@@ -129,60 +129,47 @@ if (typeof io !== 'undefined') {
                 // 🌟🌟🌟 判斷如果對方是翻轉單機模式 🌟🌟🌟
                 if (u.isFlipped) {
                     return `
-                    <div id="user-card-${u.name}" class="standalone-user-card flex flex-col items-center justify-center p-4 bg-gray-900/90 rounded-3xl border border-blue-500/30 relative animate-fade-in transition-all duration-300 hover:border-blue-400/60 shadow-lg" style="aspect-ratio: 16/9; min-width: 200px;" title="📱 手機翻轉深度專注中">
-                        
-                        <div class="relative w-28 h-28 rounded-full border-4 border-blue-600/60 shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center bg-gray-800">
-                            
-                            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full">
-
-                            <div class="absolute -bottom-1 -right-1 bg-blue-500 rounded-full p-1.5 border-2 border-[#05070a] flex items-center justify-center">
-                                <i class="fas fa-mobile-alt text-white text-[12px]"></i>
+                    <div id="user-card-${u.name}" class="relative flex flex-col items-center justify-center p-2 w-full animate-fade-in transition-all duration-300" style="aspect-ratio: 3/4; background: transparent; border: none; box-shadow: none;">
+                        <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-blue-500 shadow-lg flex-shrink-0 bg-gray-800 flex items-center justify-center overflow-visible">
+                            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                            <div class="absolute -bottom-1 -right-1 bg-blue-600 rounded-full w-8 h-8 border-2 border-[#05070a] flex items-center justify-center z-10">
+                                <i class="fas fa-mobile-alt text-white text-[14px]"></i>
                             </div>
-
-                            <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-900 border border-blue-500 text-blue-200 text-xs px-3 py-1 rounded-full whitespace-nowrap shadow-lg flex items-center gap-1">
-                                <span>🌙</span> 深度專注中
+                        </div>
+                        <div class="mt-4 text-center z-10 w-full">
+                            <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${u.name}</div>
+                            <div class="text-sm text-gray-400 font-semibold drop-shadow-md mt-1 flex items-center justify-center gap-1">
+                                <i class="fas fa-clock"></i> ${u.focusMinutes || 0} min
                             </div>
-                            
                         </div>
-
-                        <div class="mt-5 text-lg font-bold text-white tracking-wide">
-                            ${u.name}
-                        </div>
-
-                        <div class="mt-1 text-sm text-gray-400 flex items-center gap-1">
-                            <span>⏱</span> 已專注: ${u.focusMinutes || 0} min
-                        </div>
-
                     </div>`;
-                } 
-                // 🖥️ 一般線上模式 
-                else {
+                } else {
+                    // 🌟🌟🌟 正常模式：單機直立圖卡 (恢復正常網格大小) 🌟🌟🌟
                     return `
-                    <div id="user-card-${u.name}" class="flex flex-col group animate-fade-in" title="${u.status === 'FOCUSED' ? '在線專注中' : '一般狀態'}">
-                        <div class="relative aspect-video bg-gray-900 rounded-3xl overflow-hidden border-2 transition-all duration-500 ${statusClass} ${isThisUserCaptain ? 'leader-glow-effect' : ''}">
+                    <div id="user-card-${u.name}" class="relative w-full h-full flex items-center justify-center animate-fade-in bg-transparent">
+                        
+                        <div class="inner-card relative h-fit w-fit min-w-[160px] max-w-[180px] bg-[#111827] rounded-2xl shadow-2xl border border-gray-700/50 flex flex-col items-center gap-2.5 py-4 px-3 transition-all duration-300 hover:border-blue-400/50">
                             
-                            <span class="status-text absolute top-2 right-2 px-2 py-1 text-[10px] font-bold rounded-lg z-[50] ${u.status === 'FOCUSED' ? 'bg-green-500/80 text-white' : (u.status === 'BREAK' ? 'bg-blue-500/80 text-white' : 'bg-red-500/80 text-white animate-pulse')}">${u.status}</span>
+                            <div class="relative w-16 h-16 rounded-full border-2 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)] flex-shrink-0 bg-gray-800 flex items-center justify-center z-10">
+                                <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                            </div>
                             
-                            ${isThisUserCaptain ? `
-                            <div class="absolute top-2 left-2 z-[90]">
-                                <div class="relative group cursor-help">
-                                    <div class="px-2 py-1 bg-gradient-to-r from-yellow-600 to-yellow-400 rounded-lg flex items-center gap-1 shadow-[0_0_15px_rgba(234,179,8,0.5)] border border-yellow-200/50">
-                                        <i class="fas fa-crown text-[#111827] text-xs"></i>
-                                        <span class="text-[#111827] text-[9px] font-extrabold tracking-wider">CAPTAIN</span>
-                                    </div>
+                            <div class="flex flex-col items-center w-full space-y-1.5 z-10">
+                                <div class="text-base font-bold text-white truncate w-full text-center px-1">${u.name}</div>
+                                
+                                <div class="w-full bg-blue-900/30 text-blue-200 text-xs px-2 py-1.5 rounded border border-blue-500/30 text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-inner">
+                                    🎯 ${u.goal || '專注進行中...'}
+                                </div>
+
+                                <div class="w-full bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30 flex items-center justify-center gap-1.5 shadow-inner whitespace-nowrap">
+                                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
+                                    <span class="font-bold tracking-wider truncate">${u.status === 'FOCUSED' ? '深度專注中' : (u.status || '連線中')}</span>
+                                </div>
+                                
+                                <div class="text-sm text-gray-400 font-bold flex items-center justify-center gap-1 whitespace-nowrap w-full">
+                                    <i class="fas fa-clock text-gray-500"></i> ${u.focusMinutes || 0} 分鐘
                                 </div>
                             </div>
-                            ` : ''}
-
-                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-transparent to-black/60">
-                                <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" 
-                                     class="w-20 h-20 rounded-full mb-3 border-4 ${u.status === 'FOCUSED' ? 'border-green-500' : (u.status === 'BREAK' ? 'border-blue-500' : 'border-red-500')} shadow-2xl transition-transform group-hover:scale-110">
-                                <p class="text-white font-bold text-sm drop-shadow-md">${u.name}</p>
-                            </div>
-                            <div class="absolute inset-0 bg-red-950/40 backdrop-blur-[2px] flex items-center justify-center transition-opacity ${u.status === 'DISTRACTED' || u.status === 'SLEEPING' ? 'opacity-100' : 'opacity-0'} pointer-events-none z-[40]">
-                                <i class="fas fa-exclamation-triangle text-red-500 text-2xl animate-pulse"></i>
-                            </div>
-                            ${u.status === 'BREAK' ? '<div class="absolute inset-0 bg-blue-900/40 backdrop-blur-sm flex items-center justify-center text-center p-4 z-[40]"><p class="text-white text-xs font-bold leading-relaxed">生理需求暫離中</p></div>' : ''}
                         </div>
                     </div>`;
                 }
@@ -522,7 +509,7 @@ function generateFinalReport(seconds) {
     if (!details) details = "   無違規紀錄，表現優異！✨";
 
     let comment = "";
-    if (score >= 90) comment = "太不可思議了！你的專注力簡直就像是黑洞，把所有的知識都吸進去了！AI 老師為你感到驕傲，繼續保持這種王者風範！👑";
+    if (score >= 90) comment = "太不可思議了！你的專注力簡集就像是黑洞，把所有的知識都吸進去了！AI 老師為你感到驕傲，繼續保持這種王者風範！👑";
     else if (score >= 70) comment = "做得好！這段時間你展現了強大的意志力。雖然中間有一點點小分神，但你調整的速度非常快。你是個天生的學習者！💪";
     else if (score >= 50) comment = "今天辛苦了！學習的路途難免有分心的時候，但重要的是你完成了這段旅程。喝杯水休息一下，下次我們一起挑戰更高分！🌿";
     else comment = "感覺你今天的心情有點浮躁呢？沒關係，每個人都有狀態起伏的時候。AI 老師建議你先去散個步，找回平靜的自己。加油，明天會更好！💖";

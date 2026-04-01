@@ -14,21 +14,22 @@
     <link rel="stylesheet" href="/css/room.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        /* 📱 Level 1: 單機模式專屬視覺 (修正版：限制大小並置中) */
+        /* 📱 Level 1: 單機模式專屬視覺 (修正版：寫死寬度、縮小並靠左) */
         .is-mobile-flip {
             aspect-ratio: 9/16 !important;
-            max-width: 220px !important; /* 限制最大寬度，約原本的一半 */
-            max-height: 390px !important; /* 限制最大高度 */
-            margin: auto !important; /* 在 Grid 中置中 */
-            border-radius: 24px !important;
-            border: 2px solid #3b82f6 !important;
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3) !important;
-            position: relative;
-            background: #0f172a;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            width: 160px !important; /* 新增寫死寬度，將圖卡縮小 */
+            max-width: 160px !important; /* 限制最大寬度 */
+            max-height: 285px !important; /* 配合 9:16 比例微調最大高度 */
+            flex-shrink: 0 !important; /* 確保在 Flex 排版中不會被擠壓變形 */
+            /* 🚨 已經移除 margin: auto !important; 讓圖卡能自然靠左貼齊 */
+            
+            /* 以下保留原有的視覺設定 */
+            border-radius: 20px !important;
+            border: 3px solid #3b82f6 !important;
+            background-color: #0f172a !important;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4) !important;
+            position: relative !important;
+            overflow: hidden !important;
         }
         .mobile-badge {
             position: absolute;

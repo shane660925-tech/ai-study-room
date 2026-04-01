@@ -625,6 +625,11 @@ io.on('connection', (socket) => {
         io.emit('community_event', data);
     });
 
+    // 接收翻轉失敗事件，並轉發給大廳的所有人
+    socket.on('flip_failed', (data) => {
+        io.emit('flip_failed', data);
+    });
+
     socket.on('disconnect', () => {
         const user = onlineUsers.find(u => u.id === socket.id);
         if (user) {

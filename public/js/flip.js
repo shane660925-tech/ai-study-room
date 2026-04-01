@@ -1,53 +1,73 @@
 /**
- * StudyVerse V2.2.10 - 翻轉自習室邏輯 (flip.js)
- * 終極修正：靜音輪播破解 iOS 音訊阻擋、封鎖退房復活 Bug、全域跳轉護盾消除 AI 殘影
+ * StudyVerse V2.3.0 - 翻轉自習室邏輯 (flip.js)
+ * 終極進化版：導入 Web Audio API 徹底擊潰 iOS 阻擋機制、加入核彈級跳轉護盾消除所有殘影
  */
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
-    // 1. 動態建立音效資源
+    // 1. 遊戲級 Web Audio API 引擎 (破解 iOS 休眠)
     // ==========================================
-    const coinAudio = new Audio('https://www.myinstants.com/media/sounds/mario-coin.mp3');
-    const alarmAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'); 
-    alarmAudio.loop = true; 
-    const successAudio = new Audio('/audio/chuuka.mp3'); 
-    successAudio.loop = true; 
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    const audioBuffers = {};
+    const activeSources = {};
 
-    // 將音訊實體化加入網頁
-    [coinAudio, alarmAudio, successAudio].forEach(audio => {
-        audio.style.display = 'none';
-        audio.preload = 'auto';
-        audio.setAttribute('playsinline', '');
-        document.body.appendChild(audio);
-    });
+    // 背景非同步預載音效檔轉為 Buffer
+    async function loadAudio(name, url) {
+        try {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            audioBuffers[name] = audioBuffer;
+        } catch (e) { console.error(`音效 ${name} 載入失敗:`, e); }
+    }
 
-    // 🚀 極短的無聲空白音訊 (保持 iOS 音訊通道永遠活著，防休眠！)
-    const silentAudio = new Audio('data:audio/mp3;base64,//MkxAAQAAAAAAAAAAAAAAAAAAAAAAAWQQhwAANAA0QQAACsMAAAAB4AA/8oAAgAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA');
+    // 載入我們的三大音效
+    loadAudio('coin', 'https://www.myinstants.com/media/sounds/mario-coin.mp3');
+    loadAudio('alarm', 'https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3');
+    loadAudio('success', '/audio/chuuka.mp3');
+
+    // 播放音效函數 (具備最高系統特權)
+    function playSound(name, loop = false) {
+        if (!audioBuffers[name]) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        stopSound(name); // 確保不會重複疊加播放
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffers[name];
+        source.loop = loop;
+        source.connect(audioCtx.destination);
+        source.start(0);
+        activeSources[name] = source;
+    }
+
+    // 停止音效函數
+    function stopSound(name) {
+        if (activeSources[name]) {
+            try { activeSources[name].stop(); } catch(e){}
+            delete activeSources[name];
+        }
+    }
+
+    // 🚀 極短的無聲空白音訊 (輔助保持 iOS 音訊通道永遠活著)
+    const silentAudio = new Audio('data:audio/mp3;base64,//MkxAAQAAAAAAAAAAAAAAAAAAAAAAAWQQhwAANAA0QQAACsMAAAAB4AA/8oAAgAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA');
     silentAudio.loop = true;
     silentAudio.setAttribute('playsinline', '');
     document.body.appendChild(silentAudio);
 
-    // 【防禦機制 A】：靜音輪播大法 (Muted Loop) 破解 iOS 阻擋
+    // 【防禦機制 A】：音效引擎解鎖器
     let isAudioUnlocked = false;
     function unlockAudio() {
         if (isAudioUnlocked) return;
         isAudioUnlocked = true;
         
-        // 1. 金幣聲：稍後才會播，先短暫播放取得權限
-        coinAudio.play().then(() => {
-            coinAudio.pause();
-            coinAudio.currentTime = 0;
-        }).catch(() => {});
-
-        // 2. 警報與成功音樂：【靜音且無限播放】
-        // iOS 允許隨時將 muted 設為 false (解除靜音) 而不需要點擊！
-        alarmAudio.muted = true;
-        alarmAudio.play().catch(() => {});
+        // 喚醒 Web Audio 引擎
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         
-        successAudio.muted = true;
-        successAudio.play().catch(() => {});
-
-        // 3. 無聲通道保持開啟
+        // 播放無聲音軌
         silentAudio.play().catch(() => {});
+
+        // 瞬間播放並暫停實體音效，取得傳統授權
+        const tempCoin = new Audio('https://www.myinstants.com/media/sounds/mario-coin.mp3');
+        tempCoin.play().then(() => tempCoin.pause()).catch(() => {});
 
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('click', unlockAudio);
@@ -128,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isWarningState = false;
     let myName = "";
     
-    window.isCheckingOut = false; 
+    window.isCheckingOut = false; // 防護鎖：標記是否正在準備跳轉退房
 
     const urlParams = new URLSearchParams(window.location.search);
     let targetMinutes = parseInt(urlParams.get('duration') || localStorage.getItem('studyVerseDuration') || 25);
@@ -204,24 +224,28 @@ document.addEventListener('DOMContentLoaded', () => {
     async function executeCheckout(statusType) {
         window.isCheckingOut = true; 
         
-        // 🛡️ 終極跳轉護盾：徹底消滅跳轉期間的 AI 殘影與不速之客警報聲
-        
-        // 1. 注入 CSS 永遠隱藏違規畫面 (包含 ai-core.js 的畫面)
-        const style = document.createElement('style');
-        style.innerHTML = `
-            #warningOverlay, .warning-overlay, .ai-warning-box, .ai-bubble { 
-                display: none !important; opacity: 0 !important; visibility: hidden !important; z-index: -9999 !important; 
-            }
+        // 🛡️ 核彈級跳轉護盾：徹底癱瘓頁面，注入全螢幕覆蓋層，杜絕任何殘影閃爍與雜音
+        const nukeStyle = document.createElement('style');
+        nukeStyle.innerHTML = `
+            body * { visibility: hidden !important; pointer-events: none !important; }
+            #checkoutNuke, #checkoutNuke * { visibility: visible !important; pointer-events: auto !important; }
+            #warningOverlay, .warning-overlay, .ai-warning-box, .ai-bubble { display: none !important; }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(nukeStyle);
 
-        // 2. 攔截並癱瘓整個網頁所有的音訊播放 (防止 ai-core 發出聲音)
+        const nukeDiv = document.createElement('div');
+        nukeDiv.id = 'checkoutNuke';
+        nukeDiv.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:#051a10;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#10b981;font-size:20px;font-weight:bold;";
+        nukeDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:40px;margin-bottom:20px;"></i><p>結算中，請稍候...</p>';
+        document.body.appendChild(nukeDiv);
+
+        // 停止所有傳統音訊
         document.querySelectorAll('audio, video').forEach(media => {
             media.muted = true;
             media.pause();
         });
 
-        stopTracking();
+        stopTracking(); // 強制停止 Web Audio 與計時器
 
         if (focusSeconds > 0) {
             try {
@@ -242,16 +266,11 @@ document.addEventListener('DOMContentLoaded', () => {
         isTracking = false; isFocusing = false; isWarningState = false; 
         clearInterval(timerInterval); clearInterval(warningCountdownInterval); 
         
-        alarmAudio.muted = true;
-        successAudio.muted = true;
-        silentAudio.pause(); 
+        stopSound('alarm');
+        stopSound('success');
+        silentAudio.pause();
         releaseWakeLock();
         
-        const wOverlay = document.getElementById('warningOverlay');
-        if(wOverlay) {
-            wOverlay.classList.add('hidden');
-            wOverlay.classList.remove('flex');
-        }
         window.removeEventListener('deviceorientation', handleOrientation);
     }
 
@@ -259,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. 改進的翻轉偵測邏輯
     // ==========================================
     function handleOrientation(event) {
+        // 如果不在追蹤中，或「已經進入結算跳轉流程」，絕對停止所有動作！
         if (!isTracking || window.isCheckingOut) return;
         
         let beta = event.beta;
@@ -275,8 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const startModal = document.getElementById('standaloneReadyModal');
                 if (startModal) startModal.remove();
 
-                coinAudio.currentTime = 0;
-                coinAudio.play().catch(() => {});
+                // Web Audio API 播放金幣聲
+                playSound('coin', false);
 
                 if (statusDisplay) {
                     statusDisplay.innerHTML = `🟢 深度專注中...`;
@@ -294,16 +314,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const remain = targetSeconds - focusSeconds;
                         if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
                         
-                        // 🚀 達成預定時間：直接解除靜音，小當家音樂立刻響起！
+                        // 🚀 達成預定時間
                         if (focusSeconds >= targetSeconds && !isCompleted) {
                             isCompleted = true;
                             
-                            // 🛑 核心防禦：時間一到，立刻「拔除違規偵測神經」，徹底杜絕 AI 與翻轉殘影！
+                            // 🛑 核心防禦：時間一到，立刻「拔除違規偵測神經」，徹底杜絕所有跳轉殘影！
                             window.removeEventListener('deviceorientation', handleOrientation);
                             isTracking = false; 
 
-                            successAudio.currentTime = 0;
-                            successAudio.muted = false; // 解除靜音大聲播放
+                            // Web Audio API 播放小當家音樂 (無視系統休眠，強制響起！)
+                            playSound('success', true);
                             
                             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
                             if(statusDisplay) {
@@ -311,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 statusDisplay.style.color = "#f1c40f";
                             }
 
-                            // 加入全新的「領獎專用監聽器」(只等翻上來，絕不會觸發違規)
+                            // 領獎專用監聽器 (只等翻上來，絕不會觸發任何違規)
                             window.addEventListener('deviceorientation', function checkFlipUp(e) {
                                 if (window.isCheckingOut) return;
                                 let b = e.beta; let g = e.gamma;
@@ -328,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const text = `🏆 挑戰成功！\n\n${comment}\n\n本次時長：${formatTime(focusSeconds)}\n請點擊確定進行結算並返回大廳。`;
                                     
                                     showCustomModal("發光吧！目標達成！", text, () => {
-                                        successAudio.muted = true; // 按下確定後，立刻將音樂靜音並跳轉
+                                        stopSound('success'); // 按下確定後，立刻將音樂關閉並跳轉
                                         executeCheckout('completed');
                                     });
                                 }
@@ -342,12 +362,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(warningCountdownInterval);
                 isWarningState = false;
                 
-                // 重新將警報聲靜音
-                alarmAudio.muted = true;
+                // 停止警報聲
+                stopSound('alarm');
                 
                 const wOverlay = document.getElementById('warningOverlay');
-                wOverlay.classList.add('hidden');
-                wOverlay.classList.remove('flex'); 
+                if(wOverlay) {
+                    wOverlay.classList.add('hidden');
+                    wOverlay.classList.remove('flex'); 
+                }
                 document.body.style.backgroundColor = "#051a10"; 
                 
                 if(statusDisplay) {
@@ -369,9 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 socket.emit("update_status", { name: myName, status: "DISTRACTED", isFlipped: false });
                 
-                // 🚀 解除警報靜音，大聲發出警告
-                alarmAudio.currentTime = 0;
-                alarmAudio.muted = false;
+                // 🚀 播放強烈警告聲
+                playSound('alarm', true);
                 
                 if (navigator.vibrate) navigator.vibrate([800, 400]); 
 
@@ -384,13 +405,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (warningSeconds <= 0) {
                         clearInterval(warningCountdownInterval);
                         
-                        // 🚀 核心修復：強制將狀態鎖定，防止彈窗期間再翻轉復活！
+                        // 🚀 核心修復：強制鎖死狀態，防止彈窗期間再蓋回手機復活！
                         window.isCheckingOut = true; 
                         isTracking = false;
                         window.removeEventListener('deviceorientation', handleOrientation);
 
+                        // 🚀 觸發大廳的社會性死亡事件！
+                        socket.emit("flip_failed", { name: myName });
+
                         showCustomModal("違規退房", `🚨 專注中斷！\n\n定力不足，系統已將您強制退房。`, () => {
-                            alarmAudio.muted = true; 
+                            stopSound('alarm'); 
                             executeCheckout('early_leave');
                         });
                     }

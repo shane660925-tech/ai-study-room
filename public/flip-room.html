@@ -104,8 +104,8 @@
 
             <div id="sa-input-section" class="hidden">
                 <div class="mb-4 text-left">
-                    <label class="text-xs text-gray-400 font-bold mb-1 block">讀書目標</label>
-                    <input id="sa-goal" type="text" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="例：完成微積分習題">
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">讀書目標 (非必填)</label>
+                    <input id="sa-goal" type="text" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="未填寫將預設為「自主學習」">
                 </div>
                 
                 <div class="mb-8 text-left">
@@ -215,11 +215,13 @@
         function prepareStandaloneFlip() {
             if (isRedirecting) return;
             
-            const goal = document.getElementById('sa-goal').value.trim();
+            const rawGoal = document.getElementById('sa-goal').value.trim();
+            const goal = rawGoal || "自主學習"; // 目標改為非必填，設定預設值
             const time = document.getElementById('sa-time').value.trim();
             
-            if(!goal || !time) {
-                alert('請先填寫讀書目標與專注時間喔！');
+            // 僅檢查時數是否填寫
+            if(!time) {
+                alert('請務必填寫專注時間喔！');
                 return;
             }
 
@@ -319,7 +321,21 @@
                 const jtm = document.getElementById('joinTeamModal');
                 if(jtm) { jtm.classList.remove('flex'); jtm.classList.add('hidden'); }
 
-                pendingRoomType = roomType || 'managed-room.html';
+                // 根據傳入的 roomType 解析並導向正確的教室檔名
+                let mappedRoom = 'managed-room.html'; // 預設
+                if (roomType) {
+                    if (typeof roomType === 'string' && roomType.includes('immersive')) {
+                        mappedRoom = 'immersive-room.html';
+                    } else if (typeof roomType === 'string' && roomType.includes('managed')) {
+                        mappedRoom = 'managed-room.html';
+                    } else if (typeof roomType === 'string' && roomType.endsWith('.html')) {
+                        mappedRoom = roomType;
+                    } else {
+                        mappedRoom = `${roomType}-room.html`;
+                    }
+                }
+                pendingRoomType = mappedRoom;
+
                 const needsApproval = (is_approval_required === true || is_approval_required === 'true');
 
                 if (needsApproval) {
@@ -331,8 +347,8 @@
                     });
                     if (window.showWaitingModal) window.showWaitingModal(teamName);
                 } else {
-                    // 免審核直接開啟設定 Modal
-                    const teamParams = `&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
+                    // 免審核直接開啟設定 Modal，加上 &mode=team
+                    const teamParams = `&mode=team&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
                     openStandaloneModal(pendingRoomType);
                     window.tempTeamParams = teamParams;
                 }
@@ -342,8 +358,22 @@
             socket.on('join_team_approved', (data) => {
                 if (window.hideWaitingModal) window.hideWaitingModal();
                 
-                const targetRoom = data.roomType || 'managed-room.html';
-                const teamParams = `&teamId=${data.teamId || data.teamName}&teamName=${encodeURIComponent(data.realTeamName || data.teamName)}`;
+                // 收到審核通過時，再次確認跳轉的教室檔名是否正確
+                let mappedRoom = 'managed-room.html'; 
+                if (data.roomType) {
+                    if (typeof data.roomType === 'string' && data.roomType.includes('immersive')) {
+                        mappedRoom = 'immersive-room.html';
+                    } else if (typeof data.roomType === 'string' && data.roomType.includes('managed')) {
+                        mappedRoom = 'managed-room.html';
+                    } else if (typeof data.roomType === 'string' && data.roomType.endsWith('.html')) {
+                        mappedRoom = data.roomType;
+                    } else {
+                        mappedRoom = `${data.roomType}-room.html`;
+                    }
+                }
+                const targetRoom = mappedRoom;
+                // 審核通過時，同樣加上 &mode=team
+                const teamParams = `&mode=team&teamId=${data.teamId || data.teamName}&teamName=${encodeURIComponent(data.realTeamName || data.teamName)}`;
 
                 if (typeof openSetupModal === 'function') {
                     openSetupModal(targetRoom, teamParams); 

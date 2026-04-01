@@ -1,6 +1,7 @@
 /**
  * StudyVerse V2.2.2 - AI教室介面與 Socket 邏輯 (room-ui.js)
  * 完全委由 ai-core.js 的單一 Socket 通道驅動，確保不漏失廣播
+ * [修正] 小隊UI比例改為 4:3，並加入 object-fit: contain 防止大頭貼被截斷
  */
 
 let warningCheckTimer = null; 
@@ -17,7 +18,7 @@ window.updateLeaderUI = function() {
     const inputNameEl = document.getElementById('inputName');
     const myName = String(inputNameEl?.value || urlParams.get('name') || "Commander").trim();
     const leaderName = String(window.currentTeamLeader || "").trim();
-    const isAuditMode = urlParams.get('audit') === 'true'; // 判斷自己是否以隊長身分進入
+    const isAuditMode = urlParams.get('audit') === 'true'; 
 
     // 清除舊版或錯位的圖章
     const oldCaptainBadge = document.getElementById('myCaptainBadge');
@@ -25,7 +26,7 @@ window.updateLeaderUI = function() {
     const oldDashboardBadge = document.getElementById('dashboardCaptainBadge');
     if (oldDashboardBadge) oldDashboardBadge.remove();
 
-    // 取得本機視訊鏡頭的容器 (通常是包裹 webcam 的 div)
+    // 取得本機視訊鏡頭的容器
     const webcamEl = document.getElementById('webcam');
     if (!webcamEl || !webcamEl.parentElement) return;
     const webcamContainer = webcamEl.parentElement;
@@ -49,7 +50,7 @@ window.updateLeaderUI = function() {
 
         // 🎯 3. 插入最美漸層隊長徽章
         const badgeHtml = `
-            <div id="local-video-captain-badge" class="absolute top-2 left-2 z-[100] flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full border border-yellow-200/50 shadow-[0_0_20px_rgba(251,191,36,0.6)] animate-in fade-in zoom-in duration-300">
+            <div id="local-video-captain-badge" onclick="if(window.showMyTeamInfo) window.showMyTeamInfo(event)" class="absolute top-2 left-2 z-[100] flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 rounded-full border border-yellow-200/50 shadow-[0_0_20px_rgba(251,191,36,0.6)] animate-in fade-in zoom-in duration-300 cursor-pointer hover:scale-105 pointer-events-auto">
                 <div class="flex items-center justify-center w-5 h-5 bg-white/20 rounded-full">
                     <i class="fas fa-crown text-white text-[10px] drop-shadow-md"></i>
                 </div>
@@ -58,7 +59,6 @@ window.updateLeaderUI = function() {
         `;
         webcamContainer.insertAdjacentHTML('beforeend', badgeHtml);
     } else {
-        // 如果不是隊長，恢復 "YOU (Self)" 標籤並移除特效
         if (yourselfLabel) yourselfLabel.style.display = '';
         webcamContainer.classList.remove('leader-glow-effect');
     }
@@ -115,7 +115,7 @@ function handleJoinResponse(isApproved, requestData) {
     if (window.appSocket) {
         window.appSocket.emit('reply_join_team', {
             requestSocketId: requestData.applicantId,
-            requestUser: requestData.applicantName, // 🎯 [配套修改] 必須回傳 Username，後端才找得到人
+            requestUser: requestData.applicantName, 
             teamName: currentTeamId,
             approved: isApproved
         });
@@ -247,3 +247,240 @@ window.triggerAISocialBubble = function(type) {
         setTimeout(() => bubble.remove(), 800);
     }, 7000);
 };
+
+// ==========================================
+// [修改] 小隊專屬 UI 特效與排列邏輯
+// ==========================================
+
+const teamUIStyle = document.createElement('style');
+teamUIStyle.innerHTML = `
+    /* 1. 修正小隊隊員圖卡：維持一半大小，改為 4:3 比例，加入底色 */
+    .team-member-card {
+        width: calc(50% - 0.5rem) !important;
+        aspect-ratio: 4 / 3 !important; 
+        height: auto !important;
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+        background-color: #1a1a1a; 
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    /* 2. 視訊維持 cover 填滿 */
+    .team-member-card video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    /* 3. 頭像圖片改為 contain，避免人臉被裁切，並加上 padding 給文字讓出空間 */
+    .team-member-card img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        padding: 24px 10px; /* 上下留白避免被 header/footer 遮擋 */
+    }
+    /* 深度專注特效 */
+    .deep-focus-ring {
+        box-shadow: 0 0 20px #3b82f6 !important;
+        border: 3px solid #3b82f6 !important;
+    }
+    .team-card-header {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+        padding: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        z-index: 20;
+        pointer-events: none;
+    }
+    .team-card-footer {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        z-index: 20;
+        pointer-events: none;
+    }
+    .team-flag {
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: white;
+        font-weight: 900;
+        padding: 3px 8px;
+        border-radius: 6px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+`;
+document.head.appendChild(teamUIStyle);
+
+// 儲存當前小隊資料，供彈窗使用
+window.myCurrentTeamData = null;
+
+window.showMyTeamInfo = function(e) {
+    if (e) e.stopPropagation();
+    if (!window.myCurrentTeamData) return;
+    
+    const { teamId, totalFocus, count } = window.myCurrentTeamData;
+    const modalId = 'team-info-modal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = "fixed inset-0 z-[99999] hidden flex-col items-center justify-center bg-black/80 backdrop-blur-sm";
+        document.body.appendChild(modal);
+    }
+    
+    modal.innerHTML = `
+        <div class="bg-gray-900 border border-yellow-500/50 rounded-2xl p-6 w-[90%] max-w-sm shadow-2xl flex flex-col items-center text-center transform transition-all">
+            <div class="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4 border border-yellow-500/50">
+                <i class="fas fa-flag text-3xl text-yellow-400"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">🏆 小隊資訊</h3>
+            <div class="text-gray-300 text-base mb-6 space-y-3 w-full bg-black/40 p-4 rounded-xl border border-gray-700">
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span>小隊名稱：</span>
+                    <span class="font-black text-white">${teamId}</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span>當前隊員：</span>
+                    <span class="font-black text-blue-400">${count} 人</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>累計總專注：</span>
+                    <span class="font-black text-green-400">${totalFocus} 分鐘</span>
+                </div>
+            </div>
+            <button onclick="document.getElementById('${modalId}').style.display='none'" class="w-full py-3 rounded-lg font-bold text-gray-900 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 transition-all shadow-[0_0_15px_rgba(251,191,36,0.4)]">
+                確認
+            </button>
+        </div>
+    `;
+    modal.style.display = 'flex';
+};
+
+function initializeTeamUIHook() {
+    if (window.appSocket && !window._teamUIHooked) {
+        window._teamUIHooked = true;
+        
+        window.appSocket.on('update_rank', (users) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const inputNameEl = document.getElementById('inputName');
+            const myName = String(inputNameEl?.value || urlParams.get('name') || "Commander").trim();
+            
+            const me = users.find(u => u.name === myName);
+            if (!me || !me.teamId) return; 
+            
+            const teamMembers = users.filter(u => u.teamId === me.teamId);
+            const totalFocus = teamMembers.reduce((sum, u) => sum + (u.focusMinutes || 0), 0);
+            window.myCurrentTeamData = { teamId: me.teamId, totalFocus, count: teamMembers.length };
+
+            const webcamEl = document.getElementById('webcam');
+            const localCard = document.getElementById(`user-card-${myName}`) || webcamEl?.closest('.user-card') || webcamEl?.parentElement;
+            const grid = localCard?.parentElement;
+            
+            if (grid) {
+                const hue = [...me.teamId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;
+                const flagColor = `hsl(${hue}, 80%, 55%)`;
+
+                teamMembers.forEach(member => {
+                    if (member.name === myName) return; 
+
+                    const card = document.getElementById(`user-card-${member.name}`) || 
+                                 Array.from(grid.children).find(el => el.innerHTML.includes(member.name) && el !== localCard);
+                    
+                    if (card) {
+                        if (card.parentElement === grid) {
+                            grid.insertBefore(card, localCard.nextSibling);
+                        }
+                        
+                        // 根據是否為手機翻轉模式套用不同的樣式
+                        if (member.isFlipped) {
+                            // 📱 手機翻轉單機模式
+                            card.className = 'remote-user-card relative flex flex-col items-center justify-center p-2 w-full transition-all duration-300';
+                            card.style = 'aspect-ratio: 3/4; background: transparent; border: none; box-shadow: none;';
+                            
+                            card.innerHTML = `
+                                <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-blue-500 shadow-lg flex-shrink-0 bg-gray-800 flex items-center justify-center overflow-visible">
+                                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${member.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                                    <div class="absolute -bottom-1 -right-1 bg-blue-600 rounded-full w-8 h-8 border-2 border-[#05070a] flex items-center justify-center z-10">
+                                        <i class="fas fa-mobile-alt text-white text-[14px]"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-4 text-center z-10 w-full">
+                                    <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${member.name}</div>
+                                    <div class="text-sm text-gray-400 font-semibold drop-shadow-md mt-1 flex items-center justify-center gap-1">
+                                        <i class="fas fa-clock"></i> ${member.focusMinutes || 0} min
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            // 💻 正常模式：單機直立圖卡 (恢復正常網格大小)
+                            card.className = 'remote-user-card relative w-full h-full flex items-center justify-center bg-transparent';
+                            card.style = ''; 
+                            
+                            card.innerHTML = `
+                                <div class="inner-card relative h-fit w-fit min-w-[160px] max-w-[180px] bg-[#111827] rounded-2xl shadow-2xl border border-gray-700/50 flex flex-col items-center gap-2.5 py-4 px-3 transition-all duration-300 hover:border-blue-400/50">
+                                    
+                                    <div class="relative w-16 h-16 rounded-full border-2 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)] flex-shrink-0 bg-gray-800 flex items-center justify-center z-10">
+                                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${member.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                                    </div>
+                                    
+                                    <div class="flex flex-col items-center w-full space-y-1.5 z-10">
+                                        <div class="text-base font-bold text-white truncate w-full text-center px-1">${member.name}</div>
+                                        
+                                        <div class="w-full bg-blue-900/30 text-blue-200 text-xs px-2 py-1.5 rounded border border-blue-500/30 text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-inner">
+                                            🎯 ${member.goal || '專注進行中...'}
+                                        </div>
+
+                                        <div class="w-full bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30 flex items-center justify-center gap-1.5 shadow-inner whitespace-nowrap">
+                                            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
+                                            <span class="font-bold tracking-wider truncate">${member.status === 'FOCUSED' ? '深度專注中' : (member.status || '連線中')}</span>
+                                        </div>
+                                        
+                                        <div class="text-sm text-gray-400 font-bold flex items-center justify-center gap-1 whitespace-nowrap w-full">
+                                            <i class="fas fa-clock text-gray-500"></i> ${member.focusMinutes || 0} 分鐘
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        // 🎯 隊長標籤邏輯：位置往外推一點 (-top-2 -left-2) 讓它自然浮貼在卡片左上角
+                        let captainBadge = card.querySelector('.remote-captain-badge');
+                        if (member.isCaptain) {
+                            if (!captainBadge) {
+                                captainBadge = document.createElement('div');
+                                captainBadge.className = 'remote-captain-badge absolute -top-2 -left-2 z-[30] cursor-pointer hover:scale-110 transition-transform pointer-events-auto';
+                                captainBadge.innerHTML = `
+                                    <div class="flex items-center gap-1 px-2 py-1 bg-yellow-500 rounded-full border border-yellow-200 shadow-[0_0_10px_rgba(251,191,36,0.5)]" onclick="window.showMyTeamInfo(event)">
+                                        <i class="fas fa-crown text-white text-[10px]"></i>
+                                        <span class="text-white font-bold text-[10px]">隊長</span>
+                                    </div>
+                                `;
+                                const targetContainer = card.querySelector('.inner-card') || card;
+                                targetContainer.appendChild(captainBadge);
+                            }
+                        } else if (captainBadge) {
+                            captainBadge.remove();
+                        }
+                    }
+                });
+            }
+        });
+    } else if (!window._teamUIHooked) {
+        setTimeout(initializeTeamUIHook, 1000); 
+    }
+}
+initializeTeamUIHook();

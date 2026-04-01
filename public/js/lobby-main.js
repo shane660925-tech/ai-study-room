@@ -11,53 +11,35 @@ window.pageSpecificInit = function() {
 
 // [專業大廳專屬] 進入教室前的綜合防呆檢查
 window.enterClassroomWithCheck = function(roomUrl) {
-    // 🌟 新增：偵測使用者當下是否正在使用行動裝置 (手機/平板)
+    // 偵測使用者當下是否正在使用行動裝置 (手機/平板)
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (isMobileDevice) {
-        // 如果是手機，直接詢問是否進入單機翻轉模式
-        const goStandalone = confirm("📱 偵測到您正在使用手機！\n\n是否直接以「單機翻轉模式」進入該自習室或小隊？\n(將獲得專屬游擊隊標記與計分)");
+        // (1) 跳出詢問是否進入單機翻轉
+        const goStandalone = confirm("📱 偵測到您正在使用手機！\n\n是否進入「單機翻轉大廳」選擇專屬教室或隊伍？\n(將獲得專屬游擊隊標記與計分)");
         
         if (goStandalone) {
-            // 將想去的教室 URL 當作參數 (targetRoom) 傳遞給 mobile.html
-            window.location.href = `/mobile.html?standalone=true&targetRoom=${encodeURIComponent(roomUrl)}`;
+            // (2) 若按「是」則跳轉至「手機翻轉大廳」
+            window.location.href = '/flip-room.html';
         } else {
-            // 不使用翻轉模式，當作一般網頁進入
-            window.location.href = roomUrl;
-        }
-        return; // 結束執行，不再往下跑電腦版的 QR Code 邏輯
-    }
-
-    // ==========================================
-    // 以下是原本的「電腦端」防呆與 QR Code 邏輯
-    // ==========================================
-    
-    // 依賴於 core.js 中的 isMobileConnected 與 isMobileFlipped 變數
-    if (isMobileConnected && isMobileFlipped) {
-        window.location.href = roomUrl;
-        return;
-    }
-
-    if (isMobileConnected && !isMobileFlipped) {
-        alert("📍 偵測到手機已連動，但尚未「翻轉蓋上」！\n請先將手機螢幕朝下放置，即可啟動深度專注模式並進入教室。");
-        return;
-    }
-
-    const userChoice = confirm("💡 系統提示：連動手機進入「翻轉模式」可以獲得額外加分且減少 AI 誤判！\n\n是否要現在掃描 QR Code 連動手機？");
-    
-    if (userChoice) {
-        const qrSection = document.querySelector('#syncModule'); 
-        if (qrSection) {
-            qrSection.scrollIntoView({ behavior: 'smooth' });
-            qrSection.classList.add('ring-4', 'ring-blue-500', 'animate-pulse');
-            setTimeout(() => qrSection.classList.remove('animate-pulse'), 3000);
-            alert("請掃描右側藍色區塊內的 QR Code。連動成功後，狀態將自動更新！");
-        } else {
-            // 如果畫面上剛好沒有 QR Code 區塊，直接開新視窗顯示手機端網址
-            window.open('/mobile.html', '_blank');
+            // (3) 若按「否」則依原專業大廳邏輯進入教室
+            if (typeof openSetupModal === 'function') {
+                openSetupModal(roomUrl);
+            } else if (typeof showRoomSetup === 'function') {
+                showRoomSetup(roomUrl);
+            } else {
+                window.location.href = roomUrl;
+            }
         }
     } else {
-        window.location.href = roomUrl;
+        // 非手機設備，依原專業大廳邏輯進入教室
+        if (typeof openSetupModal === 'function') {
+            openSetupModal(roomUrl);
+        } else if (typeof showRoomSetup === 'function') {
+            showRoomSetup(roomUrl);
+        } else {
+            window.location.href = roomUrl;
+        }
     }
 };
 
@@ -210,3 +192,102 @@ socket.on("status_updated", (data) => {
         }
     }
 });
+// =========================================================================
+// [新增] 社會性死亡特效：接收 flip_failed 事件
+// =========================================================================
+
+socket.on('flip_failed', (data) => {
+    const userName = data.name;
+
+    // 1. 碎裂與灰階特效：尋找大廳中的該名學生卡片
+    const userCard = document.getElementById(`user-card-${userName}`);
+    if (userCard) {
+        // 掛上碎裂動畫 class
+        userCard.classList.add('flip-failed-shatter');
+
+        // 更改狀態文字為陣亡
+        const statusText = userCard.querySelector('.status-text');
+        if (statusText) {
+            statusText.innerHTML = "💔 專注陣亡";
+            statusText.style.color = "#ef4444"; // 警告紅
+        }
+
+        // 10秒後解除碎裂特效 (若想讓他永遠灰階直到重連，可把這段 setTimeout 刪除)
+        setTimeout(() => {
+            userCard.classList.remove('flip-failed-shatter');
+        }, 10000);
+    }
+
+    // 2. 聊天室系統廣播 (請確認你聊天室的容器 ID，這裡預設為 chat-messages)
+    const chatBox = document.getElementById('chat-messages');
+    if (chatBox) {
+        const msgEl = document.createElement('div');
+        msgEl.className = 'w-full text-center my-3';
+        msgEl.innerHTML = `
+            <span class="inline-block bg-red-950/80 text-red-300 text-xs px-4 py-1.5 rounded-full border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                🚨 系統廣播：<b>${userName}</b> 忍不住拿起了手機，翻轉專注中斷！
+            </span>
+        `;
+        chatBox.appendChild(msgEl);
+        chatBox.scrollTop = chatBox.scrollHeight; // 自動捲動到最底
+    }
+
+    // 3. 【其它加碼】全大廳播放玻璃碎裂音效
+    const shatterSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2855/2855-preview.mp3');
+    shatterSound.volume = 0.6;
+    shatterSound.play().catch(() => {});
+
+    // 4. 【其它加碼】頂部公開處刑跑馬燈 (Toast)
+    showPublicShamingToast(userName);
+});
+
+// 注入專屬的「社會性死亡」CSS 特效與動畫
+const shamingStyle = document.createElement('style');
+shamingStyle.innerHTML = `
+    @keyframes shatterAndShake {
+        0% { transform: translate(2px, 1px) rotate(0deg); filter: grayscale(0%); }
+        10% { transform: translate(-1px, -2px) rotate(-2deg); filter: grayscale(20%); }
+        20% { transform: translate(-3px, 0px) rotate(2deg); filter: grayscale(40%); }
+        30% { transform: translate(3px, 2px) rotate(0deg); filter: grayscale(60%); }
+        40% { transform: translate(1px, -1px) rotate(2deg); filter: grayscale(80%); }
+        50% { transform: translate(-1px, 2px) rotate(-2deg); filter: grayscale(100%) sepia(30%) hue-rotate(-50deg) saturate(300%); box-shadow: 0 0 25px rgba(239,68,68,0.9); border-color: #ef4444; }
+        100% { transform: translate(0, 0) rotate(0deg); filter: grayscale(100%); opacity: 0.5; border-color: #52525b; }
+    }
+    .flip-failed-shatter {
+        animation: shatterAndShake 0.6s forwards;
+        pointer-events: none; /* 陣亡後短暫禁止點擊 */
+    }
+    .shaming-toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(90deg, rgba(127,29,29,0.95), rgba(220,38,38,0.95));
+        color: white;
+        padding: 12px 24px;
+        border-radius: 50px;
+        font-weight: 900;
+        font-size: 16px;
+        z-index: 999999;
+        box-shadow: 0 10px 30px rgba(220, 38, 38, 0.6);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideDownOut 4.5s forwards;
+    }
+    @keyframes slideDownOut {
+        0% { top: -60px; opacity: 0; transform: translate(-50%, -20px); }
+        10% { top: 20px; opacity: 1; transform: translate(-50%, 0); }
+        85% { top: 20px; opacity: 1; transform: translate(-50%, 0); }
+        100% { top: -60px; opacity: 0; transform: translate(-50%, -20px); }
+    }
+`;
+document.head.appendChild(shamingStyle);
+
+function showPublicShamingToast(userName) {
+    const toast = document.createElement('div');
+    toast.className = 'shaming-toast';
+    toast.innerHTML = `<i class="fas fa-skull-crossbones animate-bounce text-xl text-black"></i> <span>快看！<b>${userName}</b> 剛剛放棄了專注！</span> <i class="fas fa-hand-point-down text-xl text-black"></i>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000); // 5秒後自動移除
+}

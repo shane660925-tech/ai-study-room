@@ -9,31 +9,24 @@ body {
     font-family: 'Inter', sans-serif; 
 }
 
-/* 中間視訊網格：調整為適合正方形卡片的佈局 */
+/* 中間視訊網格：調整為適合正方形卡片靠左緊湊排列的佈局 */
 .cam-grid { 
     display: grid; 
-    /* 修正佈局寬度，讓卡片排列更整齊 */
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
     gap: 1.5rem; 
     padding: 1.5rem; 
     overflow-y: auto;
+    width: 100%;
 }
 
-/* 虛擬書桌風格：強制方正比例，增強視覺深度感 */
 .desk-wood { 
-    aspect-ratio: 1 / 1; /* 強制正方形比例 */
+    aspect-ratio: 1 / 1; 
     border: 3px solid #334155; 
     border-radius: 20px; 
     background: rgba(15, 23, 42, 0.6);
-    /* 增強層級陰影 */
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7); 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center; /* 讓內容在方塊中居中 */
-    padding: 1.25rem;
     position: relative;
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
 }
 
 .desk-wood:hover {
