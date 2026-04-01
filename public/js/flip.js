@@ -1,6 +1,6 @@
 /**
  * StudyVerse V2.2.4 - 翻轉自習室邏輯 (flip.js)
- * 修正：回歸正規「白名單解鎖」機制，避免長時間靜音播放被系統判定為耗電而強制休眠
+ * 修正：新增等待翻轉的雙階段彈窗，並修復陀螺儀朝上誤判的問題
  */
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
@@ -21,8 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAudioUnlocked) return;
         isAudioUnlocked = true;
         
-        // 正規解鎖法：播放後「立刻暫停」，這樣瀏覽器就會將這個音效加入信任白名單
-        // 時間到的時候，就算沒有點擊也能直接呼叫 play()
         alarmAudio.play().then(() => {
             alarmAudio.pause();
             alarmAudio.currentTime = 0;
@@ -33,11 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
             successAudio.currentTime = 0;
         }).catch(() => {});
 
-        // 解鎖後即可移除監聽
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('click', unlockAudio);
     }
-    // 只要學生手指摸到螢幕任何一處，立刻解鎖音效權限
     document.addEventListener('touchstart', unlockAudio);
     document.addEventListener('click', unlockAudio);
 
@@ -47,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if ('wakeLock' in navigator) {
                 wakeLock = await navigator.wakeLock.request('screen');
-                console.log('✅ 螢幕喚醒鎖定已啟動，防止計時器休眠');
+                console.log('✅ 螢幕喚醒鎖定已啟動');
             }
         } catch (err) {
             console.error('Wake Lock 錯誤:', err);
@@ -60,10 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 新增：自訂彈窗 UI (取代會凍結系統音效的 alert)
+    // 新增：自訂彈窗 UI
     // ==========================================
     function showCustomModal(title, text, callback) {
-        // 暫停陀螺儀監聽，避免重複觸發
         window.removeEventListener('deviceorientation', handleOrientation); 
 
         const overlay = document.createElement('div');
@@ -84,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 2. 動態建立 5 秒警告 UI 覆蓋層
+    // 2. 動態建立 5 秒警告 UI
     // ==========================================
     const warningOverlay = document.createElement('div');
     warningOverlay.id = 'warningOverlay';
@@ -131,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let myName = "";
 
     const urlParams = new URLSearchParams(window.location.search);
-    const targetMinutes = parseInt(urlParams.get('duration') || localStorage.getItem('studyVerseDuration') || 25);
+    let targetMinutes = parseInt(urlParams.get('duration') || localStorage.getItem('studyVerseDuration') || 25);
     const targetSeconds = targetMinutes * 60; 
     let isCompleted = false; 
 
@@ -139,59 +134,67 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedName && syncNameInput) syncNameInput.value = savedName;
 
     // ==========================================
-    // 4. 單機模式：強制點擊啟動 (解決 iOS 無聲與 UX 問題)
+    // 單機教室模式：載入即彈窗 -> 點擊變為黃燈 -> 翻轉後才移除彈窗
     // ==========================================
     if (urlParams.get('standalone') === 'true') {
-        myName = localStorage.getItem('studyVerseUser') || "專注者"; 
-        
-        // 建立一個全螢幕的「準備畫面」
-        const readyOverlay = document.createElement('div');
-        readyOverlay.id = 'readyOverlay';
-        readyOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#051a10;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;padding:20px;text-align:center;";
-        readyOverlay.innerHTML = `
-            <i class="fas fa-mobile-alt text-6xl mb-6 text-green-400 animate-bounce"></i>
-            <h1 style="font-size:28px;font-weight:900;margin-bottom:15px;">準備進入單機專注</h1>
-            <p style="font-size:16px;color:#a7f3d0;margin-bottom:40px;">點擊下方按鈕解鎖防護系統<br>隨後將手機螢幕朝下放置桌上，即會開始計時。</p>
-            <button id="tapToStartBtn" style="background:linear-gradient(to right, #10b981, #059669);color:white;padding:15px 40px;border-radius:30px;font-size:20px;font-weight:bold;border:none;cursor:pointer;box-shadow:0 10px 20px rgba(16,185,129,0.3);">我準備好了</button>
-        `;
-        document.body.appendChild(readyOverlay);
+        const inputNameEl = document.getElementById('inputName');
+        myName = inputNameEl ? inputNameEl.value : (localStorage.getItem('studyVerseUser') || "專注者"); 
+        targetMinutes = parseInt(urlParams.get('duration')) || 25;
 
-        document.getElementById('tapToStartBtn').addEventListener('click', () => {
-            // 1. 真人點擊的瞬間：立刻解鎖音效！這對 iOS Safari 來說是最合法的操作
-            alarmAudio.play().then(() => {
-                alarmAudio.pause();
-                alarmAudio.currentTime = 0;
-            }).catch(e => console.log('解鎖警報音效失敗:', e));
+        isTracking = false; 
+        isFocusing = false; 
+        isWarningState = false;
+        window.hasStartedFocus = false; 
+
+        // 建立「準備與等待」雙階段彈窗
+        const startModal = document.createElement('div');
+        startModal.id = 'standaloneReadyModal';
+        startModal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#051a10;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;padding:20px;text-align:center;";
+        startModal.innerHTML = `
+            <div id="modalStep1" class="flex flex-col items-center">
+                <i class="fas fa-door-open text-6xl mb-6 text-green-400 animate-bounce"></i>
+                <h1 style="font-size:26px;font-weight:900;margin-bottom:15px;">已抵達專屬座位</h1>
+                <p style="font-size:16px;color:#a7f3d0;margin-bottom:40px;">目標：${targetMinutes} 分鐘<br><br>請點擊下方按鈕解鎖防護系統，<br>隨後將手機螢幕朝下放置，即會自動進入教室。</p>
+                <button id="finalStartBtn" style="background:linear-gradient(to right, #10b981, #059669);color:white;padding:15px 40px;border-radius:30px;font-size:20px;font-weight:bold;border:none;cursor:pointer;box-shadow:0 10px 20px rgba(16,185,129,0.3);">🚀 開始專注</button>
+            </div>
             
-            successAudio.play().then(() => {
-                successAudio.pause();
-                successAudio.currentTime = 0;
-            }).catch(e => console.log('解鎖成功音效失敗:', e));
+            <div id="modalStep2" class="hidden flex-col items-center">
+                <i class="fas fa-wifi text-6xl mb-6 text-yellow-400 animate-pulse"></i>
+                <h1 style="font-size:26px;font-weight:900;margin-bottom:15px; color:#f1c40f;">🟡 防護系統已啟動</h1>
+                <p style="font-size:18px;color:#fef08a;font-weight:bold;margin-bottom:10px;">等待手機翻轉中...</p>
+                <p style="font-size:14px;color:#a7f3d0;">請將手機螢幕朝下蓋在桌上<br>聽到「叮」聲即代表成功進入教室並開始倒數</p>
+            </div>
+        `;
+        document.body.appendChild(startModal);
 
-            // 2. 請求螢幕防休眠
-            requestWakeLock();
+        if(setupArea) setupArea.classList.add('hidden');
 
-            // 3. 移除準備畫面
-            readyOverlay.remove();
+        document.getElementById('finalStartBtn').addEventListener('click', () => {
+            // 解鎖音效
+            unlockAudio();
+            if (typeof requestWakeLock === 'function') requestWakeLock();
 
-            // 4. 開始追蹤陀螺儀 (此時 isFocusing 仍是 false，不會響警報)
-            if (!isTracking) {
-                startTracking(); 
-                
-                if (statusDisplay) {
-                    statusDisplay.textContent = `✅ 系統已啟動：請將手機螢幕朝下放置以開始計時`;
-                    statusDisplay.style.color = "#3498db";
-                }
+            // 🚨 關鍵改變：不移除全螢幕彈窗，而是切換到黃燈等待畫面！
+            document.getElementById('modalStep1').classList.add('hidden');
+            document.getElementById('modalStep1').classList.remove('flex');
+            document.getElementById('modalStep2').classList.remove('hidden');
+            document.getElementById('modalStep2').classList.add('flex');
+
+            if (statusDisplay) {
+                statusDisplay.innerHTML = `🟡 已連線：等待翻轉螢幕以開始計時`;
+                statusDisplay.style.color = "#f1c40f"; 
             }
+
+            // 啟動監聽陀螺儀
+            isTracking = true;
+            window.addEventListener('deviceorientation', handleOrientation);
         });
     }
 
     socket.on('force_status_sync', (data) => {
-        if (data.isFlipped) {
-            if (!isTracking) {
-                myName = syncNameInput?.value.trim() || localStorage.getItem('studyVerseUser');
-                if (myName) startTracking();
-            }
+        if (data.isFlipped && !isTracking) {
+            myName = syncNameInput?.value.trim() || localStorage.getItem('studyVerseUser');
+            if (myName) startTracking();
         }
     });
 
@@ -202,22 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${h}:${m}:${s}`;
     }
 
-    // 檢查是否達成目標的函數
     function checkCompletion() {
         if (focusSeconds >= targetSeconds && !isCompleted) {
             isCompleted = true;
-            
-            // 確保音樂從頭開始播放
             successAudio.currentTime = 0;
-            const playPromise = successAudio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(e => {
-                    console.log('音樂被瀏覽器阻擋:', e);
-                });
-            }
-            
+            successAudio.play().catch(e => console.log('音樂播放受阻', e));
             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
-            
             if(statusDisplay) {
                 statusDisplay.textContent = "🎉 恭喜達標！請翻開手機查看您的專屬評語";
                 statusDisplay.style.color = "#f1c40f";
@@ -232,10 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        username: myName,
-                        roomType: 'flip-mode', 
-                        focusSeconds: focusSeconds,
-                        status: statusType 
+                        username: myName, roomType: 'flip-mode', 
+                        focusSeconds: focusSeconds, status: statusType 
                     })
                 });
             } catch (error) { console.error("儲存失敗:", error); }
@@ -246,43 +237,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if(startBtn) {
         startBtn.addEventListener('click', async () => {
             myName = syncNameInput.value.trim();
-            if (!myName) { alert("請輸入暱稱以進行 AI 教室連動！"); return; }
+            if (!myName) { alert("請輸入暱稱！"); return; }
             localStorage.setItem('studyVerseUser', myName);
-            
-            unlockAudio(); // 點擊按鈕時解鎖音效！
-
+            unlockAudio();
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceOrientationEvent.requestPermission();
-                    if (permissionState === 'granted') { startTracking(); } 
-                    else { alert('需要陀螺儀權限才能連動喔！'); }
+                    if (permissionState === 'granted') startTracking();
                 } catch (error) { console.error(error); }
             } else { startTracking(); }
         });
     }
 
     function startTracking() {
-        isTracking = true; 
-        focusSeconds = 0;
-        isCompleted = false;
-        
+        isTracking = true; focusSeconds = 0; isCompleted = false;
+        window.hasStartedFocus = false; // 重設起始標記
         if(timerDisplay) timerDisplay.textContent = formatTime(targetSeconds);
-        
         if(setupArea) setupArea.classList.add('hidden'); 
         if(stopBtn) stopBtn.classList.remove('hidden');
         if(statusDisplay) {
-            statusDisplay.textContent = `✅ 已就緒，目標：${targetMinutes} 分鐘，請將螢幕朝下`; 
+            statusDisplay.textContent = `✅ 已就緒，請將螢幕朝下開始計時`; 
             statusDisplay.style.color = "#3498db";
         }
         if(syncBadge) {
             syncBadge.textContent = `● 已與 ${myName} 的 AI 教室連動`;
             syncBadge.classList.add('sync-active');
         }
-
-        const currentTeamId = urlParams.get('teamId') || null;
-        socket.emit("join_room", { name: myName, goal: "手機同步模式", teamId: currentTeamId });
-        socket.emit("update_status", { name: myName, isFlipped: false });
-
+        socket.emit("join_room", { name: myName, goal: "手機同步模式" });
         window.addEventListener('deviceorientation', handleOrientation);
     }
 
@@ -290,14 +271,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isTracking = false; isFocusing = false; isWarningState = false; 
         clearInterval(timerInterval); clearInterval(warningCountdownInterval); 
         alarmAudio.pause();
-        releaseWakeLock(); // 解除防休眠
-        
+        releaseWakeLock();
         const overlay = document.getElementById('warningOverlay');
-        if (overlay) {
-            overlay.classList.add('hidden');
-            overlay.classList.remove('flex');
-        }
-        
+        if (overlay) overlay.classList.add('hidden');
         window.removeEventListener('deviceorientation', handleOrientation);
         if(setupArea) setupArea.classList.remove('hidden'); 
         if(stopBtn) stopBtn.classList.add('hidden');
@@ -305,54 +281,51 @@ document.addEventListener('DOMContentLoaded', () => {
             syncBadge.classList.remove('sync-active');
             syncBadge.textContent = "未連動 AI 教室";
         }
-        if(statusBox) statusBox.classList.remove('is-flipped');
         socket.emit("update_status", { name: myName, isFlipped: false });
     }
 
+    // ==========================================
+    // 4. 改進的 handleOrientation (核心邏輯)
+    // ==========================================
     function handleOrientation(event) {
         if (!isTracking) return;
-        const beta = event.beta;
-        const gamma = event.gamma;
-        const isFaceDown = (Math.abs(beta) > 165 || Math.abs(beta) < 15) && Math.abs(gamma) < 25 && beta < 0;
+        let beta = event.beta;
+        
+        // 🚨 修正翻轉偵測邏輯：只有 beta 接近 180 或 -180 才算真正蓋在桌上！
+        // (移除了原本會導致「朝上」被誤判的 Math.abs(beta) < 15 邏輯)
+        const isFaceDown = (beta > 150 || beta < -150);
 
         if (isFaceDown) {
-            if (isWarningState) {
-                // 及時蓋回：解除警報
-                clearInterval(warningCountdownInterval);
-                isWarningState = false;
+            // 🚀 按下按鈕後的第一次翻轉
+            if (!window.hasStartedFocus) {
+                window.hasStartedFocus = true; 
+                isFocusing = true; 
                 
-                // 停止警報
-                alarmAudio.pause();
-                alarmAudio.currentTime = 0;
-                
-                document.getElementById('warningOverlay').classList.add('hidden');
-                document.getElementById('warningOverlay').classList.remove('flex');
-                document.body.style.backgroundColor = "#051a10"; 
-                
-                if(statusDisplay) {
-                    statusDisplay.textContent = "✅ 已恢復專注，繼續計時";
-                    statusDisplay.style.color = "#2ecc71";
+                requestWakeLock(); 
+
+                // 🚨 關鍵：真正翻轉後，才移除覆蓋全螢幕的黃燈等待彈窗，顯示出後方的教室！
+                const startModal = document.getElementById('standaloneReadyModal');
+                if (startModal) startModal.remove();
+
+                // 播放叮一聲提示 (1秒後自動暫停)
+                successAudio.play().then(() => {
+                    setTimeout(() => {
+                        successAudio.pause();
+                        successAudio.currentTime = 0;
+                    }, 1000); 
+                }).catch(() => {});
+
+                // 更新介面狀態：切換為綠燈
+                if (statusDisplay) {
+                    statusDisplay.innerHTML = `🟢 深度專注中...`;
+                    statusDisplay.style.color = "#10b981";
                 }
-                socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
-            } 
-            else if (!isFocusing) {
-                isFocusing = true;
-                requestWakeLock(); // 開始專注時啟動防休眠
-                
                 if(statusBox) statusBox.classList.add('is-flipped');
                 document.body.style.backgroundColor = "#051a10"; 
                 socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
-                
-                const targetRoom = urlParams.get('targetRoom');
-                if (targetRoom) {
-                    if (navigator.vibrate) navigator.vibrate(200);
-                    setTimeout(() => {
-                        const currentParams = new URLSearchParams(window.location.search);
-                        currentParams.delete('targetRoom');
-                        window.location.href = `/${targetRoom}?${currentParams.toString()}`;
-                    }, 1200);
-                }
 
+                // 啟動正式倒數計時器
+                if(timerDisplay) timerDisplay.textContent = formatTime(targetSeconds);
                 clearInterval(timerInterval);
                 timerInterval = setInterval(() => {
                     if (!isWarningState && !isCompleted) {
@@ -362,37 +335,45 @@ document.addEventListener('DOMContentLoaded', () => {
                         checkCompletion(); 
                     }
                 }, 1000);
+
+            } else if (isWarningState) {
+                // 及時蓋回：解除警報
+                clearInterval(warningCountdownInterval);
+                isWarningState = false;
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
+                
+                document.getElementById('warningOverlay').classList.add('hidden');
+                document.body.style.backgroundColor = "#051a10"; 
+                
+                if(statusDisplay) {
+                    statusDisplay.textContent = "✅ 已恢復專注，繼續計時";
+                    statusDisplay.style.color = "#2ecc71";
+                }
+                socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
             }
         } else {
             // 手機被拿起來了
-            
-            // 情況 1：已經達標完成了！
             if (isCompleted) {
-                // 如果音樂在背景被阻擋，當學生翻開手機時補刀再次強制播放！
-                successAudio.play().catch(e => console.log('補發播放失敗:', e));
-
+                successAudio.play().catch(() => {});
                 const aiSuccessComments = [
-                    `【AI 總結】太棒了 ${myName}！你展現了驚人的專注力，完美抵擋了手機的誘惑！`,
-                    `【AI 總結】任務達成！這段時間的深度學習將成為你邁向卓越的基石。`,
-                    `【AI 總結】完美的一擊！你的意志力堅不可摧，系統已為您記錄本次光榮的專注。`
+                    `【AI 總結】太棒了 ${myName}！你展現了驚人的專注力！`,
+                    `【AI 總結】任務達成！這段時間的深度學習將成為你的基石。`,
+                    `【AI 總結】完美的一擊！你的意志力堅不可摧。`
                 ];
                 const comment = aiSuccessComments[Math.floor(Math.random() * aiSuccessComments.length)];
-                
-                const text = `🏆 挑戰成功！\n\n${comment}\n\n本次實際專注時長：${formatTime(focusSeconds)}\n系統即將為您結算並返回大廳。`;
+                const text = `🏆 挑戰成功！\n\n${comment}\n\n本次時長：${formatTime(focusSeconds)}\n即將返回大廳。`;
                 
                 showCustomModal("發光吧！目標達成！", text, () => {
-                    // 點擊確定後才關閉音樂、結算並跳轉
                     successAudio.pause();
-                    successAudio.currentTime = 0;
                     stopTracking();
                     executeCheckout('completed');
                 });
             }
-            // 情況 2：還沒達標 (啟動國家級警報)
             else if (isFocusing && !isWarningState) {
+                // 啟動警告
                 isWarningState = true;
                 warningSeconds = 5; 
-                
                 document.getElementById('warningOverlay').classList.remove('hidden');
                 document.getElementById('warningOverlay').classList.add('flex');
                 document.getElementById('warningNumber').textContent = warningSeconds;
@@ -403,35 +384,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 socket.emit("update_status", { name: myName, status: "DISTRACTED", isFlipped: false });
-                
-                // 播放警報
                 alarmAudio.currentTime = 0;
-                alarmAudio.play().catch(e => console.log('Alarm play failed:', e));
-                if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800, 400]); 
+                alarmAudio.play().catch(() => {});
+                if (navigator.vibrate) navigator.vibrate([800, 400]); 
 
                 clearInterval(warningCountdownInterval);
-                warningCountdownInterval = setInterval(async () => {
+                warningCountdownInterval = setInterval(() => {
                     warningSeconds--;
                     document.getElementById('warningNumber').textContent = warningSeconds;
-                    
                     if (navigator.vibrate) navigator.vibrate([500, 200]);
-
                     if (warningSeconds <= 0) {
                         clearInterval(warningCountdownInterval);
-                        
-                        const aiFailComments = [
-                            `【AI 總結】定力嚴重不足！禁不起手機的誘惑，本次專注宣告失敗。`,
-                            `【AI 總結】太可惜了！只差一點點就能完成任務，您的意志力需要再多加鍛鍊。`,
-                            `【AI 總結】手機的吸引力顯然大於你的目標，系統已將您強制退房。`
-                        ];
-                        const comment = aiFailComments[Math.floor(Math.random() * aiFailComments.length)];
-                        
-                        const text = `🚨 專注中斷！\n\n${comment}\n\n懲罰：記早退一次，即將返回大廳。`;
-                        
+                        const text = `🚨 專注中斷！\n\n定力不足，系統已將您強制退房。`;
                         showCustomModal("違規退房", text, () => {
-                            // 退房前也要把音樂強制關閉
-                            successAudio.pause();
-                            successAudio.currentTime = 0;
                             stopTracking(); 
                             executeCheckout('early_leave');
                         });

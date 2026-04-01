@@ -114,7 +114,7 @@
                 </div>
 
                 <button id="btn-sa-ready" onclick="prepareStandaloneFlip()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20">
-                    下一步：準備翻轉
+                    下一步：準備進入教室
                 </button>
             </div>
 
@@ -174,27 +174,19 @@
         // ==========================================
         // 單機翻轉模式：視訊鏡頭預設關閉邏輯
         // ==========================================
-        // 假設你已經取得使用者的 mediaStream
         function disableCameraForSingleDeviceMode(stream) {
             if (!stream) return;
             
-            // 取得所有的視訊軌道
             const videoTracks = stream.getVideoTracks();
-            
             videoTracks.forEach(track => {
-                // 完全停止該視訊軌道，釋放硬體資源以節省最大能耗
                 track.stop(); 
-                
-                // 如果你的架構需要保留軌道但只傳黑畫面，則改用：
-                // track.enabled = false; 
             });
             
             console.log("單機翻轉模式：視訊鏡頭已完全關閉以節省能耗。");
         }
-        // 若該模式根本不需要語音以外的功能，建議在 getUserMedia 時就直接設定 { video: false, audio: true }
 
         // ==========================================
-        // 單機翻轉 5 步驟核心邏輯
+        // 單機翻轉 核心邏輯 (新版：略過大廳翻轉，直接跳轉教室)
         // ==========================================
 
         // 步驟 1: 開啟設定 Modal
@@ -216,11 +208,13 @@
             document.getElementById('sa-input-section').classList.remove('hidden');
             
             const sound = document.getElementById('success-sound');
-            sound.load(); // 透過使用者點擊行為預先載入，避免被瀏覽器阻擋
+            sound.load(); 
         }
 
-        // 步驟 4: 儲存目標與時間，準備監聽陀螺儀
+        // 步驟 4: 儲存目標與時間，直接跳轉進入教室
         function prepareStandaloneFlip() {
+            if (isRedirecting) return;
+            
             const goal = document.getElementById('sa-goal').value.trim();
             const time = document.getElementById('sa-time').value.trim();
             
@@ -229,94 +223,50 @@
                 return;
             }
 
+            isRedirecting = true; // 上鎖防止重複點擊
+
             // 將資料存起來，等等跳轉時要放在網址帶過去
             localStorage.setItem('standaloneGoal', goal);
             localStorage.setItem('standaloneTime', time);
 
+            // 隱藏輸入畫面
             document.getElementById('sa-input-section').classList.add('hidden');
-            document.getElementById('sa-flip-instruction').classList.remove('hidden');
 
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', checkPhoneFlipped);
-                        } else {
-                            alert('需要允許動作與方向存取，才能偵測手機翻轉喔！');
-                        }
-                    })
-                    .catch(console.error);
-            } else {
-                window.addEventListener('deviceorientation', checkPhoneFlipped);
+            // === 在進入單機翻轉模式前，確實執行鏡頭關閉以節省能耗 ===
+            try {
+                const streamToClose = window.currentStream || (typeof currentStream !== 'undefined' ? currentStream : null);
+                disableCameraForSingleDeviceMode(streamToClose);
+            } catch(e) {
+                console.error("關閉鏡頭時發生錯誤：", e);
             }
-        }
 
-        // 步驟 5: 偵測翻轉、播音效、完美跳轉
-        function checkPhoneFlipped(event) {
-            if (isRedirecting) return; // 已經在上鎖跳轉中就不再重複執行
-
-            const beta = event.beta;
-            const gamma = event.gamma;
+            // 取得要跳轉的教室與參數
+            const targetRoom = targetStandaloneRoomUrl || 'managed-room.html';
+            const currentUser = localStorage.getItem('studyVerseUser') || "游擊隊員";
             
-            if (beta !== null) {
-                // 判斷手機朝下
-                if ((beta < -150 || beta > 150) && Math.abs(gamma) < 45) {
-                    isRedirecting = true;
-                    window.removeEventListener('deviceorientation', checkPhoneFlipped);
-                    
-                    const sound = document.getElementById('success-sound');
-                    
-                    // 準備跳轉的執行函數
-                    const doRedirect = () => {
-                        // === 在進入單機翻轉模式前，確實執行鏡頭關閉以節省能耗 ===
-                        try {
-                            // 若大廳層級未來有實作鏡頭流，這裡會捕捉並自動關閉
-                            const streamToClose = window.currentStream || (typeof currentStream !== 'undefined' ? currentStream : null);
-                            disableCameraForSingleDeviceMode(streamToClose);
-                        } catch(e) {
-                            console.error("關閉鏡頭時發生錯誤：", e);
-                        }
-                        
-                        const currentUser = localStorage.getItem('studyVerseUser') || "游擊隊員";
-                        const goal = localStorage.getItem('standaloneGoal') || '';
-                        const time = localStorage.getItem('standaloneTime') || '25';
-                        
-                        // 將參數直接帶入目標教室，繞過所有多餘介面直接啟動計時
-                        let url = `/${targetStandaloneRoomUrl}?username=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
-                        
-                        // 若是加入隊伍進來的，把隊伍參數也接上
-                        if (window.tempTeamParams) {
-                            url += window.tempTeamParams;
-                            window.tempTeamParams = null;
-                        }
-                        
-                        window.location.href = url;
-                    };
-
-                    // 設定音效播放完畢後跳轉 (最佳體驗)
-                    sound.onended = doRedirect;
-                    
-                    // 播放音效
-                    sound.play().catch(e => {
-                        console.log('音效播放失敗(可能被瀏覽器阻擋):', e);
-                        // 即使音效被阻擋，也保證一定會跳轉
-                        doRedirect(); 
-                    });
-                }
+            // 組合最終 URL (帶上 standalone=true)
+            let finalUrl = `/${targetRoom}?username=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
+            
+            // 若是加入隊伍進來的，把隊伍參數也接上
+            if (window.tempTeamParams) {
+                finalUrl += window.tempTeamParams;
+                window.tempTeamParams = null; // 處理完清除
             }
+            
+            // 🚀 關鍵修改：不跳出等待翻轉彈窗，直接跳轉進入教室！
+            window.location.href = finalUrl;
         }
 
         // 取消設定
         function closeStandaloneModal() {
             document.getElementById('standalone-setup-modal').classList.add('hidden');
             document.getElementById('standalone-setup-modal').classList.remove('flex');
-            window.removeEventListener('deviceorientation', checkPhoneFlipped);
             isRedirecting = false;
             window.tempTeamParams = null;
         }
 
         // ==========================================
-        // 隊伍與審核邏輯 (整合新版 5 步驟)
+        // 隊伍與審核邏輯 
         // ==========================================
 
         window.showWaitingModal = function(teamName) {
@@ -381,7 +331,7 @@
                     });
                     if (window.showWaitingModal) window.showWaitingModal(teamName);
                 } else {
-                    // 免審核直接開啟 5 步驟 Modal
+                    // 免審核直接開啟設定 Modal
                     const teamParams = `&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
                     openStandaloneModal(pendingRoomType);
                     window.tempTeamParams = teamParams;
@@ -400,7 +350,7 @@
                 } else if (typeof showRoomSetup === 'function') {
                     showRoomSetup(targetRoom, teamParams);
                 } else {
-                    // 審核通過後開啟 5 步驟 Modal
+                    // 審核通過後開啟設定 Modal
                     openStandaloneModal(targetRoom);
                     window.tempTeamParams = teamParams;
                 }
