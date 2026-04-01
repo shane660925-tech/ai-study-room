@@ -1,6 +1,6 @@
 /**
- * StudyVerse V2.2.7 - 翻轉自習室邏輯 (flip.js)
- * 修正：恢復標準音訊解鎖解決 iOS 靜音問題、確保小當家音樂響起、並徹底消除跳轉殘影
+ * StudyVerse V2.2.8 - 翻轉自習室邏輯 (flip.js)
+ * 修正：導入「靜音輪播大法」完美破解 iOS 無聲問題，並加入結算跳轉護盾消滅殘影
  */
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
@@ -18,23 +18,25 @@ document.addEventListener('DOMContentLoaded', () => {
     successAudio.loop = true; 
     successAudio.preload = 'auto'; 
 
-    // 【防禦機制 A】：正規白名單音效解鎖器
+    // 【防禦機制 A】：靜音輪播大法 (完美破解 iOS 阻擋機制)
     let isAudioUnlocked = false;
     function unlockAudio() {
         if (isAudioUnlocked) return;
         isAudioUnlocked = true;
         
-        // 透過使用者真實點擊，瞬間播放再暫停，取得 iOS 永久播放權限
-        const unlock = (audio) => {
-            audio.play().then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-            }).catch(() => {});
-        };
+        // 1. 金幣聲解鎖 (因為只播一次，所以播完暫停即可)
+        coinAudio.play().then(() => {
+            coinAudio.pause();
+            coinAudio.currentTime = 0;
+        }).catch(() => {});
+
+        // 2. 警報與成功音樂：設定為「靜音(muted)並持續播放」
+        // iOS 允許取消靜音 (muted = false)，所以我們讓它在背景無聲運作，隨時可以發出聲音！
+        alarmAudio.muted = true;
+        alarmAudio.play().catch(() => {});
         
-        unlock(coinAudio);
-        unlock(alarmAudio);
-        unlock(successAudio);
+        successAudio.muted = true;
+        successAudio.play().catch(() => {});
 
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('click', unlockAudio);
@@ -193,6 +195,26 @@ document.addEventListener('DOMContentLoaded', () => {
     async function executeCheckout(statusType) {
         window.isCheckingOut = true; 
         
+        // 🛡️ 終極跳轉護盾：徹底消滅跳轉期間的殘影與不速之客警報聲
+        
+        // 1. 攔截並癱瘓整個網頁所有的音訊播放 (防止 ai-core 等腳本發出聲音)
+        const originalPlay = HTMLAudioElement.prototype.play;
+        HTMLAudioElement.prototype.play = function() {
+            return Promise.resolve();
+        };
+        document.querySelectorAll('audio, video').forEach(el => {
+            el.muted = true;
+            el.pause();
+        });
+
+        // 2. 顯示絕對頂層的「結算遮罩」，強勢蓋住任何可能彈出的違規殘影
+        const checkoutOverlay = document.createElement('div');
+        checkoutOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#051a10;z-index:2147483647;display:flex;align-items:center;justify-content:center;color:#10b981;font-size:20px;font-weight:bold;";
+        checkoutOverlay.innerHTML = "<i class='fas fa-spinner fa-spin mr-3'></i> 正在結算並返回大廳...";
+        document.body.appendChild(checkoutOverlay);
+
+        stopTracking();
+
         if (focusSeconds > 0) {
             try {
                 await fetch('/api/save-focus', {
@@ -212,34 +234,16 @@ document.addEventListener('DOMContentLoaded', () => {
         isTracking = false; isFocusing = false; isWarningState = false; 
         clearInterval(timerInterval); clearInterval(warningCountdownInterval); 
         
-        // 1. 強制暫停所有已知音效
-        alarmAudio.pause();
-        successAudio.pause();
-        coinAudio.pause();
-        
-        // 2. 徹底靜音頁面上的「所有」音訊元素 (防止 ai-core.js 等其他腳本發出聲音)
-        document.querySelectorAll('audio, video').forEach(media => {
-            media.pause();
-            media.muted = true;
-        });
-        
+        alarmAudio.muted = true;
+        successAudio.muted = true;
         releaseWakeLock();
-        
-        // 3. 注入 CSS 永久隱藏所有警示層 (防止 ai-core.js 再次觸發違規畫面殘影)
-        const style = document.createElement('style');
-        style.innerHTML = '#warningOverlay, .warning-overlay, .ai-warning-box { display: none !important; opacity: 0 !important; visibility: hidden !important; z-index: -999 !important; }';
-        document.head.appendChild(style);
         
         const wOverlay = document.getElementById('warningOverlay');
         if(wOverlay) {
             wOverlay.classList.add('hidden');
             wOverlay.classList.remove('flex');
         }
-        
         window.removeEventListener('deviceorientation', handleOrientation);
-        
-        // 結算期間不再發送 isFlipped: false，避免伺服器或其他模組誤判
-        // socket.emit("update_status", { name: myName, isFlipped: false });
     }
 
     // ==========================================
@@ -263,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const startModal = document.getElementById('standaloneReadyModal');
                 if (startModal) startModal.remove();
 
+                coinAudio.muted = false;
                 coinAudio.play().catch(() => {});
 
                 if (statusDisplay) {
@@ -281,11 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const remain = targetSeconds - focusSeconds;
                         if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
                         
-                        // 🚀 達成預定時間：播放小當家音樂提醒學生 (此時手機仍蓋在桌上)
+                        // 🚀 達成預定時間：直接「解除靜音」，小當家音樂立刻響起呼喚學生
                         if (focusSeconds >= targetSeconds && !isCompleted) {
                             isCompleted = true;
-                            successAudio.currentTime = 0;
-                            successAudio.play().catch(e => console.log('音樂播放受阻', e));
+                            successAudio.muted = false; 
                             
                             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
                             if(statusDisplay) {
@@ -301,8 +305,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(warningCountdownInterval);
                 isWarningState = false;
                 
-                alarmAudio.pause();
-                alarmAudio.currentTime = 0;
+                // 🚀 重新靜音警報聲
+                alarmAudio.muted = true;
                 
                 const wOverlay = document.getElementById('warningOverlay');
                 wOverlay.classList.add('hidden');
@@ -320,13 +324,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isCompleted) {
                 if (window.isCheckoutProcessed) return;
                 window.isCheckoutProcessed = true;
-                
-                // 瞬間移除監聽器
                 window.removeEventListener('deviceorientation', handleOrientation);
 
-                // 再次確保小當家音樂依然大聲播 (防止背景時效過期)
-                successAudio.play().catch(() => {});
-                
                 const aiSuccessComments = [
                     `【AI 總結】太棒了 ${myName}！你展現了驚人的專注力！`,
                     `【AI 總結】完美的一擊！這段時間的深度學習將成為你的基石。`
@@ -335,9 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const text = `🏆 挑戰成功！\n\n${comment}\n\n本次時長：${formatTime(focusSeconds)}\n請點擊確定進行結算並返回大廳。`;
                 
                 showCustomModal("發光吧！目標達成！", text, () => {
-                    // 🚀 點擊確定後，徹底關閉音樂並進行跳轉結算
-                    successAudio.pause();
-                    stopTracking();
+                    // 🚀 點擊確定後，靜音音樂並執行「絕對無殘影跳轉」
+                    successAudio.muted = true;
                     executeCheckout('completed');
                 });
             }
@@ -353,9 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 socket.emit("update_status", { name: myName, status: "DISTRACTED", isFlipped: false });
                 
-                // 🚀 正確播放警報聲
-                alarmAudio.currentTime = 0;
-                alarmAudio.play().catch(() => {});
+                // 🚀 解除警報靜音，大聲發出警告
+                alarmAudio.muted = false;
                 
                 if (navigator.vibrate) navigator.vibrate([800, 400]); 
 
@@ -372,8 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.removeEventListener('deviceorientation', handleOrientation);
 
                         showCustomModal("違規退房", `🚨 專注中斷！\n\n定力不足，系統已將您強制退房。`, () => {
-                            alarmAudio.pause(); // 確定關閉警報
-                            stopTracking(); 
+                            alarmAudio.muted = true; // 靜音警報
                             executeCheckout('early_leave');
                         });
                     }
