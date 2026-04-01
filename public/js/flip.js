@@ -1,42 +1,52 @@
 /**
- * StudyVerse V2.2.8 - 翻轉自習室邏輯 (flip.js)
- * 修正：導入「靜音輪播大法」完美破解 iOS 無聲問題，並加入結算跳轉護盾消滅殘影
+ * StudyVerse V2.2.9 - 翻轉自習室邏輯 (flip.js)
+ * 修正：導入「實體化綁定」與「無聲背景迴圈大法」徹底破解 iOS 休眠阻擋，並加入跳轉防護盾
  */
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
-    // 1. 動態建立音效資源
+    // 1. 動態建立音效資源 (實體化綁定)
     // ==========================================
     const coinAudio = new Audio('https://www.myinstants.com/media/sounds/mario-coin.mp3');
-    coinAudio.preload = 'auto';
-
     const alarmAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'); 
     alarmAudio.loop = true; 
-    alarmAudio.preload = 'auto'; 
-    
-    // 小當家音樂 (達成時間播放)
     const successAudio = new Audio('/audio/chuuka.mp3'); 
     successAudio.loop = true; 
-    successAudio.preload = 'auto'; 
 
-    // 【防禦機制 A】：靜音輪播大法 (完美破解 iOS 阻擋機制)
+    // 將音訊實體化加入網頁，防止 iOS 偷偷回收資源
+    [coinAudio, alarmAudio, successAudio].forEach(audio => {
+        audio.style.display = 'none';
+        audio.preload = 'auto';
+        audio.setAttribute('playsinline', '');
+        document.body.appendChild(audio);
+    });
+
+    // 🚀 極短的無聲空白音訊 (保持 iOS 音訊通道永遠活著！)
+    // 這是一段合法的空白 mp3 base64，不會有任何聲音，但能騙過瀏覽器
+    const silentAudio = new Audio('data:audio/mp3;base64,//MkxAAQAAAAAAAAAAAAAAAAAAAAAAAWQQhwAANAA0QQAACsMAAAAB4AA/8oAAgAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA');
+    silentAudio.loop = true;
+    silentAudio.setAttribute('playsinline', '');
+    document.body.appendChild(silentAudio);
+
+    // 【防禦機制 A】：正規白名單音效解鎖器
     let isAudioUnlocked = false;
     function unlockAudio() {
         if (isAudioUnlocked) return;
         isAudioUnlocked = true;
         
-        // 1. 金幣聲解鎖 (因為只播一次，所以播完暫停即可)
-        coinAudio.play().then(() => {
-            coinAudio.pause();
-            coinAudio.currentTime = 0;
-        }).catch(() => {});
+        // 1. 啟動無聲迴圈，維持 Audio Context 永不休眠
+        silentAudio.play().catch(() => {});
 
-        // 2. 警報與成功音樂：設定為「靜音(muted)並持續播放」
-        // iOS 允許取消靜音 (muted = false)，所以我們讓它在背景無聲運作，隨時可以發出聲音！
-        alarmAudio.muted = true;
-        alarmAudio.play().catch(() => {});
+        // 2. 瞬間播放並暫停其他音效，取得合法發聲權限
+        const unlock = (audio) => {
+            audio.play().then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+            }).catch(() => {});
+        };
         
-        successAudio.muted = true;
-        successAudio.play().catch(() => {});
+        unlock(coinAudio);
+        unlock(alarmAudio);
+        unlock(successAudio);
 
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('click', unlockAudio);
@@ -195,23 +205,20 @@ document.addEventListener('DOMContentLoaded', () => {
     async function executeCheckout(statusType) {
         window.isCheckingOut = true; 
         
-        // 🛡️ 終極跳轉護盾：徹底消滅跳轉期間的殘影與不速之客警報聲
-        
-        // 1. 攔截並癱瘓整個網頁所有的音訊播放 (防止 ai-core 等腳本發出聲音)
-        const originalPlay = HTMLAudioElement.prototype.play;
-        HTMLAudioElement.prototype.play = function() {
-            return Promise.resolve();
-        };
-        document.querySelectorAll('audio, video').forEach(el => {
-            el.muted = true;
-            el.pause();
-        });
+        // 🛡️ 終極跳轉護盾：徹底消滅跳轉期間的殘影與其他腳本的警報
+        const wOverlay = document.getElementById('warningOverlay');
+        if (wOverlay) wOverlay.remove(); // 物理刪除
 
-        // 2. 顯示絕對頂層的「結算遮罩」，強勢蓋住任何可能彈出的違規殘影
-        const checkoutOverlay = document.createElement('div');
-        checkoutOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#051a10;z-index:2147483647;display:flex;align-items:center;justify-content:center;color:#10b981;font-size:20px;font-weight:bold;";
-        checkoutOverlay.innerHTML = "<i class='fas fa-spinner fa-spin mr-3'></i> 正在結算並返回大廳...";
-        document.body.appendChild(checkoutOverlay);
+        const style = document.createElement('style');
+        style.innerHTML = `
+            #warningOverlay, .warning-overlay, .ai-warning-box, .ai-bubble {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                z-index: -9999 !important;
+            }
+        `;
+        document.head.appendChild(style);
 
         stopTracking();
 
@@ -234,15 +241,11 @@ document.addEventListener('DOMContentLoaded', () => {
         isTracking = false; isFocusing = false; isWarningState = false; 
         clearInterval(timerInterval); clearInterval(warningCountdownInterval); 
         
-        alarmAudio.muted = true;
-        successAudio.muted = true;
+        alarmAudio.pause();
+        successAudio.pause();
+        silentAudio.pause(); // 關閉無聲背景音
         releaseWakeLock();
         
-        const wOverlay = document.getElementById('warningOverlay');
-        if(wOverlay) {
-            wOverlay.classList.add('hidden');
-            wOverlay.classList.remove('flex');
-        }
         window.removeEventListener('deviceorientation', handleOrientation);
     }
 
@@ -267,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const startModal = document.getElementById('standaloneReadyModal');
                 if (startModal) startModal.remove();
 
-                coinAudio.muted = false;
+                coinAudio.currentTime = 0;
                 coinAudio.play().catch(() => {});
 
                 if (statusDisplay) {
@@ -286,10 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const remain = targetSeconds - focusSeconds;
                         if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
                         
-                        // 🚀 達成預定時間：直接「解除靜音」，小當家音樂立刻響起呼喚學生
+                        // 🚀 達成預定時間：播放小當家音樂，持續響直到學生按下確認
                         if (focusSeconds >= targetSeconds && !isCompleted) {
                             isCompleted = true;
-                            successAudio.muted = false; 
+                            successAudio.currentTime = 0;
+                            successAudio.play().catch(e => console.log('音樂播放受阻', e));
                             
                             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
                             if(statusDisplay) {
@@ -305,8 +309,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(warningCountdownInterval);
                 isWarningState = false;
                 
-                // 🚀 重新靜音警報聲
-                alarmAudio.muted = true;
+                // 停止警報聲
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
                 
                 const wOverlay = document.getElementById('warningOverlay');
                 wOverlay.classList.add('hidden');
@@ -326,6 +331,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.isCheckoutProcessed = true;
                 window.removeEventListener('deviceorientation', handleOrientation);
 
+                // 確保小當家音樂大聲播著
+                successAudio.play().catch(() => {});
+                
                 const aiSuccessComments = [
                     `【AI 總結】太棒了 ${myName}！你展現了驚人的專注力！`,
                     `【AI 總結】完美的一擊！這段時間的深度學習將成為你的基石。`
@@ -334,8 +342,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const text = `🏆 挑戰成功！\n\n${comment}\n\n本次時長：${formatTime(focusSeconds)}\n請點擊確定進行結算並返回大廳。`;
                 
                 showCustomModal("發光吧！目標達成！", text, () => {
-                    // 🚀 點擊確定後，靜音音樂並執行「絕對無殘影跳轉」
-                    successAudio.muted = true;
+                    // 🚀 點擊確定後，徹底關閉音樂並進行無殘影跳轉
+                    successAudio.pause();
                     executeCheckout('completed');
                 });
             }
@@ -351,8 +359,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 socket.emit("update_status", { name: myName, status: "DISTRACTED", isFlipped: false });
                 
-                // 🚀 解除警報靜音，大聲發出警告
-                alarmAudio.muted = false;
+                // 🚀 播放警報聲
+                alarmAudio.currentTime = 0;
+                alarmAudio.play().catch(() => {});
                 
                 if (navigator.vibrate) navigator.vibrate([800, 400]); 
 
@@ -369,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.removeEventListener('deviceorientation', handleOrientation);
 
                         showCustomModal("違規退房", `🚨 專注中斷！\n\n定力不足，系統已將您強制退房。`, () => {
-                            alarmAudio.muted = true; // 靜音警報
+                            alarmAudio.pause(); // 確認關閉警報
                             executeCheckout('early_leave');
                         });
                     }
