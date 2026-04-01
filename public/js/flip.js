@@ -1,6 +1,6 @@
 /**
  * StudyVerse V2.2.4 - 翻轉自習室邏輯 (flip.js)
- * 新增：靜音臥底戰術 - 解決手機蓋住時，計時結束無法自動播放音樂的問題
+ * 修正：回歸正規「白名單解鎖」機制，避免長時間靜音播放被系統判定為耗電而強制休眠
  */
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
@@ -8,30 +8,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     const alarmAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'); 
     alarmAudio.loop = true; 
+    alarmAudio.preload = 'auto'; // 強制預先載入
     
     // 小當家音樂
     const successAudio = new Audio('/audio/chuuka.mp3'); 
     successAudio.loop = true; 
+    successAudio.preload = 'auto'; // 強制預先載入
 
-    // 【防禦機制 A】：全域音效解鎖器 (0 音量永動機戰術)
+    // 【防禦機制 A】：白名單音效解鎖器
     let isAudioUnlocked = false;
     function unlockAudio() {
         if (isAudioUnlocked) return;
         isAudioUnlocked = true;
         
-        // 【關鍵修改】：把音量設為 0 並直接播放，絕對不呼叫 pause()！
-        // 讓瀏覽器認定這個網頁「一直都在播放音樂」，權限就不會過期
-        alarmAudio.volume = 0;
-        alarmAudio.play().catch(() => {});
+        // 正規解鎖法：播放後「立刻暫停」，這樣瀏覽器就會將這個音效加入信任白名單
+        // 時間到的時候，就算沒有點擊也能直接呼叫 play()
+        alarmAudio.play().then(() => {
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+        }).catch(() => {});
         
-        successAudio.volume = 0;
-        successAudio.play().catch(() => {});
+        successAudio.play().then(() => {
+            successAudio.pause();
+            successAudio.currentTime = 0;
+        }).catch(() => {});
 
         // 解鎖後即可移除監聽
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('click', unlockAudio);
     }
-    // 只要學生手指摸到螢幕任何一處，立刻啟動背景 0 音量永動機
+    // 只要學生手指摸到螢幕任何一處，立刻解鎖音效權限
     document.addEventListener('touchstart', unlockAudio);
     document.addEventListener('click', unlockAudio);
 
@@ -49,16 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function releaseWakeLock() {
         if (wakeLock !== null) {
-            wakeLock.release().then(() => wakeLock = null).catch(console.error);
+            wakeLock.release().then(() => wakeLock = null);
         }
     }
-    // 【黑科技補充】：當頁面可見度改變（例如跳出通知或切換APP）時，Wake Lock 會被系統自動釋放
-    // 必須在此時重新請求，確保防休眠持續有效
-    document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') {
-            await requestWakeLock();
-        }
-    });
 
     // ==========================================
     // 新增：自訂彈窗 UI (取代會凍結系統音效的 alert)
@@ -142,42 +141,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 4. 單機模式自動啟動追蹤
     // ==========================================
-    // ==========================================
-    // 4. 單機模式啟動邏輯 (點擊解鎖 + 蓋下才計時)
-    // ==========================================
     if (urlParams.get('standalone') === 'true') {
-        myName = localStorage.getItem('studyVerseUser') || "專注者"; 
-        
-        // 1. 確保設定區塊（或開始按鈕）有顯示，讓學生可以點擊
-        if(setupArea) setupArea.classList.remove('hidden'); 
-        
-        // 如果你有一個單機模式專用的開始按鈕，或者是共用 startBtn
-        if(startBtn) {
-            // 覆蓋原本的監聽器或新增單機邏輯
-            startBtn.addEventListener('click', () => {
-                // 2. 學生點擊了！立刻解鎖音效 (0 音量永動機啟動)
-                unlockAudio(); 
-
-                // 3. 進入「武裝狀態」但還不開始倒數
-                isTracking = true; 
-                isFocusing = false; // 關鍵！確保不會立刻觸發警告
-                focusSeconds = 0;
-                isCompleted = false;
-
-                if(timerDisplay) timerDisplay.textContent = formatTime(targetSeconds);
-                if(setupArea) setupArea.classList.add('hidden'); 
-                if(stopBtn) stopBtn.classList.remove('hidden');
+        setTimeout(() => {
+            myName = localStorage.getItem('studyVerseUser') || "專注者"; 
+            
+            if (!isTracking) {
+                startTracking(); 
                 
-                // 4. 提示學生現在可以把手機蓋下了
-                if(statusDisplay) {
-                    statusDisplay.textContent = `✅ 音效已解鎖！請將手機螢幕朝下以開始計時...`; 
-                    statusDisplay.style.color = "#3498db";
+                if (!urlParams.get('targetRoom')) {
+                    isFocusing = true;
+                    document.body.style.backgroundColor = "#051a10";
+                    requestWakeLock(); // 啟動防休眠
+                    
+                    if (statusBox) statusBox.classList.add('is-flipped');
+                    if (statusDisplay) {
+                        statusDisplay.textContent = `✅ 已進入教室，目標：${targetMinutes} 分鐘`;
+                        statusDisplay.style.color = "#2ecc71";
+                    }
+                    
+                    socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
+                    
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(() => {
+                        if (!isWarningState && !isCompleted) {
+                            focusSeconds++;
+                            const remain = targetSeconds - focusSeconds;
+                            if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
+                            checkCompletion(); 
+                        }
+                    }, 1000);
                 }
-
-                // 啟動陀螺儀監聽
-                window.addEventListener('deviceorientation', handleOrientation);
-            }, { once: true }); // 確保只綁定一次
-        }
+            }
+        }, 500); 
     }
 
     socket.on('force_status_sync', (data) => {
@@ -197,15 +192,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 檢查是否達成目標的函數
-    // 檢查是否達成目標的函數
     function checkCompletion() {
         if (focusSeconds >= targetSeconds && !isCompleted) {
             isCompleted = true;
             
-            // 【黑科技發動】：因為音樂這 25 分鐘都在背景以 0 音量無限循環
-            // 現在我們只需要把進度條拉回開頭，並把音量開到最大！完全不需要呼叫 .play()
+            // 確保音樂從頭開始播放
             successAudio.currentTime = 0;
-            successAudio.volume = 1.0; 
+            const playPromise = successAudio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    console.log('音樂被瀏覽器阻擋:', e);
+                });
+            }
             
             if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
             
@@ -240,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!myName) { alert("請輸入暱稱以進行 AI 教室連動！"); return; }
             localStorage.setItem('studyVerseUser', myName);
             
-            unlockAudio(); // 若有點擊按鈕，直接解鎖音效
+            unlockAudio(); // 點擊按鈕時解鎖音效！
 
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
@@ -312,8 +310,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(warningCountdownInterval);
                 isWarningState = false;
                 
-                // 警報聲停止
-                alarmAudio.volume = 0;
+                // 停止警報
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
                 
                 document.getElementById('warningOverlay').classList.add('hidden');
                 document.getElementById('warningOverlay').classList.remove('flex');
@@ -358,6 +357,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 情況 1：已經達標完成了！
             if (isCompleted) {
+                // 如果音樂在背景被阻擋，當學生翻開手機時補刀再次強制播放！
+                successAudio.play().catch(e => console.log('補發播放失敗:', e));
+
                 const aiSuccessComments = [
                     `【AI 總結】太棒了 ${myName}！你展現了驚人的專注力，完美抵擋了手機的誘惑！`,
                     `【AI 總結】任務達成！這段時間的深度學習將成為你邁向卓越的基石。`,
@@ -391,10 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 socket.emit("update_status", { name: myName, status: "DISTRACTED", isFlipped: false });
                 
-                // 警報正式播放
-                // 警報正式大作 (因為本來就在播，所以只要把音量調回最大)
+                // 播放警報
                 alarmAudio.currentTime = 0;
-                alarmAudio.volume = 1.0;
+                alarmAudio.play().catch(e => console.log('Alarm play failed:', e));
                 if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800, 400]); 
 
                 clearInterval(warningCountdownInterval);
