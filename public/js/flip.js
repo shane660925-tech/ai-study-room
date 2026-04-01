@@ -139,40 +139,51 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedName && syncNameInput) syncNameInput.value = savedName;
 
     // ==========================================
-    // 4. 單機模式自動啟動追蹤
+    // 4. 單機模式：強制點擊啟動 (解決 iOS 無聲與 UX 問題)
     // ==========================================
     if (urlParams.get('standalone') === 'true') {
-        setTimeout(() => {
-            myName = localStorage.getItem('studyVerseUser') || "專注者"; 
+        myName = localStorage.getItem('studyVerseUser') || "專注者"; 
+        
+        // 建立一個全螢幕的「準備畫面」
+        const readyOverlay = document.createElement('div');
+        readyOverlay.id = 'readyOverlay';
+        readyOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#051a10;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;padding:20px;text-align:center;";
+        readyOverlay.innerHTML = `
+            <i class="fas fa-mobile-alt text-6xl mb-6 text-green-400 animate-bounce"></i>
+            <h1 style="font-size:28px;font-weight:900;margin-bottom:15px;">準備進入單機專注</h1>
+            <p style="font-size:16px;color:#a7f3d0;margin-bottom:40px;">點擊下方按鈕解鎖防護系統<br>隨後將手機螢幕朝下放置桌上，即會開始計時。</p>
+            <button id="tapToStartBtn" style="background:linear-gradient(to right, #10b981, #059669);color:white;padding:15px 40px;border-radius:30px;font-size:20px;font-weight:bold;border:none;cursor:pointer;box-shadow:0 10px 20px rgba(16,185,129,0.3);">我準備好了</button>
+        `;
+        document.body.appendChild(readyOverlay);
+
+        document.getElementById('tapToStartBtn').addEventListener('click', () => {
+            // 1. 真人點擊的瞬間：立刻解鎖音效！這對 iOS Safari 來說是最合法的操作
+            alarmAudio.play().then(() => {
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
+            }).catch(e => console.log('解鎖警報音效失敗:', e));
             
+            successAudio.play().then(() => {
+                successAudio.pause();
+                successAudio.currentTime = 0;
+            }).catch(e => console.log('解鎖成功音效失敗:', e));
+
+            // 2. 請求螢幕防休眠
+            requestWakeLock();
+
+            // 3. 移除準備畫面
+            readyOverlay.remove();
+
+            // 4. 開始追蹤陀螺儀 (此時 isFocusing 仍是 false，不會響警報)
             if (!isTracking) {
                 startTracking(); 
                 
-                if (!urlParams.get('targetRoom')) {
-                    isFocusing = true;
-                    document.body.style.backgroundColor = "#051a10";
-                    requestWakeLock(); // 啟動防休眠
-                    
-                    if (statusBox) statusBox.classList.add('is-flipped');
-                    if (statusDisplay) {
-                        statusDisplay.textContent = `✅ 已進入教室，目標：${targetMinutes} 分鐘`;
-                        statusDisplay.style.color = "#2ecc71";
-                    }
-                    
-                    socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
-                    
-                    clearInterval(timerInterval);
-                    timerInterval = setInterval(() => {
-                        if (!isWarningState && !isCompleted) {
-                            focusSeconds++;
-                            const remain = targetSeconds - focusSeconds;
-                            if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
-                            checkCompletion(); 
-                        }
-                    }, 1000);
+                if (statusDisplay) {
+                    statusDisplay.textContent = `✅ 系統已啟動：請將手機螢幕朝下放置以開始計時`;
+                    statusDisplay.style.color = "#3498db";
                 }
             }
-        }, 500); 
+        });
     }
 
     socket.on('force_status_sync', (data) => {
