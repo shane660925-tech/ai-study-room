@@ -142,38 +142,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 4. 單機模式自動啟動追蹤
     // ==========================================
+    // ==========================================
+    // 4. 單機模式啟動邏輯 (點擊解鎖 + 蓋下才計時)
+    // ==========================================
     if (urlParams.get('standalone') === 'true') {
-        setTimeout(() => {
-            myName = localStorage.getItem('studyVerseUser') || "專注者"; 
-            
-            if (!isTracking) {
-                startTracking(); 
+        myName = localStorage.getItem('studyVerseUser') || "專注者"; 
+        
+        // 1. 確保設定區塊（或開始按鈕）有顯示，讓學生可以點擊
+        if(setupArea) setupArea.classList.remove('hidden'); 
+        
+        // 如果你有一個單機模式專用的開始按鈕，或者是共用 startBtn
+        if(startBtn) {
+            // 覆蓋原本的監聽器或新增單機邏輯
+            startBtn.addEventListener('click', () => {
+                // 2. 學生點擊了！立刻解鎖音效 (0 音量永動機啟動)
+                unlockAudio(); 
+
+                // 3. 進入「武裝狀態」但還不開始倒數
+                isTracking = true; 
+                isFocusing = false; // 關鍵！確保不會立刻觸發警告
+                focusSeconds = 0;
+                isCompleted = false;
+
+                if(timerDisplay) timerDisplay.textContent = formatTime(targetSeconds);
+                if(setupArea) setupArea.classList.add('hidden'); 
+                if(stopBtn) stopBtn.classList.remove('hidden');
                 
-                if (!urlParams.get('targetRoom')) {
-                    isFocusing = true;
-                    document.body.style.backgroundColor = "#051a10";
-                    requestWakeLock(); // 啟動防休眠
-                    
-                    if (statusBox) statusBox.classList.add('is-flipped');
-                    if (statusDisplay) {
-                        statusDisplay.textContent = `✅ 已進入教室，目標：${targetMinutes} 分鐘`;
-                        statusDisplay.style.color = "#2ecc71";
-                    }
-                    
-                    socket.emit("update_status", { name: myName, status: "FOCUSED", isFlipped: true });
-                    
-                    clearInterval(timerInterval);
-                    timerInterval = setInterval(() => {
-                        if (!isWarningState && !isCompleted) {
-                            focusSeconds++;
-                            const remain = targetSeconds - focusSeconds;
-                            if(timerDisplay) timerDisplay.textContent = formatTime(remain > 0 ? remain : 0);
-                            checkCompletion(); 
-                        }
-                    }, 1000);
+                // 4. 提示學生現在可以把手機蓋下了
+                if(statusDisplay) {
+                    statusDisplay.textContent = `✅ 音效已解鎖！請將手機螢幕朝下以開始計時...`; 
+                    statusDisplay.style.color = "#3498db";
                 }
-            }
-        }, 500); 
+
+                // 啟動陀螺儀監聽
+                window.addEventListener('deviceorientation', handleOrientation);
+            }, { once: true }); // 確保只綁定一次
+        }
     }
 
     socket.on('force_status_sync', (data) => {
