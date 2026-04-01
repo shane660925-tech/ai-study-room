@@ -1,0 +1,284 @@
+/* =========================================================== */
+/* [1] 基礎設定與佈局優化 */
+/* =========================================================== */
+body { 
+    background: #05070a; 
+    color: white; 
+    margin: 0; 
+    overflow: hidden; 
+    font-family: 'Inter', sans-serif; 
+}
+
+/* 中間視訊網格：調整為適合正方形卡片的佈局 */
+.cam-grid { 
+    display: grid; 
+    /* 修正佈局寬度，讓卡片排列更整齊 */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+    gap: 1.5rem; 
+    padding: 1.5rem; 
+    overflow-y: auto;
+}
+
+/* 虛擬書桌風格：強制方正比例，增強視覺深度感 */
+.desk-wood { 
+    aspect-ratio: 1 / 1; /* 強制正方形比例 */
+    border: 3px solid #334155; 
+    border-radius: 20px; 
+    background: rgba(15, 23, 42, 0.6);
+    /* 增強層級陰影 */
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7); 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center; /* 讓內容在方塊中居中 */
+    padding: 1.25rem;
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.desk-wood:hover {
+    transform: translateY(-8px);
+    border-color: #475569;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
+}
+
+/* 分頁按鈕樣式 */
+.tab-btn { 
+    flex: 1; 
+    padding: 0.75rem; 
+    color: #94a3b8; 
+    font-size: 0.875rem;
+    font-weight: bold; 
+    border-bottom: 2px solid transparent; 
+    cursor: pointer; 
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+    transition: all 0.2s;
+}
+.tab-active { color: #fbbf24; border-bottom-color: #fbbf24; }
+
+/* 排行榜修正：確保人名正常顯示，防止 flex 擠壓 */
+.rank-item-name {
+    flex: 1;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 12px;
+    min-width: 0; /* 防止溢出 */
+}
+
+/* =========================================================== */
+/* [2] 優化動畫：狀態回饋 (完整保留並強化) */
+/* =========================================================== */
+
+/* 1. 專注狀態：綠色呼吸燈 */
+.status-focused-active {
+    position: relative;
+    border-color: rgba(34, 197, 94, 0.6) !important;
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+    transition: all 0.5s ease-in-out;
+}
+
+.status-focused-active::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    border: 2px solid #22c55e;
+    animation: focused-breath 3s infinite ease-in-out;
+    pointer-events: none;
+    z-index: 5;
+}
+
+@keyframes focused-breath {
+    0% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 5px rgba(34, 197, 94, 0.4); }
+    50% { transform: scale(1.03); opacity: 0.2; box-shadow: 0 0 25px rgba(34, 197, 94, 0.7); }
+    100% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 5px rgba(34, 197, 94, 0.4); }
+}
+
+/* 2. 違規狀態：紅色警告急促閃爍 */
+.status-distracted-active {
+    border-color: #ef4444 !important;
+    animation: alert-flash 0.6s infinite alternate;
+    z-index: 10;
+}
+
+@keyframes alert-flash {
+    from { box-shadow: 0 0 5px #ef4444; border-color: #ef4444; background: rgba(127, 29, 29, 0.2); }
+    to { box-shadow: 0 0 30px #ef4444; border-color: #f87171; background: rgba(127, 29, 29, 0.5); }
+}
+
+/* 3. 生理需求：藍色柔和狀態 */
+.status-break-active {
+    border-color: #3b82f6 !important;
+    filter: brightness(0.9) contrast(1.1);
+    background: rgba(30, 58, 138, 0.3);
+    box-shadow: inset 0 0 25px rgba(59, 130, 246, 0.3);
+}
+
+/* 4. 隊長特效：黃金發光外框 */
+.leader-glow-effect {
+    position: relative;
+    border-color: rgba(250, 204, 21, 0.8) !important;
+    box-shadow: 0 0 15px rgba(250, 204, 21, 0.5);
+    animation: leader-glow 2s infinite alternate ease-in-out;
+    z-index: 15;
+}
+
+@keyframes leader-glow {
+    0% {
+        box-shadow: 0 0 10px rgba(250, 204, 21, 0.4), inset 0 0 5px rgba(250, 204, 21, 0.2);
+        border-color: rgba(250, 204, 21, 0.6);
+    }
+    100% {
+        box-shadow: 0 0 25px rgba(250, 204, 21, 0.9), inset 0 0 10px rgba(250, 204, 21, 0.4);
+        border-color: rgba(253, 224, 71, 1);
+    }
+}
+
+.aspect-video {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 8px;
+}
+
+/* =========================================================== */
+/* [3] 右側欄位美化：多層式「姓名 > 事件 > 詳細」結構 */
+/* =========================================================== */
+
+/* 第一層：姓名外殼 (User Group) - 解決姓名重複顯示問題 */
+.user-event-group {
+    background: rgba(30, 41, 59, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.user-event-group:hover {
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 姓名標題列 */
+.user-group-header {
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.9);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-weight: bold;
+    color: #fbbf24; /* 醒目的姓名顏色 */
+}
+
+/* 第二層：事件項目 (Violation Item) */
+.event-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.event-item:hover {
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.event-item.active {
+    background: rgba(30, 41, 59, 0.95);
+    box-shadow: inset 4px 0 0 #3b82f6; /* 啟動時左側顯示指示條 */
+}
+
+/* 第三層：展開詳細內容 (截圖與說明) */
+.expand-content {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-8px);
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.event-item.active .expand-content {
+    max-height: 600px;
+    opacity: 1;
+    transform: translateY(0);
+    padding: 15px;
+}
+
+/* 截圖卡片與深度效果 */
+.snap-card img {
+    border-radius: 12px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    cursor: zoom-in;
+    transition: transform 0.3s ease, border-color 0.3s;
+}
+
+.snap-card img:hover {
+    transform: scale(1.02);
+    border-color: #3b82f6;
+}
+
+/* =========================================================== */
+/* [4] 其他 UI 元件 (文字紀錄、表情、滾動條) */
+/* =========================================================== */
+
+.text-record {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* 誠信分視覺強化 */
+.integrity-score {
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.2);
+}
+.text-integrity-high { color: #22c55e; }
+.text-integrity-mid { color: #facc15; }
+.text-integrity-low { color: #ef4444; }
+
+/* 表情漂浮動畫 (完整保留) */
+.floating-emoji { 
+    position: fixed; 
+    bottom: 50px; 
+    animation: floatUp 2.5s forwards cubic-bezier(0.1, 0.7, 0.1, 1); 
+    pointer-events: none; 
+    z-index: 1000; 
+}
+
+@keyframes floatUp { 
+    0% { transform: translateY(0) scale(0.5) rotate(0deg); opacity: 0; }
+    20% { opacity: 1; transform: translateY(-50px) scale(1.2) rotate(10deg); }
+    100% { transform: translateY(-450px) scale(1.5) rotate(-10deg); opacity: 0; }
+}
+
+/* 滾動條美化 */
+.scroll-hide::-webkit-scrollbar { width: 5px; }
+.scroll-hide::-webkit-scrollbar-track { background: transparent; }
+.scroll-hide::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+.scroll-hide::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* 放大檢視 Modal */
+#imageModal {
+    background: rgba(2, 6, 23, 0.97);
+    backdrop-filter: blur(20px);
+    z-index: 9999;
+}

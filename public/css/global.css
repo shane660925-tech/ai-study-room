@@ -1,0 +1,184 @@
+@charset "UTF-8";
+/* =========================================================== */
+/* STUDY VERSE V2.2.1 - GLOBAL CSS (全域核心樣式)              */
+/* 負責範圍：基礎設定、卷軸、共用 UI 元件、全域共用動畫        */
+/* =========================================================== */
+
+/* ----------------------------------------------------------- */
+/* 1. 基礎設定與字體 (Base & Typography)                       */
+/* ----------------------------------------------------------- */
+body {
+    background-color: #05070a; /* 統一深夜背景色 */
+    color: #e0e0e0;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    /* 注意：不全域加上 overflow: hidden，保留各頁面自行決定的彈性 */
+}
+
+.font-handwriting { 
+    font-family: 'Comic Sans MS', cursive, sans-serif; 
+}
+
+/* ----------------------------------------------------------- */
+/* 2. 全域卷軸優化 (Scrollbars)                                */
+/* ----------------------------------------------------------- */
+/* 應用於所有元素的基礎卷軸 */
+* { 
+    scrollbar-width: thin; 
+    scrollbar-color: #374151 transparent; 
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+
+/* 特定區塊隱藏卷軸 (支援 admin.html, ai-room.html 等) */
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 專屬自訂卷軸樣式 */
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+/* ----------------------------------------------------------- */
+/* 3. 共用 UI 元件 (Shared Utilities)                          */
+/* ----------------------------------------------------------- */
+/* 玻璃擬態卡片 (跨 ai-room, index 共用) */
+.glass-panel {
+    background: rgba(17, 24, 39, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 霓虹發光字體 (大廳與標題共用) */
+.neon-text { 
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); 
+}
+
+/* 強制顯示違規彈窗 (防呆用) */
+.show-violation { display: flex !important; }
+
+/* 展開/收合容器 (支援後台動態顯示) */
+.expand-content {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+.expand-content.show {
+    max-height: 800px;
+    opacity: 1;
+    padding: 1rem;
+}
+
+/* ----------------------------------------------------------- */
+/* 4. 全域共用動畫引擎 (Global Animations)                     */
+/* ----------------------------------------------------------- */
+
+/* --- 基礎淡入/滑入 --- */
+@keyframes slideInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: slideInUp 0.3s ease-out forwards; }
+
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* --- 脈衝效果 (Pulse) - 統整手機端與連線狀態 --- */
+@keyframes pulse-standard {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.pulse { animation: pulse-standard 2s infinite; }
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.status-pulse { animation: pulse-opacity 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.loading-pulse { animation: pulse-opacity 2s infinite; }
+
+/* --- 搖晃警告 (Shake) - 支援違規卡片 --- */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
+}
+/* 注意: .violation-card 等實體類別將放在各別專用 css 內，此處僅註冊 keyframes 引擎 */
+
+/* --- 紅色閃爍警告 (整合 ai-room 與 index 的衝突寫法) --- */
+@keyframes flash-red {
+    0%, 100% { background-color: rgba(220, 38, 38, 0.95); }
+    50% { background-color: rgba(153, 27, 27, 1); }
+}
+.animate-flash-red { animation: flash-red 0.5s infinite; }
+
+/* --- 浮動表情動畫 (支援全域所有 Socket 事件) --- */
+.floating-emoji { 
+    position: fixed; 
+    bottom: 50px; 
+    animation: floatUp 2.5s forwards cubic-bezier(0.1, 0.7, 0.1, 1); 
+    pointer-events: none; 
+    z-index: 1000; 
+}
+@keyframes floatUp { 
+    0% { transform: translateY(0) scale(0.5) rotate(0deg); opacity: 0; }
+    20% { transform: translateY(-20px) scale(1.2) rotate(-10deg); opacity: 1; }
+    100% { transform: translateY(-200px) scale(1) rotate(20deg); opacity: 0; }
+}
+/* =========================================================== */
+/* [V2.2.5.1 新增] 大廳共用 UI 元件 (從 lobby.css 提取)          */
+/* =========================================================== */
+
+/* 科技感網格背景 (共用) */
+.bg-grid-pattern { 
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px); 
+    background-size: 20px 20px; 
+}
+
+/* 首頁連動專用 QR Code 樣式 (共用) */
+#qrcode img { 
+    margin: 0 auto; 
+    border-radius: 8px; 
+    border: 4px solid white; 
+}
+
+/* 跑馬燈滾動動畫 (共用) */
+@keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+#tickerStream {
+    display: inline-flex;
+    animation: ticker 30s linear infinite;
+}
+
+#tickerStream:hover {
+    animation-play-state: paused;
+}
+
+/* 勳章與排行榜樣式 (共用) */
+.rank-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+}
+.rank-1 { background: linear-gradient(45deg, #ffd700, #ffae00); color: #000; }
+.rank-2 { background: #e2e8f0; color: #000; }
+.rank-3 { background: #cd7f32; color: #000; }
+
+/* 自習室卡片基礎過渡 (共用，顏色發光由各別大廳覆蓋) */
+.room-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

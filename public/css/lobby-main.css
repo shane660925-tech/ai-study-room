@@ -1,0 +1,101 @@
+@charset "UTF-8";
+/* =========================================================== */
+/* STUDY VERSE V2.2.5.1 - LOBBY MAIN CSS (專業大廳與手機專用)  */
+/* 負責範圍：專業大廳藍色懸浮特效、手機版翻轉介面              */
+/* 依賴說明：背景、跑馬燈、基礎卡片等已移至 global.css           */
+/* =========================================================== */
+
+/* ----------------------------------------------------------- */
+/* 1. 專業大廳首頁專用 (index.html)                            */
+/* ----------------------------------------------------------- */
+
+/* 自習室卡片懸浮互動 (專業大廳科技藍覆蓋) */
+.room-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); 
+    border-color: rgba(59, 130, 246, 0.4); 
+}
+
+/* 載入/同步脈衝特效 (專屬淡藍色) */
+@keyframes pulse-blue {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+.loading-pulse { 
+    animation: pulse-blue 2s infinite; 
+}
+
+/* =========================================
+   手機翻轉模式專屬頭像框 (Level 1)
+========================================= */
+.is-mobile-flip {
+    width: 60px !important;         /* 稍微縮窄 */
+    height: 90px !important;        /* 拉長，呈現手機比例 */
+    border-radius: 12px !important; /* 模擬手機的圓角 */
+    border: 2px solid #3b82f6 !important; /* 藍色邊框 */
+    transition: all 0.3s ease;
+    position: relative;
+    /* 啟動藍色禪意光環呼吸燈 */
+    animation: zen-aura 2s infinite alternate;
+}
+
+/* 呼吸燈發光動畫 */
+@keyframes zen-aura {
+    from { box-shadow: 0 0 8px rgba(59, 130, 246, 0.3); }
+    to { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+}
+
+/* (可選) 在頭像右下角加上一個小手機 icon */
+.is-mobile-flip::after {
+    content: '\f3ce'; /* FontAwesome 的 fa-mobile-alt */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    position: absolute;
+    bottom: -8px;
+    right: -8px;
+    background: #1e293b;
+    color: #3b82f6;
+    border-radius: 50%;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: 2px solid #0f172a;
+}
+
+/* ----------------------------------------------------------- */
+/* 2. 手機網頁版專用 (mobile.html)                             */
+/* ----------------------------------------------------------- */
+
+/* 手機版專屬 Body (防止下拉更新或滾動干擾) */
+.mobile-page-body { 
+    background-color: #0f172a; 
+    touch-action: none; 
+    overflow: hidden; 
+}
+
+/* 手機狀態球過渡 */
+.status-dot { 
+    transition: all 0.5s ease; 
+}
+
+/* 手機翻轉成功狀態 (強烈藍色光暈) */
+.active-flip { 
+    background: #1e40af !important; 
+    box-shadow: 0 0 50px #3b82f6 !important; 
+    border-color: transparent !important;
+}
+
+/* 手機端專屬脈衝光動畫 */
+.pulse { 
+    animation: pulse 2s infinite; 
+}
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* 螢幕常亮狀態文字提醒 */
+.nosleep-active { 
+    color: #3b82f6; 
+    text-shadow: 0 0 5px rgba(59, 130, 246, 0.5); 
+}

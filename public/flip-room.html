@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>單機翻轉專區 | 單機翻轉大廳</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/lobby-main.css">
+</head>
+<body class="bg-[#0f172a] text-slate-200 min-h-screen font-sans relative overflow-x-hidden pb-20 flex justify-center">
+
+    <div class="w-full max-w-xl p-6 min-h-screen">
+        <header class="flex justify-between items-center mb-10 bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md shadow-xl">
+            <div>
+                <h1 class="text-2xl font-black text-blue-500 italic flex items-center">
+                    <i class="fas fa-mobile-alt mr-2"></i>游擊隊總部
+                </h1>
+                <p class="text-[10px] text-gray-500 tracking-widest mt-1 uppercase">Standalone Command Center</p>
+            </div>
+            <div class="bg-blue-900/40 border border-blue-500/30 px-3 py-1.5 rounded-2xl flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span class="text-xs font-bold text-blue-300">在線翻轉：<span id="onlineFlipCount" class="text-white">0</span> 人</span>
+            </div>
+        </header>
+
+        <section class="mb-10">
+            <div class="flex items-center justify-between mb-4 px-1">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                    <img id="userAvatar" src="" class="w-8 h-8 rounded-full mr-3 border border-gray-600 bg-gray-800">
+                    <span id="welcomeName" class="text-white">學員</span> 的戰績
+                </h2>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-3xl p-5 text-center">
+                    <i class="fas fa-clock text-blue-400 text-xl mb-2"></i>
+                    <span id="statHours" class="text-3xl font-black text-white block">0</span>
+                    <span class="text-[10px] text-gray-500 uppercase">累積時數</span>
+                </div>
+                <div class="bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-3xl p-5 text-center">
+                    <i class="fas fa-fire text-orange-400 text-xl mb-2"></i>
+                    <span id="statDays" class="text-3xl font-black text-white block">0</span>
+                    <span class="text-[10px] text-gray-400 uppercase">連續專注</span>
+                </div>
+                <div class="bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-3xl p-5 text-center">
+                    <i class="fas fa-shield-alt text-green-400 text-xl mb-2"></i>
+                    <span id="statScore" class="text-3xl font-black text-white block">100</span>
+                    <span class="text-[10px] text-gray-500 uppercase">總積分</span>
+                </div>
+                <div class="bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-3xl p-5 text-center">
+                    <i class="fas fa-medal text-yellow-400 text-xl mb-2"></i>
+                    <span id="statBadges" class="text-3xl font-black text-white block">0</span>
+                    <span class="text-[10px] text-gray-500 uppercase">解鎖成就</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-10 space-y-4">
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] mb-4 px-1"><i class="fas fa-door-open mr-2"></i>選擇翻轉教室</h2>
+            <button onclick="openStandaloneModal('immersive-room.html')" class="w-full bg-gradient-to-r from-purple-900/80 to-purple-800/80 border border-purple-500/40 rounded-3xl p-5 text-left flex items-center gap-5 shadow-2xl active:scale-95">
+                <div class="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-300 text-3xl"><i class="fas fa-eye-slash"></i></div>
+                <div class="flex-1">
+                    <h3 class="text-xl font-black text-white mb-1">沉浸式自習室</h3>
+                    <p class="text-xs text-purple-200/60">手機蓋上即進入深度專注模式。</p>
+                </div>
+            </button>
+            <button onclick="openStandaloneModal('managed-room.html')" class="w-full bg-gradient-to-r from-blue-900/80 to-blue-800/80 border border-blue-500/40 rounded-3xl p-5 text-left flex items-center gap-5 shadow-2xl active:scale-95">
+                <div class="w-14 h-14 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-300 text-3xl"><i class="fas fa-users-viewfinder"></i></div>
+                <div class="flex-1">
+                    <h3 class="text-xl font-black text-white mb-1">模擬線上教室</h3>
+                    <p class="text-xs text-blue-200/60">與大家同步顯示努力狀態。</p>
+                </div>
+            </button>
+        </section>
+
+        <section class="bg-orange-500/5 border border-orange-500/10 rounded-3xl p-6">
+            <h2 class="text-xs font-bold text-orange-500/70 uppercase tracking-widest mb-4"><i class="fas fa-users mr-2"></i>組隊與競賽</h2>
+            <button onclick="loadAndShowTeamModal('join')" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 active:scale-95">
+                <i class="fas fa-search"></i> 查看目前隊伍狀態
+            </button>
+        </section>
+
+        <div class="mt-12 text-center">
+            <a href="index.html" class="text-xs text-gray-500 underline tracking-widest uppercase">← 返回一般大廳</a>
+        </div>
+    </div>
+
+    <div id="standalone-setup-modal" class="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
+        <div class="bg-[#111827] border border-blue-500/30 p-8 rounded-3xl w-full max-w-sm text-center">
+            <h2 class="text-2xl font-black text-blue-500 mb-6">單機翻轉設定</h2>
+            
+            <div id="sa-connect-section">
+                <div class="mb-6 py-4">
+                    <i class="fas fa-wifi text-4xl text-blue-400 mb-4 animate-pulse"></i>
+                    <p class="text-gray-300 font-bold text-lg mb-1">準備進入專注空間</p>
+                    <p class="text-xs text-gray-500">點擊下方按鈕建立連線</p>
+                </div>
+                <button onclick="proceedToInput()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20">
+                    建立連線
+                </button>
+            </div>
+
+            <div id="sa-input-section" class="hidden">
+                <div class="mb-4 text-left">
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">讀書目標</label>
+                    <input id="sa-goal" type="text" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="例：完成微積分習題">
+                </div>
+                
+                <div class="mb-8 text-left">
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">專注時間 (分鐘)</label>
+                    <input id="sa-time" type="number" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" value="25">
+                </div>
+
+                <button id="btn-sa-ready" onclick="prepareStandaloneFlip()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20">
+                    下一步：準備翻轉
+                </button>
+            </div>
+
+            <div id="sa-flip-instruction" class="hidden mt-4 animate-pulse">
+                <i class="fas fa-mobile-alt text-4xl text-blue-400 mb-3 animate-bounce"></i>
+                <p class="text-yellow-400 font-bold text-lg">請將手機螢幕朝下蓋在桌上！</p>
+                <p class="text-xs text-gray-400 mt-2">聽到「叮」聲即代表成功傳送至教室</p>
+            </div>
+            
+            <button onclick="closeStandaloneModal()" class="mt-4 text-gray-500 text-sm hover:text-white transition-colors">取消</button>
+        </div>
+    </div>
+
+    <audio id="success-sound" src="https://www.myinstants.com/media/sounds/mario-coin.mp3" preload="auto"></audio>
+    <div id="modal-container"></div>
+    
+    <div id="standalone-modal-container" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[20000] flex items-center justify-center hidden">
+        <div id="waiting-approval-modal" class="bg-[#1e293b] p-8 rounded-3xl border border-blue-500/30 text-center max-w-xs hidden">
+            <div class="mb-4 text-blue-400">
+                <i class="fas fa-hourglass-half fa-spin text-4xl"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2 text-white">申請已送出</h3>
+            <p class="text-gray-400 text-sm">正在等待隊長審核，請稍候...</p>
+        </div>
+
+        <div id="rejected-modal" class="bg-[#1e293b] p-8 rounded-3xl border border-red-500/30 text-center max-w-xs hidden">
+            <div class="mb-4 text-red-500">
+                <i class="fas fa-times-circle text-5xl mb-2"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2 text-white">申請被婉拒</h3>
+            <p class="text-gray-400 text-sm mb-6">隊長目前無法接受您的加入申請。</p>
+            <button onclick="closeRejectedModal()" class="w-full bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold transition-all">確認並返回</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const username = localStorage.getItem('studyVerseUser') || "游擊隊員";
+        window.myUsername = username; 
+
+        let pendingRoomType = 'managed-room.html';
+        let targetStandaloneRoomUrl = '';
+        let isRedirecting = false; // 防止連續觸發跳轉的鎖
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('welcomeName').innerText = username;
+            document.getElementById('userAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${username}`;
+            socket.emit("join_room", { name: username, roomMode: 'lobby', status: 'LOBBY' });
+        });
+
+        socket.on("update_rank", (users) => {
+            const flipCount = users.filter(u => u.isFlipped === true).length;
+            const el = document.getElementById('onlineFlipCount');
+            if(el) el.innerText = flipCount;
+        });
+
+        // ==========================================
+        // 單機翻轉模式：視訊鏡頭預設關閉邏輯
+        // ==========================================
+        // 假設你已經取得使用者的 mediaStream
+        function disableCameraForSingleDeviceMode(stream) {
+            if (!stream) return;
+            
+            // 取得所有的視訊軌道
+            const videoTracks = stream.getVideoTracks();
+            
+            videoTracks.forEach(track => {
+                // 完全停止該視訊軌道，釋放硬體資源以節省最大能耗
+                track.stop(); 
+                
+                // 如果你的架構需要保留軌道但只傳黑畫面，則改用：
+                // track.enabled = false; 
+            });
+            
+            console.log("單機翻轉模式：視訊鏡頭已完全關閉以節省能耗。");
+        }
+        // 若該模式根本不需要語音以外的功能，建議在 getUserMedia 時就直接設定 { video: false, audio: true }
+
+        // ==========================================
+        // 單機翻轉 5 步驟核心邏輯
+        // ==========================================
+
+        // 步驟 1: 開啟設定 Modal
+        function openStandaloneModal(roomUrl) {
+            targetStandaloneRoomUrl = roomUrl;
+            isRedirecting = false; // 重置狀態
+            
+            document.getElementById('standalone-setup-modal').classList.remove('hidden');
+            document.getElementById('standalone-setup-modal').classList.add('flex');
+            
+            document.getElementById('sa-connect-section').classList.remove('hidden');
+            document.getElementById('sa-input-section').classList.add('hidden');
+            document.getElementById('sa-flip-instruction').classList.add('hidden');
+        }
+
+        // 步驟 2/3: 進入輸入畫面並預載音效
+        function proceedToInput() {
+            document.getElementById('sa-connect-section').classList.add('hidden');
+            document.getElementById('sa-input-section').classList.remove('hidden');
+            
+            const sound = document.getElementById('success-sound');
+            sound.load(); // 透過使用者點擊行為預先載入，避免被瀏覽器阻擋
+        }
+
+        // 步驟 4: 儲存目標與時間，準備監聽陀螺儀
+        function prepareStandaloneFlip() {
+            const goal = document.getElementById('sa-goal').value.trim();
+            const time = document.getElementById('sa-time').value.trim();
+            
+            if(!goal || !time) {
+                alert('請先填寫讀書目標與專注時間喔！');
+                return;
+            }
+
+            // 將資料存起來，等等跳轉時要放在網址帶過去
+            localStorage.setItem('standaloneGoal', goal);
+            localStorage.setItem('standaloneTime', time);
+
+            document.getElementById('sa-input-section').classList.add('hidden');
+            document.getElementById('sa-flip-instruction').classList.remove('hidden');
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', checkPhoneFlipped);
+                        } else {
+                            alert('需要允許動作與方向存取，才能偵測手機翻轉喔！');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', checkPhoneFlipped);
+            }
+        }
+
+        // 步驟 5: 偵測翻轉、播音效、完美跳轉
+        function checkPhoneFlipped(event) {
+            if (isRedirecting) return; // 已經在上鎖跳轉中就不再重複執行
+
+            const beta = event.beta;
+            const gamma = event.gamma;
+            
+            if (beta !== null) {
+                // 判斷手機朝下
+                if ((beta < -150 || beta > 150) && Math.abs(gamma) < 45) {
+                    isRedirecting = true;
+                    window.removeEventListener('deviceorientation', checkPhoneFlipped);
+                    
+                    const sound = document.getElementById('success-sound');
+                    
+                    // 準備跳轉的執行函數
+                    const doRedirect = () => {
+                        // === 在進入單機翻轉模式前，確實執行鏡頭關閉以節省能耗 ===
+                        try {
+                            // 若大廳層級未來有實作鏡頭流，這裡會捕捉並自動關閉
+                            const streamToClose = window.currentStream || (typeof currentStream !== 'undefined' ? currentStream : null);
+                            disableCameraForSingleDeviceMode(streamToClose);
+                        } catch(e) {
+                            console.error("關閉鏡頭時發生錯誤：", e);
+                        }
+                        
+                        const currentUser = localStorage.getItem('studyVerseUser') || "游擊隊員";
+                        const goal = localStorage.getItem('standaloneGoal') || '';
+                        const time = localStorage.getItem('standaloneTime') || '25';
+                        
+                        // 將參數直接帶入目標教室，繞過所有多餘介面直接啟動計時
+                        let url = `/${targetStandaloneRoomUrl}?username=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
+                        
+                        // 若是加入隊伍進來的，把隊伍參數也接上
+                        if (window.tempTeamParams) {
+                            url += window.tempTeamParams;
+                            window.tempTeamParams = null;
+                        }
+                        
+                        window.location.href = url;
+                    };
+
+                    // 設定音效播放完畢後跳轉 (最佳體驗)
+                    sound.onended = doRedirect;
+                    
+                    // 播放音效
+                    sound.play().catch(e => {
+                        console.log('音效播放失敗(可能被瀏覽器阻擋):', e);
+                        // 即使音效被阻擋，也保證一定會跳轉
+                        doRedirect(); 
+                    });
+                }
+            }
+        }
+
+        // 取消設定
+        function closeStandaloneModal() {
+            document.getElementById('standalone-setup-modal').classList.add('hidden');
+            document.getElementById('standalone-setup-modal').classList.remove('flex');
+            window.removeEventListener('deviceorientation', checkPhoneFlipped);
+            isRedirecting = false;
+            window.tempTeamParams = null;
+        }
+
+        // ==========================================
+        // 隊伍與審核邏輯 (整合新版 5 步驟)
+        // ==========================================
+
+        window.showWaitingModal = function(teamName) {
+            document.getElementById('standalone-modal-container').classList.remove('hidden');
+            document.getElementById('waiting-approval-modal').classList.remove('hidden');
+        };
+
+        window.hideWaitingModal = function() {
+            document.getElementById('waiting-approval-modal').classList.add('hidden');
+        };
+
+        function closeRejectedModal() {
+            document.getElementById('rejected-modal').classList.add('hidden');
+            document.getElementById('standalone-modal-container').classList.add('hidden');
+        }
+
+        window.loadAndShowTeamModal = async function(modalType) {
+            try {
+                if (!document.getElementById('team-css-link')) {
+                    const link = document.createElement('link');
+                    link.id = 'team-css-link'; link.rel = 'stylesheet'; link.href = '/css/lobby-team.css';
+                    document.head.appendChild(link);
+                }
+                if (!customElements.get('team-modals')) {
+                    await loadScriptAsync('/js/team-modals.js');
+                    const modalContainer = document.createElement('team-modals');
+                    document.getElementById('modal-container').appendChild(modalContainer);
+                }
+                if (!window.executeJoinTeam) {
+                    await loadScriptAsync('/js/lobby-team.js');
+                }
+
+                overwriteTeamSyncLogic();
+
+                setTimeout(() => {
+                    const targetModal = document.getElementById('joinTeamModal');
+                    if (targetModal) {
+                        targetModal.classList.remove('hidden');
+                        targetModal.classList.add('flex');
+                    }
+                }, 50);
+            } catch (error) {
+                console.error(error);
+                alert("模組載入失敗");
+            }
+        };
+
+        function overwriteTeamSyncLogic() {
+            window.joinTeam = function(teamId, teamName, is_approval_required, roomType) {
+                const jtm = document.getElementById('joinTeamModal');
+                if(jtm) { jtm.classList.remove('flex'); jtm.classList.add('hidden'); }
+
+                pendingRoomType = roomType || 'managed-room.html';
+                const needsApproval = (is_approval_required === true || is_approval_required === 'true');
+
+                if (needsApproval) {
+                    socket.emit('request_join_team', {
+                        teamName: teamId, 
+                        username: username,
+                        realTeamName: teamName, 
+                        roomType: pendingRoomType
+                    });
+                    if (window.showWaitingModal) window.showWaitingModal(teamName);
+                } else {
+                    // 免審核直接開啟 5 步驟 Modal
+                    const teamParams = `&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
+                    openStandaloneModal(pendingRoomType);
+                    window.tempTeamParams = teamParams;
+                }
+            };
+
+            socket.off('join_team_approved');
+            socket.on('join_team_approved', (data) => {
+                if (window.hideWaitingModal) window.hideWaitingModal();
+                
+                const targetRoom = data.roomType || 'managed-room.html';
+                const teamParams = `&teamId=${data.teamId || data.teamName}&teamName=${encodeURIComponent(data.realTeamName || data.teamName)}`;
+
+                if (typeof openSetupModal === 'function') {
+                    openSetupModal(targetRoom, teamParams); 
+                } else if (typeof showRoomSetup === 'function') {
+                    showRoomSetup(targetRoom, teamParams);
+                } else {
+                    // 審核通過後開啟 5 步驟 Modal
+                    openStandaloneModal(targetRoom);
+                    window.tempTeamParams = teamParams;
+                }
+            });
+
+            socket.off('join_team_rejected');
+            socket.on('join_team_rejected', (data) => {
+                if (window.hideWaitingModal) window.hideWaitingModal();
+                document.getElementById('standalone-modal-container').classList.remove('hidden');
+                document.getElementById('rejected-modal').classList.remove('hidden');
+            });
+        }
+
+        function loadScriptAsync(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src; s.onload = resolve; s.onerror = reject;
+                document.body.appendChild(s);
+            });
+        }
+    </script>
+</body>
+</html>

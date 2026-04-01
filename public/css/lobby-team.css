@@ -1,0 +1,53 @@
+@charset "UTF-8";
+/* =========================================================== */
+/* STUDY VERSE V2.2.5.1 - LOBBY TEAM CSS (組隊大廳專屬樣式)    */
+/* 負責範圍：組隊大廳橘色競賽卡片懸浮、橘色脈衝                */
+/* 依賴說明：背景、跑馬燈、基礎卡片等已移至 global.css           */
+/* =========================================================== */
+
+/* ----------------------------------------------------------- */
+/* 1. 組隊大廳首頁專用 (team-lobby.html)                       */
+/* ----------------------------------------------------------- */
+
+/* 組隊自習室卡片懸浮互動 (修改為橘色系，符合 Team 熱血風格) */
+.room-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); 
+    border-color: rgba(249, 115, 22, 0.4); 
+}
+
+/* 載入/同步脈衝特效 (專屬橘色系) */
+@keyframes pulse-orange {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+.loading-pulse { 
+    animation: pulse-orange 2s infinite; 
+}
+/* =========================================================== */
+/* [V2.2.5.2 新增] 科技感表單元素覆蓋 (組隊大廳彈窗專用)       */
+/* =========================================================== */
+
+/* 隱藏原生下拉箭頭，使用自訂的科技藍箭頭 */
+#createTeamModal select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2em;
+}
+
+/* 焦點發光效果 (讓輸入框與下拉選單點擊時更有光暈感) */
+#createTeamModal input:focus, 
+#createTeamModal select:focus {
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+/* 確保下拉選單內的選項在深色模式下清晰可見 */
+#createTeamModal select option {
+    background-color: #050b14;
+    color: #93c5fd;
+    padding: 10px;
+}

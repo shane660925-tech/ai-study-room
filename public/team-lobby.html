@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STUDY VERSE - 組隊大廳 Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/lobby-team.css">
+
+    <script src="/js/lobby-components.js"></script>
+    <script src="/js/team-modals.js"></script>
+</head>
+<body class="min-h-screen flex flex-col relative bg-grid-pattern">
+    
+    <shared-modals></shared-modals>
+    <team-modals></team-modals>
+
+    <header class="h-16 flex justify-between items-center px-8 glass-panel sticky top-0 z-50">
+        <div>
+            <h1 class="text-xl font-black text-orange-500 tracking-wider neon-text">STUDY VERSE <span class="text-xs text-gray-400 font-normal">組隊大廳</span></h1>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="index.html" class="text-xs font-bold text-blue-400 border border-blue-500/50 px-3 py-1.5 rounded-full hover:bg-blue-500/20 transition-all flex items-center gap-1">
+                <i class="fas fa-arrow-left"></i> 返回專業大廳
+            </a>
+            <div class="text-right hidden sm:block">
+                <p id="navName" class="text-sm font-bold text-white leading-none">--</p>
+                <p class="text-[10px] text-gray-500 uppercase tracking-tighter">Verified Commander</p>
+            </div>
+            <img id="navAvatar" src="" class="w-10 h-10 rounded-full border-2 border-gray-700 bg-gray-800 object-cover" alt="User Avatar">
+            <button onclick="logout()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-gray-500" title="登出">
+                <i class="fas fa-sign-out-alt text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 flex flex-col gap-8">
+        
+        <section class="mb-2">
+            <div class="glass-panel rounded-2xl border border-white/5 bg-black/40 overflow-hidden h-10 flex items-center">
+                <div class="bg-orange-600 px-4 h-full flex items-center gap-2 flex-shrink-0 z-10">
+                    <i class="fas fa-bullhorn animate-pulse text-white"></i>
+                    <span class="text-xs font-bold uppercase tracking-widest text-white">Team Event</span>
+                </div>
+                <div class="flex-1 overflow-hidden relative">
+                    <div id="tickerStream" class="flex whitespace-nowrap items-center gap-8 px-4 text-xs text-orange-100/80">
+                        <span class="opacity-50 italic">等待社群動態中...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex flex-col gap-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-bold text-white flex items-center"><i class="fas fa-chess-knight mr-3 text-orange-400"></i>我的小隊狀態</h2>
+                <span class="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-3 py-1 rounded-full border border-orange-500/20 uppercase">Dashboard</span>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-3"><i class="fas fa-clock"></i></div>
+                    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">小隊累計專注</p>
+                    <h4 class="text-2xl font-black text-white">0 <span class="text-xs text-gray-500 font-normal">H</span></h4>
+                </div>
+                
+                <div class="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 mb-3"><i class="fas fa-fire"></i></div>
+                    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">連續登入</p>
+                    <h4 class="text-2xl font-black text-white">0 <span class="text-xs text-gray-500 font-normal">天</span></h4>
+                </div>
+                
+                <div class="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center text-yellow-400 mb-3"><i class="fas fa-star"></i></div>
+                    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">小隊總積分</p>
+                    <h4 class="text-2xl font-black text-white">0 <span class="text-xs text-gray-500 font-normal">PTS</span></h4>
+                </div>
+                
+                <div class="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 mb-3"><i class="fas fa-medal"></i></div>
+                    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">成就解鎖</p>
+                    <h4 class="text-2xl font-black text-white">0 <span class="text-xs text-gray-500 font-normal">/ 12</span></h4>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="glass-panel p-6 rounded-3xl border border-white/5 flex flex-col h-64">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-white uppercase tracking-tighter"><i class="fas fa-list-ol mr-2 text-orange-400"></i>小隊排行榜</h3>
+                        <span class="text-[10px] bg-white/5 text-gray-400 px-2 py-1 rounded">Weekly</span>
+                    </div>
+                    <div class="flex-1 flex items-center justify-center border-2 border-dashed border-white/5 rounded-xl bg-black/20">
+                        <div class="text-center">
+                            <i class="fas fa-chart-bar text-3xl text-gray-600 mb-2"></i>
+                            <p class="text-xs text-gray-500">本週排行榜數據計算中...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-6 rounded-3xl border border-white/5 flex flex-col h-64 relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-white uppercase tracking-tighter"><i class="fas fa-calendar-alt mr-2 text-orange-400"></i>排定競賽模式</h3>
+                        <span class="text-[10px] bg-orange-500/20 text-orange-400 px-2 py-1 rounded border border-orange-500/30">即將開放</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-xl bg-black/20 gap-3 p-4">
+                        <div class="flex gap-3">
+                            <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-gray-500"><i class="fas fa-stopwatch text-xl"></i></div>
+                            <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-gray-500"><i class="fas fa-crosshairs text-xl"></i></div>
+                            <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-gray-500"><i class="fas fa-flag-checkered text-xl"></i></div>
+                        </div>
+                        <p class="text-xs text-gray-500 text-center leading-relaxed mt-2">敬請期待<br>隊長可於此處發起 24H/48H 衝刺對決</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-4">
+            <div class="lg:col-span-3 flex flex-col gap-8">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white flex items-center"><i class="fas fa-users mr-3 text-orange-400"></i>社群組隊與競賽操作</h2>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="glass-panel p-8 rounded-3xl room-card flex flex-col border border-white/5 group cursor-pointer" onclick="openJoinTeamModal()">
+                            <div class="flex justify-between items-start mb-4">
+                                <div class="w-16 h-16 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400 text-3xl group-hover:bg-orange-500 group-hover:text-white transition-all shadow-lg"><i class="fas fa-trophy"></i></div>
+                                <span class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-bold tracking-widest" id="activeTeamsCount">尋找隊伍中</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-white mb-2">加入/查看小隊狀態</h3>
+                            <p class="text-gray-400 text-sm mb-6 flex-1 leading-relaxed">瀏覽目前有哪些開放中的小隊，或是查看自己目前所屬小隊的成員名單與狀態。</p>
+                            <div class="w-full text-center bg-white/5 group-hover:bg-orange-600 py-3 rounded-xl text-sm font-bold text-white transition-all shadow-md">瀏覽競賽列表</div>
+                        </div>
+
+                        <div class="glass-panel p-8 rounded-3xl room-card flex flex-col border-2 border-yellow-500/30 group cursor-pointer relative overflow-hidden" onclick="openCreateTeamModal()">
+                            <div class="absolute top-0 right-0 bg-yellow-500 text-[10px] text-black px-4 py-1.5 font-black rounded-bl-xl uppercase shadow-md">高分/付費解鎖</div>
+                            <div class="w-16 h-16 bg-yellow-500/20 rounded-2xl flex items-center justify-center text-yellow-400 text-3xl mb-4 group-hover:bg-yellow-500 group-hover:text-white transition-all shadow-lg"><i class="fas fa-flag"></i></div>
+                            <h3 class="text-2xl font-black text-white mb-2">創建專屬小隊</h3>
+                            <p class="text-gray-400 text-sm mb-6 flex-1 leading-relaxed">發起目標衝刺班 (如月考48H)。自訂專屬代碼，並邀請戰友加入。身為指揮官引領隊伍向前！</p>
+                            <div class="w-full text-center bg-yellow-600/20 group-hover:bg-yellow-500 py-3 rounded-xl text-sm font-bold text-yellow-500 group-hover:text-black transition-all shadow-md">發起組隊</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 flex flex-col gap-6">
+                <div class="glass-panel rounded-3xl overflow-hidden flex flex-col border border-white/5 h-full">
+                    <div class="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-white uppercase tracking-tighter"><i class="fas fa-history mr-2 text-blue-400"></i>Mission Logs</h3>
+                    </div>
+                    <div class="p-0 overflow-y-auto max-h-full custom-scroll flex-1">
+                        <table class="w-full text-left border-collapse">
+                            <tbody id="recordsTableBody" class="text-xs text-gray-400 divide-y divide-white/5">
+                                <tr><td colspan="3" class="p-8 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>連線中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <shared-footer></shared-footer>
+    
+    <script src="/js/lobby-core.js"></script>
+    <script src="/js/lobby-team.js"></script>
+</body>
+</html>

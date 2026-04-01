@@ -1,0 +1,114 @@
+@charset "UTF-8";
+/* =========================================================== */
+/* STUDY VERSE V2.2.1 - ADMIN CSS (教師後台專用樣式)           */
+/* 負責範圍：違規卡片、側邊欄日誌、結算報告與學生群組卡片        */
+/* 依賴說明：動畫引擎 (slideInLeft 等) 由 global.css 支援       */
+/* =========================================================== */
+
+/* ----------------------------------------------------------- */
+/* 0. 基礎設定與卷軸樣式 (Base & Scrollbars)                   */
+/* ----------------------------------------------------------- */
+body { 
+    background-color: #0f172a; 
+    color: #e2e8f0; 
+}
+
+.scroll-hide::-webkit-scrollbar { display: none; }
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+/* ----------------------------------------------------------- */
+/* 1. 學生網格與群組卡片 (Student Grid & Groups)               */
+/* ----------------------------------------------------------- */
+/* 確保監控畫面比例一致 */
+.student-card {
+    aspect-ratio: 1 / 1.3;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+}
+
+.user-group-container {
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.2);
+    overflow: hidden;
+}
+
+.group-items-box {
+    display: none;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.group-items-box.active {
+    display: block;
+}
+
+/* ----------------------------------------------------------- */
+/* 2. 狀態與違規視覺 (Status & Violations)                     */
+/* ----------------------------------------------------------- */
+/* 手機翻轉模式啟動中 (專屬藍色漸層漸變) */
+.flip-active { 
+    background: linear-gradient(135deg, #1e293b 0%, #1e40af 100%); 
+    border-color: #3b82f6 !important; 
+}
+
+/* 違規卡片警告 (調用下方的 shake 搖晃動畫) */
+.violation-card { 
+    animation: shake 0.5s infinite; 
+    border: 2px solid #ef4444; 
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); 
+}
+
+/* 教師端專屬狀態脈衝動畫 */
+.status-pulse { 
+    animation: pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+}
+
+/* 專屬搖晃動畫引擎 */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* 專屬脈衝動畫引擎 */
+@keyframes pulse-custom {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ----------------------------------------------------------- */
+/* 3. 側邊欄日誌系統 (AI Logs)                                 */
+/* ----------------------------------------------------------- */
+/* AI 系統日誌 (調用 global.css 的 slideInLeft 滑入動畫) */
+.ai-log { 
+    border-left: 3px solid #3b82f6; 
+    background: rgba(59, 130, 246, 0.1); 
+    padding: 8px 12px; 
+    border-radius: 0 8px 8px 0; 
+    margin-bottom: 6px; 
+    animation: slideInLeft 0.4s ease-out; 
+}
+
+/* ----------------------------------------------------------- */
+/* 4. 數據總結與報告 (Summary Reports)                         */
+/* ----------------------------------------------------------- */
+/* 結算報告專用卡片 */
+.summary-report-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    animation: slideInUp 0.4s ease-out; /* 調用 global.css 滑入 */
+    transition: transform 0.2s;
+}
+
+/* 結算報告懸浮互動 */
+.summary-report-card:hover {
+    transform: scale(1.02);
+    border-color: rgba(59, 130, 246, 0.5);
+}
