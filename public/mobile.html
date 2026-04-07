@@ -91,14 +91,41 @@
         let hasFlipped = false;
         let studentName = "";
 
+        // [獨立函數] 專門處理翻轉邏輯，放寬到 130 度就判定為翻轉
+        function handleOrientation(event) {
+            if (event.beta === null) return;
+            
+            // 降低閾值到 130，避免部分手機鏡頭太凸無法平放桌面
+            const isFaceDown = Math.abs(event.beta) > 130;
+
+            if (isFaceDown) {
+                if (!hasFlipped) {
+                    hasFlipped = true;
+                    document.getElementById('flippedOverlay').classList.remove('hidden');
+                    document.getElementById('warningOverlay').classList.add('hidden');
+                    
+                    socket.emit('update_status', { name: studentName, isFlipped: true });
+                    socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName });
+                }
+            } else {
+                if (hasFlipped) {
+                    hasFlipped = false;
+                    document.getElementById('flippedOverlay').classList.add('hidden');
+                    document.getElementById('warningOverlay').classList.remove('hidden');
+                    
+                    socket.emit('update_status', { name: studentName, isFlipped: false });
+                    socket.emit('flip_failed', { name: studentName }); 
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const isStandalone = urlParams.get('standalone') === 'true';
             const targetRoom = urlParams.get('targetRoom');
             const syncToken = urlParams.get('sync'); 
-            const urlName = urlParams.get('name'); // [新增] 抓取網址帶來的姓名
+            const urlName = urlParams.get('name'); 
             
-            // [新增] 如果網址有帶名字，自動填入並鎖定，防止打錯
             if (urlName) {
                 const nameInput = document.getElementById('syncName');
                 nameInput.value = urlName;
@@ -146,43 +173,28 @@
                     badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';
                     badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
                 }
+
+                // [核心修正] 要求 iOS 13+ 陀螺儀存取權限！(沒有這段 iOS 永遠不會有翻轉反應)
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                if (syncToken) window.addEventListener('deviceorientation', handleOrientation);
+                            } else {
+                                alert("⚠️ 權限被拒絕！請允許「動作與方向」權限，否則無法偵測翻轉！(可能需要至手機設定中重置網頁權限)");
+                            }
+                        })
+                        .catch(console.error);
+                } else {
+                    // 非 iOS 設備直接監聽
+                    if (syncToken) window.addEventListener('deviceorientation', handleOrientation);
+                }
             }
         });
 
         stopBtn.addEventListener('click', () => {
             syncArea.classList.add('hidden');
             setupArea.classList.remove('hidden');
-        });
-
-        // [修改] 完善 DeviceOrientation 的防呆與違規邏輯
-        window.addEventListener('deviceorientation', (event) => {
-            if (event.beta !== null && studentName !== "") {
-                if (Math.abs(event.beta) > 160) {
-                    if (!hasFlipped) {
-                        hasFlipped = true;
-                        
-                        // 1. 顯示防護罩
-                        document.getElementById('flippedOverlay').classList.remove('hidden');
-                        document.getElementById('warningOverlay').classList.add('hidden');
-                        
-                        // 2. 發送成功訊號給伺服器
-                        socket.emit('update_status', { name: studentName, isFlipped: true });
-                        socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName });
-                    }
-                } else {
-                    if (hasFlipped) {
-                        hasFlipped = false;
-                        
-                        // 1. 顯示中斷警告
-                        document.getElementById('flippedOverlay').classList.add('hidden');
-                        document.getElementById('warningOverlay').classList.remove('hidden');
-                        
-                        // 2. 告訴伺服器你拿起來了 (這會立刻觸發教室端的違規)
-                        socket.emit('update_status', { name: studentName, isFlipped: false });
-                        socket.emit('flip_failed', { name: studentName }); 
-                    }
-                }
-            }
         });
     </script>
 </body>
