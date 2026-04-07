@@ -4,9 +4,7 @@
  * 負責：手機連動 QR Code 初始化、防呆進入自習室檢查
  */
 
-// 紀錄大廳載入時間，用於阻擋「幽靈連線」
-window.lobbyLoadTime = Date.now();
-
+// ================= 新增：v2.2.7 裝置分流與彈窗邏輯 =================
 let targetRoomUrl = '';
 window.isDeviceLinked = false; 
 
@@ -171,9 +169,8 @@ window.cancelDeviceSync = function() {
     
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
-        syncModule.classList.remove('ring-4', 'ring-green-500');
         syncModule.innerHTML = `
-            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2 sync-title">
+            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2">
                 <i class="fas fa-qrcode"></i> 手機連動 QR CODE
             </div>
             <div id="qrcode" class="p-2 bg-white rounded-xl shadow-2xl shadow-blue-500/20"></div>
@@ -368,8 +365,6 @@ function showPublicShamingToast(userName) {
 socket.on('deviceLinked', (data) => {
     // 阻擋殘留的事件觸發
     if (sessionStorage.getItem('mobileLinked') === 'true') return;
-    // 【核心防護】忽略大廳剛載入 3 秒內的所有手機幽靈連線
-    if (Date.now() - window.lobbyLoadTime < 3000) return;
     
     console.log('✅ 收到手機連線訊號，等待翻轉！', data);
     
@@ -378,30 +373,29 @@ socket.on('deviceLinked', (data) => {
     
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
-        // 【優化】不要刪除 QR Code，僅更改外框與標題字樣
-        syncModule.classList.add('ring-4', 'ring-green-500', 'transition-all');
-        
-        const titleDiv = syncModule.querySelector('.sync-title') || syncModule.querySelector('.text-blue-500');
-        if (titleDiv) {
-            titleDiv.className = "text-green-500 text-xs font-black mb-4 flex items-center gap-2 sync-title transition-colors";
-            titleDiv.innerHTML = `<i class="fas fa-link animate-pulse"></i> 已接收手機訊號，請蓋上螢幕`;
-        }
+        syncModule.classList.add('ring-4', 'ring-blue-500');
+        syncModule.innerHTML = `
+            <div class="text-green-500 text-sm font-black mb-4 flex items-center gap-2 justify-center">
+                <i class="fas fa-link"></i> 已與手機連線成功
+            </div>
+            <div class="p-4 bg-blue-900/40 rounded-xl border border-blue-500/30 text-white font-bold animate-pulse">
+                <i class="fas fa-mobile-alt mb-2 text-2xl"></i><br>請將手機螢幕朝下蓋在桌上<br>以進入教室
+            </div>
+            <button onclick="cancelDeviceSync()" class="mt-4 text-xs text-red-400 hover:text-red-300 transition-colors underline flex items-center justify-center gap-1 mx-auto w-full">
+                <i class="fas fa-times-circle"></i> 取消連線並重置
+            </button>
+        `;
     }
 });
 
 socket.on('mobile_sync_update', (data) => {
-    // 【核心防護】忽略大廳剛載入 3 秒內的手機殘留翻轉訊號
-    if (Date.now() - window.lobbyLoadTime < 3000) return;
-
     if (data.type === 'FLIP_COMPLETED') {
         console.log("💻 收到手機翻轉成功的訊號！");
         alert("✅ 連動成功！手機已確認朝下置放。"); 
         
         const syncModule = document.getElementById('syncModule');
         if (syncModule) {
-            syncModule.classList.remove('ring-4', 'ring-green-500');
-            syncModule.classList.add('ring-4', 'ring-blue-500');
-            // 翻轉成功後才會真正覆蓋畫面，因為這時即將進入教室
+            syncModule.classList.remove('ring-4', 'ring-blue-500');
             syncModule.innerHTML = `
                 <div class="text-green-500 text-sm font-black mb-4 flex items-center gap-2 justify-center">
                     <i class="fas fa-check-circle"></i> 連動且翻轉完成
@@ -410,7 +404,6 @@ socket.on('mobile_sync_update', (data) => {
                     📱 AI 誤判豁免已啟用
                 </div>
                 <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">您的手機正在作為翻轉感測器運作中<br>請勿將手機翻回正面</p>
-                <button onclick="cancelDeviceSync()" class="mt-4 text-[10px] text-red-400 font-mono underline hover:text-red-300 transition-colors">取消連動並重置</button>
             `;
         }
 
@@ -437,9 +430,6 @@ socket.on('mobile_sync_update', (data) => {
 // [終極防護] 每次載入大廳時，強制重置手機連線狀態與還原 QR Code
 // =========================================================================
 window.addEventListener('DOMContentLoaded', () => {
-    // 刷新載入時間
-    window.lobbyLoadTime = Date.now();
-    
     localStorage.removeItem('mobileLinked');
     sessionStorage.removeItem('mobileLinked');
     window.isDeviceLinked = false;
@@ -456,7 +446,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
         syncModule.innerHTML = `
-            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2 sync-title">
+            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2">
                 <i class="fas fa-qrcode"></i> 手機連動 QR CODE
             </div>
             <div id="qrcode" class="p-2 bg-white rounded-xl shadow-2xl shadow-blue-500/20"></div>
