@@ -151,18 +151,20 @@ window.enterClassroomWithCheck = function(roomUrl) {
     }
 };
 
-// [專業大廳專屬] 初始化手機連動 QR Code (修正版，加上識別碼)
+// [專業大廳專屬] 初始化手機連動 QR Code (修正版，加上識別碼與自動姓名)
 function initSyncQRCode() {
     const qrcodeContainer = document.getElementById("qrcode");
     if(!qrcodeContainer) return;
     
     // 使用 socket.id 讓手機知道要跟哪個大廳連動
-    // 確保這裡抓得到 socket，如果你的 socket 變數名稱不同請記得修改
     const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
     
+    // [新增] 自動抓取使用者的暱稱，帶入網址中
+    const userName = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '';
+    
     const baseUrl = window.location.origin; 
-    // 把專屬 ID 塞進網址裡，例如： https://你的網域/mobile.html?sync=abc123xyz
-    const mobileUrl = `${baseUrl}/mobile.html?sync=${syncToken}`;
+    // 把專屬 ID 和 姓名 塞進網址裡
+    const mobileUrl = `${baseUrl}/mobile.html?sync=${syncToken}&name=${encodeURIComponent(userName)}`;
     
     qrcodeContainer.innerHTML = "";
     new QRCode(qrcodeContainer, {

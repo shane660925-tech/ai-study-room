@@ -13,6 +13,20 @@
 </head>
 <body class="mobile-page-body flex flex-col items-center justify-center h-screen text-slate-200 bg-[#0a0c14]">
 
+    <div id="flippedOverlay" class="fixed inset-0 bg-[#064e3b] z-[9999] flex flex-col items-center justify-center hidden transition-all duration-300">
+        <i class="fas fa-shield-alt text-7xl text-green-400 mb-6 drop-shadow-[0_0_15px_rgba(74,222,128,0.8)]"></i>
+        <h1 class="text-3xl font-black text-white mb-2 tracking-widest">防護罩已啟動</h1>
+        <p class="text-green-300 font-bold text-lg">AI 豁免生效中</p>
+        <p class="text-xs text-green-500 mt-12 uppercase tracking-widest animate-pulse">請保持手機朝下 ‧ 專注看電腦螢幕</p>
+    </div>
+
+    <div id="warningOverlay" class="fixed inset-0 bg-[#7f1d1d] z-[9999] flex flex-col items-center justify-center hidden transition-all duration-300">
+        <i class="fas fa-exclamation-triangle text-7xl text-red-500 mb-6 animate-bounce drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"></i>
+        <h1 class="text-3xl font-black text-white mb-2 tracking-widest">偵測到違規！</h1>
+        <p class="text-red-300 font-bold text-lg">手機翻轉中斷</p>
+        <p class="text-xs text-red-400 mt-12 bg-black/30 px-4 py-2 rounded-full border border-red-500/30">已即時通報至教室與大廳</p>
+    </div>
+
     <div id="setupView" class="text-center p-8 w-full max-w-sm">
         <div class="mb-6">
             <div class="relative inline-block">
@@ -43,9 +57,9 @@
     </div>
 
     <div id="syncView" class="hidden text-center p-8">
-        <div id="statusBall" class="w-48 h-48 rounded-full border-4 border-slate-700 flex flex-col items-center justify-center mx-auto mb-10 transition-all duration-700">
-            <i id="statusIcon" class="fas fa-arrow-down text-4xl mb-2 text-slate-600"></i>
-            <p id="statusText" class="font-bold text-slate-500">請將手機翻轉蓋上</p>
+        <div id="statusBall" class="w-48 h-48 rounded-full border-4 border-slate-700 flex flex-col items-center justify-center mx-auto mb-10 transition-all duration-700 bg-blue-900/10 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
+            <i id="statusIcon" class="fas fa-arrow-down text-5xl mb-3 text-blue-500 animate-bounce"></i>
+            <p id="statusText" class="font-bold text-blue-400 tracking-widest">請將手機蓋上</p>
         </div>
         <div class="space-y-3">
             <h2 id="displayName" class="text-2xl font-black">---</h2>
@@ -73,47 +87,43 @@
     <script src="/js/flip.js"></script>
 
     <script>
-        // [新增] 建立 Socket 連線
         const socket = io();
-
-        // [新增] 宣告翻轉狀態與學生暱稱變數，供下方 DeviceOrientation 使用
         let hasFlipped = false;
         let studentName = "";
 
-        // 針對「單機跳轉模式」與「大廳連動模式」的專屬 UI 處理
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const isStandalone = urlParams.get('standalone') === 'true';
             const targetRoom = urlParams.get('targetRoom');
-            const syncToken = urlParams.get('sync'); // [新增] 抓取網址中的 syncToken
+            const syncToken = urlParams.get('sync'); 
+            const urlName = urlParams.get('name'); // [新增] 抓取網址帶來的姓名
             
+            // [新增] 如果網址有帶名字，自動填入並鎖定，防止打錯
+            if (urlName) {
+                const nameInput = document.getElementById('syncName');
+                nameInput.value = urlName;
+                nameInput.setAttribute('readonly', 'true');
+                nameInput.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
             if (isStandalone) {
-                // 1. 修改標題與提示
                 document.getElementById('setupTitle').innerText = "準備進入教室";
                 document.getElementById('setupSubTitle').innerText = "點擊下方按鈕後翻轉手機即可進入";
-                
-                // 2. 處理目標教室名稱顯示
                 let roomName = "自習教室";
                 if (targetRoom === 'immersive-room.html') roomName = "沉浸式自習室";
                 if (targetRoom === 'managed-room.html') roomName = "模擬線上教室";
-                
                 document.getElementById('startBtnText').innerText = `進入 ${roomName}`;
                 document.getElementById('targetRoomHint').innerText = `翻轉後，系統將自動跳轉至「${roomName}」並開始計時。`;
                 
-                // 3. 如果已經有暱稱，隱藏輸入框縮短路徑
                 const savedName = localStorage.getItem('studyVerseUser');
-                if (savedName) {
-                    document.getElementById('nameInputGroup').classList.add('hidden');
-                }
+                if (savedName && !urlName) document.getElementById('nameInputGroup').classList.add('hidden');
             } else if (syncToken) {
-                // [新增] 如果帶有 sync 參數，代表是從 PC 大廳掃碼來的
                 document.getElementById('setupTitle').innerText = "大廳連動就緒";
-                document.getElementById('setupSubTitle').innerText = "請輸入暱稱並點擊啟動連線";
+                document.getElementById('setupSubTitle').innerText = "請確認暱稱並點擊啟動連線";
                 document.getElementById('startBtnText').innerText = "連線至主大廳";
             }
         });
 
-        // 監控 syncView 的顯示，隱藏 setupView
         const setupArea = document.getElementById('setupView');
         const syncArea = document.getElementById('syncView');
         const startBtn = document.getElementById('startBtn');
@@ -122,71 +132,54 @@
         startBtn.addEventListener('click', () => {
             const name = document.getElementById('syncName').value.trim();
             const urlParams = new URLSearchParams(window.location.search);
-            const syncToken = urlParams.get('sync'); // [新增] 再次確認網址上的 syncToken
+            const syncToken = urlParams.get('sync'); 
 
             if(name) {
-                studentName = name; // [修改] 將輸入的名字存入全域變數中，供翻轉偵測使用
-
+                studentName = name; 
                 setupArea.classList.add('hidden');
                 syncArea.classList.remove('hidden');
                 document.getElementById('displayName').innerText = name;
                 
-                // [新增] 如果有 syncToken，向伺服器發出連動請求
                 if (syncToken) {
-                    console.log("發送連動請求給大廳：", syncToken);
-                    // 把資訊傳給後端
-                    socket.emit('request_link_device', { 
-                        syncToken: syncToken, 
-                        studentName: name 
-                    });
-
-                    // 改變徽章外觀，提示連動成功
+                    socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
                     const badge = document.getElementById('connectionBadge');
-                    badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連動';
-                    badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter';
+                    badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';
+                    badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
                 }
-
-                // 注意：flip.js 裡面的 startTracking 會被觸發
             }
         });
 
         stopBtn.addEventListener('click', () => {
             syncArea.classList.add('hidden');
             setupArea.classList.remove('hidden');
-            // 注意：flip.js 裡面的 stopTracking 會被觸發
         });
 
-        // [新增] 處理 DeviceOrientation 的翻轉邏輯
+        // [修改] 完善 DeviceOrientation 的防呆與違規邏輯
         window.addEventListener('deviceorientation', (event) => {
-            // 確認 event.beta 有數值且使用者已輸入名字並按下啟動
             if (event.beta !== null && studentName !== "") {
-                // beta 代表手機前後傾斜度。平放在桌上朝上是 0，朝下大約是 180 或 -180
-                // 這裡設定當傾斜角度絕對值大於 160 度時，判定為手機朝下蓋上
                 if (Math.abs(event.beta) > 160) {
                     if (!hasFlipped) {
                         hasFlipped = true;
-                        console.log("📱 手機已翻轉朝下！");
                         
-                        // 1. 更改手機端畫面為「專注中」
-                        document.body.innerHTML = "<h1 style='color:white; text-align:center; margin-top:50%;'>手機已翻轉<br>請看電腦大廳螢幕</h1>";
+                        // 1. 顯示防護罩
+                        document.getElementById('flippedOverlay').classList.remove('hidden');
+                        document.getElementById('warningOverlay').classList.add('hidden');
                         
-                        // 2. 發送 Socket 訊號給伺服器
-                        socket.emit('update_status', { 
-                            name: studentName, 
-                            isFlipped: true 
-                        });
-
-                        // 另外發送一個明確的連動完成訊號給大廳
-                        socket.emit('mobile_sync_update', {
-                            type: 'FLIP_COMPLETED',
-                            studentName: studentName
-                        });
+                        // 2. 發送成功訊號給伺服器
+                        socket.emit('update_status', { name: studentName, isFlipped: true });
+                        socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName });
                     }
                 } else {
-                    // 如果手機被拿起來，可以在這裡處理 (例如發送 isFlipped: false)
                     if (hasFlipped) {
                         hasFlipped = false;
+                        
+                        // 1. 顯示中斷警告
+                        document.getElementById('flippedOverlay').classList.add('hidden');
+                        document.getElementById('warningOverlay').classList.remove('hidden');
+                        
+                        // 2. 告訴伺服器你拿起來了 (這會立刻觸發教室端的違規)
                         socket.emit('update_status', { name: studentName, isFlipped: false });
+                        socket.emit('flip_failed', { name: studentName }); 
                     }
                 }
             }

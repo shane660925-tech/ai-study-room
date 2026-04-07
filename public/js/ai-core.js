@@ -8,31 +8,26 @@ let sessionStartTime = null;
 let lastVideoTime = -1;
 let myUsername = localStorage.getItem('studyVerseUser') || "學員"; 
 
-// --- [優化 A] AI 穩定性變數 ---
 let distractionCounter = 0; 
 const STABLE_THRESHOLD = 3; 
 let aiFaceIssue = null; 
 let lastHeartbeat = 0; 
 
-// --- [新增] 手機翻轉偵測變數 ---
-let isPhoneFlipped = false;
+// [修改] 確保一進來就讀取 sessionStorage 知道是否連動
+let isPhoneFlipped = sessionStorage.getItem('mobileLinked') === 'true';
 
-// --- 模擬教室與教師功能變數 ---
 let isPauseMode = false;      
 let pauseEndTime = 0;         
 let lastViolationTime = 0;    
 let remoteUsers = [];
-
-// --- [隊長審核權限變數] ---
 let isAuditMode = false; 
-
-// --- [核心新增：詳細統計與報告變數] ---
 let totalViolationCount = 0; 
 let violationDetails = {
     "📱 使用手機": 0,
     "🪑 偵測離座": 0,
     "💤 偵測趴睡": 0,
-    "🚫 切換分頁": 0
+    "🚫 切換分頁": 0,
+    "📱 手機翻轉中斷": 0 // [新增]
 };
 
 // --- 介面更新邏輯 ---
@@ -80,6 +75,36 @@ if (typeof io !== 'undefined') {
     socket = io();
     window.appSocket = socket;
     
+    // [新增] 監聽手機端傳來的翻轉中斷事件，立刻判為違規
+    socket.on('flip_failed', (data) => {
+        if (data.name === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
+            console.log("🚨 接收到手機拿起事件，判定違規！");
+            isPhoneFlipped = false; // 拔除本地豁免狀態
+            
+            // 強制直接進入違規狀態 (跳過 STABLE_THRESHOLD 的緩衝)
+            const overlay = document.getElementById("distractionOverlay");
+            const overlayText = document.getElementById("overlayText");
+            const statusBubble = document.getElementById("myStatusBubble");
+
+            myStatus = "DISTRACTED";
+            if (overlay) {
+                overlay.style.opacity = 1;
+                overlayText.innerHTML = `❌ 違規中<br><span class="text-xs">📱 手機翻轉中斷</span>`;
+            }
+            if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
+            
+            captureViolation("📱 手機翻轉中斷");
+            socket.emit("update_status", { status: myStatus, name: myUsername, isFlipped: false });
+        }
+    });
+
+    // [新增] 強制狀態同步 (解決過場時遺漏事件的問題)
+    socket.on('force_status_sync', (data) => {
+        if (data.isFlipped !== undefined) {
+            isPhoneFlipped = data.isFlipped;
+        }
+    });
+
     socket.on('team_leader_update', (data) => {
         window.currentTeamLeader = data.leader;
         if (typeof window.updateLeaderUI === 'function') {
@@ -119,14 +144,6 @@ if (typeof io !== 'undefined') {
         if (othersContainer) {
             const others = users.filter(u => u.name !== myUsername);
             othersContainer.innerHTML = others.map(u => {
-                let statusClass = "";
-                if (u.status === 'FOCUSED') statusClass = "status-focused-active";
-                else if (u.status === 'DISTRACTED' || u.status === 'SLEEPING') statusClass = "status-distracted-active";
-                else if (u.status === 'BREAK') statusClass = "status-break-active";
-
-                const isThisUserCaptain = u.isCaptain || window.currentTeamLeader === u.name;
-
-                // 🌟🌟🌟 判斷如果對方是翻轉單機模式 🌟🌟🌟
                 if (u.isFlipped) {
                     return `
                     <div id="user-card-${u.name}" class="relative flex flex-col items-center justify-center p-2 w-full animate-fade-in transition-all duration-300" style="aspect-ratio: 3/4; background: transparent; border: none; box-shadow: none;">
@@ -144,28 +161,21 @@ if (typeof io !== 'undefined') {
                         </div>
                     </div>`;
                 } else {
-                    // 🌟🌟🌟 正常模式：單機直立圖卡 (恢復正常網格大小) 🌟🌟🌟
                     return `
                     <div id="user-card-${u.name}" class="relative w-full h-full flex items-center justify-center animate-fade-in bg-transparent">
-                        
                         <div class="inner-card relative h-fit w-fit min-w-[160px] max-w-[180px] bg-[#111827] rounded-2xl shadow-2xl border border-gray-700/50 flex flex-col items-center gap-2.5 py-4 px-3 transition-all duration-300 hover:border-blue-400/50">
-                            
                             <div class="relative w-16 h-16 rounded-full border-2 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)] flex-shrink-0 bg-gray-800 flex items-center justify-center z-10">
                                 <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
                             </div>
-                            
                             <div class="flex flex-col items-center w-full space-y-1.5 z-10">
                                 <div class="text-base font-bold text-white truncate w-full text-center px-1">${u.name}</div>
-                                
                                 <div class="w-full bg-blue-900/30 text-blue-200 text-xs px-2 py-1.5 rounded border border-blue-500/30 text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-inner">
                                     🎯 ${u.goal || '專注進行中...'}
                                 </div>
-
                                 <div class="w-full bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30 flex items-center justify-center gap-1.5 shadow-inner whitespace-nowrap">
                                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
                                     <span class="font-bold tracking-wider truncate">${u.status === 'FOCUSED' ? '深度專注中' : (u.status || '連線中')}</span>
                                 </div>
-                                
                                 <div class="text-sm text-gray-400 font-bold flex items-center justify-center gap-1 whitespace-nowrap w-full">
                                     <i class="fas fa-clock text-gray-500"></i> ${u.focusMinutes || 0} 分鐘
                                 </div>
@@ -206,16 +216,16 @@ if (typeof io !== 'undefined') {
 
 // 偵測手機翻轉 (Device Orientation)
 window.addEventListener('deviceorientation', (event) => {
+    // [修改防呆] 如果已經連動了手機，這台主設備(即使是平板)也不該自己偵測翻轉！
+    if (sessionStorage.getItem('mobileLinked') === 'true') return; 
+
     if (event.beta === null) return;
     
-    // beta 是前後傾角，手機平放且螢幕朝下時，數值會接近 180 或 -180 (大於 150 視為已翻轉)
     const currentlyFlipped = Math.abs(event.beta) > 150;
-    
     if (currentlyFlipped !== isPhoneFlipped) {
         isPhoneFlipped = currentlyFlipped;
         console.log("📱 翻轉狀態改變:", isPhoneFlipped ? "已翻轉 (螢幕朝下)" : "正常 (螢幕朝上)");
         
-        // 狀態改變時，即時發送給後端
         if (socket) {
             socket.emit("update_status", { 
                 status: myStatus, 
@@ -274,15 +284,21 @@ async function captureViolation(reason) {
     if (reason.includes("手機")) violationDetails["📱 使用手機"]++;
     else if (reason.includes("離座")) violationDetails["🪑 偵測離座"]++;
     else if (reason.includes("趴睡")) violationDetails["💤 偵測趴睡"]++;
+    else if (reason.includes("中斷")) violationDetails["📱 手機翻轉中斷"]++;
 
     const now = Date.now();
-    if (now - lastViolationTime < 15000) return; 
+    if (now - lastViolationTime < 15000 && !reason.includes("中斷")) return; 
     lastViolationTime = now;
-    const canvas = document.createElement('canvas');
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-    canvas.getContext('2d').drawImage(videoElement, 0, 0);
-    const imageData = canvas.toDataURL('image/jpeg', 0.4); 
+    
+    let imageData = null;
+    if (videoElement) {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+        canvas.getContext('2d').drawImage(videoElement, 0, 0);
+        imageData = canvas.toDataURL('image/jpeg', 0.4); 
+    }
+    
     socket.emit("report_violation", {
         name: myUsername, reason: reason, image: imageData, time: new Date().toLocaleTimeString()
     });
@@ -378,7 +394,7 @@ async function initApp() {
         roomMode: currentRoomMode,
         teamId: currentTeamId,
         isCaptain: isAuditMode,
-        isFlipped: isPhoneFlipped // 加入翻轉狀態
+        isFlipped: isPhoneFlipped 
     });
     
     await initAI();
@@ -447,7 +463,6 @@ async function predictLoop() {
         if (didCheckRun) {
             let currentIssue = null;
             
-            // 由於前面已經有了 isPhoneFlipped 本機變數，可以直接用它判斷自己是否翻轉
             if (isPhoneDetected && !isPhoneFlipped) {
                 currentIssue = "📱 使用手機";
             } else {
@@ -590,15 +605,11 @@ async function endSession() {
         console.error("存檔失敗:", err); 
     }
     
-    // --- [新增] 退出教室時重置連動與翻轉狀態 ---
     sessionStorage.removeItem('mobileLinked');
     localStorage.removeItem('mobileLinked');
 
     if(socket && socket.connected) {
-        // 發送解除翻轉的狀態更新給伺服器
         socket.emit("update_status", { status: "IDLE", name: myUsername, isFlipped: false });
-        
-        // 等待 200 毫秒，確保伺服器處理完狀態更新再斷線，避免斷線太快導致訊息遺失
         await new Promise(resolve => setTimeout(resolve, 200));
         socket.disconnect();
     } else if (socket) {
