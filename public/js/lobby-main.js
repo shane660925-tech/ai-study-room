@@ -425,3 +425,42 @@ socket.on('mobile_sync_update', (data) => {
         }
     }
 });
+// =========================================================================
+// [新增] 每次載入大廳時，強制重置手機連線狀態與 UI
+// =========================================================================
+window.addEventListener('DOMContentLoaded', () => {
+    // 1. 強制清除本地端的手機連線記憶
+    localStorage.removeItem('mobileLinked');
+    sessionStorage.removeItem('mobileLinked');
+
+    // 2. 重置核心變數 (與 lobby-core.js 保持一致)
+    window.isMobileConnected = false;
+    window.isMobileFlipped = false;
+    if (window.AppSync) {
+        window.AppSync = { connected: false, flipped: false };
+    }
+
+    // 3. 觸發 UI 更新函數 (確保還原為未連線狀態)
+    if (typeof updateSyncModuleUI === 'function') {
+        updateSyncModuleUI(false, false);
+    }
+
+    // 4. 如果你的 QR Code 覆蓋層有特定的 ID，可以加這段強制隱藏
+    // (請確認這個 ID 是不是你附圖中覆蓋層的 ID，如果是別的請替換)
+    const syncOverlay = document.getElementById('sync-overlay'); // TODO: 請確認你的覆蓋層 ID
+    if (syncOverlay) {
+        syncOverlay.classList.add('hidden');
+        syncOverlay.classList.remove('flex');
+    }
+
+    // 5. 確保剛進大廳時，再跟伺服器宣告一次「我沒有連線」
+    setTimeout(() => {
+        if (typeof socket !== 'undefined' && typeof myUsername !== 'undefined') {
+            socket.emit('mobile_sync', { 
+                username: myUsername, 
+                connected: false, 
+                isFlipped: false 
+            });
+        }
+    }, 500);
+});

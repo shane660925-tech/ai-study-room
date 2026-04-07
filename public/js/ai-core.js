@@ -574,6 +574,7 @@ function generateFinalReport(seconds) {
     return { score, details, comment };
 }
 
+// --- [修改] --- endSession 
 async function endSession() {
     const elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
@@ -650,9 +651,18 @@ async function endSession() {
     sessionStorage.removeItem('mobileLinked');
     localStorage.removeItem('mobileLinked');
 
-    if(socket && socket.connected) {
+    // 【新增】在跳轉回大廳前，強制通知伺服器解除手機連線狀態
+    if (socket && socket.connected) {
         socket.emit("update_status", { status: "IDLE", name: myUsername, isFlipped: false });
         socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: myUsername });
+
+        if (myUsername) {
+            socket.emit('mobile_sync', { 
+                username: myUsername, 
+                connected: false, 
+                isFlipped: false 
+            });
+        }
 
         await new Promise(resolve => setTimeout(resolve, 200));
         socket.disconnect();
