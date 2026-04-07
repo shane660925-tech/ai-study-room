@@ -15,6 +15,7 @@ let lastHeartbeat = 0;
 
 // 確保一進來就讀取 sessionStorage 知道是否連動
 let isPhoneFlipped = sessionStorage.getItem('mobileLinked') === 'true';
+let isFlipWarningActive = false; // [新增] 用來阻擋 AI 覆蓋警告畫面的鎖定變數
 
 let isPauseMode = false;      
 let pauseEndTime = 0;         
@@ -75,17 +76,24 @@ if (typeof io !== 'undefined') {
     socket = io();
     window.appSocket = socket;
     
-    // [新增] 監聽手機端的狀態變化事件 (用於顯示電腦版 5 秒警告)
     socket.on('mobile_sync_update', (data) => {
         if (data.studentName === myUsername) {
             if (data.type === 'FLIP_WARNING') {
+                // [修改] 鎖定警告狀態，防止 AI 繼續覆蓋
+                isFlipWarningActive = true;
+                myStatus = "DISTRACTED";
+                socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
+                
+                const statusBubble = document.getElementById("myStatusBubble");
+                if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
+
                 const overlay = document.getElementById("distractionOverlay");
                 const overlayText = document.getElementById("overlayText");
                 window.pcWarningCount = 5;
                 
                 if (overlay && overlayText) {
                     overlay.style.opacity = 1;
-                    overlay.style.backgroundColor = "rgba(153, 27, 27, 0.95)"; // 深紅色背景
+                    overlay.style.backgroundColor = "rgba(153, 27, 27, 0.95)"; 
                     overlay.style.backdropFilter = "blur(10px)";
                     overlayText.innerHTML = `⚠️ 手機已翻開！<br><span class="text-6xl font-mono mt-4 mb-2 block text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">${window.pcWarningCount}</span><br><span class="text-sm font-bold text-red-300">倒數結束將通報全班並強制退出</span>`;
                     
@@ -100,31 +108,45 @@ if (typeof io !== 'undefined') {
                     }, 1000);
                 }
             } else if (data.type === 'FLIP_COMPLETED') {
-                // 手機又蓋回去了，取消電腦端警告
+                // [修改] 手機蓋回去了，解除警告鎖定
+                isFlipWarningActive = false;
+                myStatus = "FOCUSED";
+                
                 if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
                 const overlay = document.getElementById("distractionOverlay");
                 if (overlay) overlay.style.opacity = 0;
+                
+                const statusBubble = document.getElementById("myStatusBubble");
+                if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]";
+                
+                socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: true });
             }
         }
     });
 
-    // [修改] 監聽手機最終 0 秒違規事件 (這也會同步觸發大廳的碎裂特效)
     socket.on('flip_failed', (data) => {
         if (data.name === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
             console.log("🚨 接收到手機最終違規，強制退出！");
             isPhoneFlipped = false; 
             
             if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
-            
-            // 紀錄嚴重違規並通報
             captureViolation("🚨 嚴重違規：手機翻轉中斷");
             
-            // 清除連動狀態，避免跳轉卡死
             sessionStorage.removeItem('mobileLinked');
             localStorage.removeItem('mobileLinked');
             
             alert("🚨 您已違反翻轉專注規則，系統已通報全班並強制將您退出教室！");
-            window.location.href = 'index.html'; // 強制踢回大廳
+            window.location.href = 'index.html'; 
+        } else if (data.name !== myUsername) {
+            // [新增] 其他同學在教室內看到社死宣告廣播
+            showPublicShamingToast(data.name);
+            
+            const bbContent = document.getElementById('blackboardContent'); 
+            if (bbContent) {
+                bbContent.innerText = `🚨 系統廣播：${data.name} 手機翻轉中斷！`;
+                bbContent.classList.add('text-red-400');
+                setTimeout(() => bbContent.classList.remove('text-red-400'), 4000);
+            }
         }
     });
 
@@ -243,11 +265,8 @@ if (typeof io !== 'undefined') {
     });
 }
 
-// 偵測手機翻轉 (Device Orientation)
 window.addEventListener('deviceorientation', (event) => {
-    // 如果已經連動了手機，這台主設備(即使是平板)也不該自己偵測翻轉！
     if (sessionStorage.getItem('mobileLinked') === 'true') return; 
-
     if (event.beta === null) return;
     
     const currentlyFlipped = Math.abs(event.beta) > 150;
@@ -265,7 +284,6 @@ window.addEventListener('deviceorientation', (event) => {
     }
 });
 
-// 生理需求處理
 window.requestBreak = function(type) {
     if (isPauseMode) return;
     const minutes = (type === 'toilet') ? 5 : 2;
@@ -307,7 +325,6 @@ window.endBreak = function() {
     socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: isPhoneFlipped });
 };
 
-// 教師截圖與統計
 async function captureViolation(reason) {
     totalViolationCount++;
     if (reason.includes("手機")) violationDetails["📱 使用手機"]++;
@@ -333,7 +350,6 @@ async function captureViolation(reason) {
     });
 }
 
-// 偵測分頁切換
 document.addEventListener("visibilitychange", () => {
     if (document.hidden && currentRoomMode === 'simulated' && !isPauseMode && !isAuditMode) {
         totalViolationCount++;
@@ -344,7 +360,6 @@ document.addEventListener("visibilitychange", () => {
     }
 });
 
-// 自動透過網址路徑判斷教室模式
 document.addEventListener('DOMContentLoaded', async () => {
     const currentPath = window.location.pathname;
     
@@ -377,7 +392,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 初始化 App
 async function initApp() {
     const nameInput = document.getElementById('inputName');
     const name = nameInput?.value || "學員";
@@ -390,7 +404,7 @@ async function initApp() {
     
     const urlParams = new URLSearchParams(window.location.search);
     const currentTeamId = urlParams.get('teamId') || null;
-    isAuditMode = urlParams.get('audit') === 'true'; // 判斷是否為隊長
+    isAuditMode = urlParams.get('audit') === 'true'; 
 
     document.getElementById("mySidebarName").innerText = name;
     document.getElementById("mySidebarGoal").innerText = goal;
@@ -447,7 +461,8 @@ async function initAI() {
 }
 
 async function predictLoop() {
-    if (isPauseMode) { requestAnimationFrame(predictLoop); return; }
+    // [修改] 如果目前處於翻轉警告鎖定狀態，直接阻斷 AI 檢查邏輯，避免把紅燈洗成綠燈！
+    if (isPauseMode || isFlipWarningActive) { requestAnimationFrame(predictLoop); return; }
 
     if (isAuditMode) {
         const now = performance.now();
@@ -491,13 +506,11 @@ async function predictLoop() {
 
         if (didCheckRun) {
             let currentIssue = null;
-            
             if (isPhoneDetected && !isPhoneFlipped) {
                 currentIssue = "📱 使用手機";
             } else {
                 currentIssue = aiFaceIssue;
             }
-
             handleDistractionBuffer(currentIssue, now);
         }
     }
@@ -639,8 +652,6 @@ async function endSession() {
 
     if(socket && socket.connected) {
         socket.emit("update_status", { status: "IDLE", name: myUsername, isFlipped: false });
-        
-        // [新增] 傳送斷開指令給手機端，讓它回到初始畫面
         socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: myUsername });
 
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -659,6 +670,20 @@ function showFloatingEmoji(emoji) {
     el.innerHTML = emoji;
     document.body.appendChild(el); 
     setTimeout(() => el.remove(), 2000);
+}
+
+// [新增] 在教室播放公開社死特效與音效 (給其他同學看的)
+function showPublicShamingToast(userName) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-red-900/95 to-red-600/95 text-white px-6 py-3 rounded-full font-bold text-sm z-[9999] shadow-[0_0_20px_rgba(220,38,38,0.8)] flex items-center gap-3 animate-bounce';
+    toast.innerHTML = `<i class="fas fa-skull-crossbones text-xl text-black"></i> <span>快看！<b>${userName}</b>剛剛放棄了專注！</span> <i class="fas fa-hand-point-down text-xl text-black"></i>`;
+    document.body.appendChild(toast);
+    
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2855/2855-preview.mp3');
+    audio.volume = 0.6;
+    audio.play().catch(() => {});
+    
+    setTimeout(() => toast.remove(), 5000);
 }
 
 window.dismissAlertFromAI = function() {
