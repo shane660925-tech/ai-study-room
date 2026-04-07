@@ -76,6 +76,10 @@
         // [新增] 建立 Socket 連線
         const socket = io();
 
+        // [新增] 宣告翻轉狀態與學生暱稱變數，供下方 DeviceOrientation 使用
+        let hasFlipped = false;
+        let studentName = "";
+
         // 針對「單機跳轉模式」與「大廳連動模式」的專屬 UI 處理
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -121,6 +125,8 @@
             const syncToken = urlParams.get('sync'); // [新增] 再次確認網址上的 syncToken
 
             if(name) {
+                studentName = name; // [修改] 將輸入的名字存入全域變數中，供翻轉偵測使用
+
                 setupArea.classList.add('hidden');
                 syncArea.classList.remove('hidden');
                 document.getElementById('displayName').innerText = name;
@@ -148,6 +154,42 @@
             syncArea.classList.add('hidden');
             setupArea.classList.remove('hidden');
             // 注意：flip.js 裡面的 stopTracking 會被觸發
+        });
+
+        // [新增] 處理 DeviceOrientation 的翻轉邏輯
+        window.addEventListener('deviceorientation', (event) => {
+            // 確認 event.beta 有數值且使用者已輸入名字並按下啟動
+            if (event.beta !== null && studentName !== "") {
+                // beta 代表手機前後傾斜度。平放在桌上朝上是 0，朝下大約是 180 或 -180
+                // 這裡設定當傾斜角度絕對值大於 160 度時，判定為手機朝下蓋上
+                if (Math.abs(event.beta) > 160) {
+                    if (!hasFlipped) {
+                        hasFlipped = true;
+                        console.log("📱 手機已翻轉朝下！");
+                        
+                        // 1. 更改手機端畫面為「專注中」
+                        document.body.innerHTML = "<h1 style='color:white; text-align:center; margin-top:50%;'>手機已翻轉<br>請看電腦大廳螢幕</h1>";
+                        
+                        // 2. 發送 Socket 訊號給伺服器
+                        socket.emit('update_status', { 
+                            name: studentName, 
+                            isFlipped: true 
+                        });
+
+                        // 另外發送一個明確的連動完成訊號給大廳
+                        socket.emit('mobile_sync_update', {
+                            type: 'FLIP_COMPLETED',
+                            studentName: studentName
+                        });
+                    }
+                } else {
+                    // 如果手機被拿起來，可以在這裡處理 (例如發送 isFlipped: false)
+                    if (hasFlipped) {
+                        hasFlipped = false;
+                        socket.emit('update_status', { name: studentName, isFlipped: false });
+                    }
+                }
+            }
         });
     </script>
 </body>

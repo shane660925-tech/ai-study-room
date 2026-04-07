@@ -6,6 +6,7 @@
 
 // ================= 新增：v2.2.7 裝置分流與彈窗邏輯 =================
 let targetRoomUrl = '';
+window.isDeviceLinked = false; // [新增] 紀錄是否已完成連動與翻轉
 
 // 判斷是否為行動裝置
 function isMobileDevice() {
@@ -15,6 +16,19 @@ function isMobileDevice() {
 // 攔截原本的進入教室點擊，進行分流
 function handleRoomEntry(url) {
     targetRoomUrl = url;
+    
+    // [新增] 如果已經連動過，直接進入設定目標畫面，不要再跳出詢問彈窗
+    if (window.isDeviceLinked) {
+        if (typeof openSetupModal === 'function') {
+            openSetupModal(targetRoomUrl);
+        } else if (typeof showRoomSetup === 'function') {
+            showRoomSetup(targetRoomUrl);
+        } else {
+            window.location.href = targetRoomUrl;
+        }
+        return;
+    }
+
     if (isMobileDevice()) {
         // 【情境 2】行動裝置：顯示 [A] 或 [B] 選擇彈窗
         document.getElementById('device-choice-modal').classList.remove('hidden');
@@ -93,9 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     syncModule.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-2', 'ring-offset-black');
                 }, 2000);
             }
-            
-            // 備註：在這裡你的 WebSocket 應該要處於監聽狀態，
-            // 當收到另一支手機掃碼成功 (deviceLinked 事件) 時，再自動執行 enterClassroomWithCheck(targetRoomUrl);
         });
     }
 });
@@ -396,34 +407,72 @@ function showPublicShamingToast(userName) {
 }
 
 // =========================================================================
-// [新增] 監聽手機掃碼連動成功事件
+// [修改] 監聽手機掃碼連動成功事件 (不會跳轉，只要求翻轉)
 // =========================================================================
 socket.on('deviceLinked', (data) => {
-    console.log('✅ 收到手機連動成功訊號！', data);
+    console.log('✅ 收到手機連線訊號，等待翻轉！', data);
     
-    // 給予畫面提示 (可選，讓使用者知道連動成功了)
+    // [新增] 標記為已連線，防止無限跳出 QR code 彈窗
+    window.isDeviceLinked = true;
+    closeAllEntryModals(); // 確保彈窗關閉
+    
+    // 給予畫面提示，引導使用者翻轉手機
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
-        syncModule.classList.add('ring-4', 'ring-green-500'); // 變成綠色框
-        setTimeout(() => syncModule.classList.remove('ring-4', 'ring-green-500'), 2000);
+        syncModule.classList.add('ring-4', 'ring-blue-500');
+        syncModule.innerHTML = `
+            <div class="text-green-500 text-sm font-black mb-4 flex items-center gap-2 justify-center">
+                <i class="fas fa-link"></i> 已與手機連線成功
+            </div>
+            <div class="p-4 bg-blue-900/40 rounded-xl border border-blue-500/30 text-white font-bold animate-pulse">
+                <i class="fas fa-mobile-alt mb-2 text-2xl"></i><br>請將手機螢幕朝下蓋在桌上<br>以進入教室
+            </div>
+        `;
     }
+});
 
-    // 自動進入剛才選擇的目標教室！
-    if (targetRoomUrl) {
-        console.log('準備進入教室：', targetRoomUrl);
-        // 確保彈窗都關閉
-        closeAllEntryModals();
+// =========================================================================
+// [新增] 監聽手機翻轉完成事件 (真正跳轉進入目標設定的步驟)
+// =========================================================================
+socket.on('mobile_sync_update', (data) => {
+    if (data.type === 'FLIP_COMPLETED') {
+        console.log("💻 收到手機翻轉成功的訊號！");
         
-        // 執行進入教室的動作 (稍微延遲 0.5 秒，讓使用者看到綠色成功提示)
-        setTimeout(() => {
-            if (typeof enterClassroomWithCheck === 'function') {
-                enterClassroomWithCheck(targetRoomUrl);
-            } else {
-                window.location.href = targetRoomUrl;
-            }
-        }, 500);
-    } else {
-        // 如果他只是單純在首頁掃碼，還沒點擊任何教室
-        alert("✅ 手機連動成功！現在您可以點擊進入任何一間教室了。");
+        // 1. 顯示文字提示
+        alert("✅ 連動成功！手機已確認朝下置放。"); 
+        
+        // 2. 更改 QR Code 區塊的 UI 為綠色已連動
+        const syncModule = document.getElementById('syncModule');
+        if (syncModule) {
+            syncModule.classList.remove('ring-4', 'ring-blue-500');
+            syncModule.innerHTML = `
+                <div class="text-green-500 text-sm font-black mb-4 flex items-center gap-2 justify-center">
+                    <i class="fas fa-check-circle"></i> 連動且翻轉完成
+                </div>
+                <div class="p-4 bg-green-500/10 rounded-xl border border-green-500/30 text-green-400 font-bold text-sm">
+                    📱 AI 誤判豁免已啟用
+                </div>
+                <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">您的手機正在作為翻轉感測器運作中<br>請勿將手機翻回正面</p>
+            `;
+        }
+
+        // [！！！修正關鍵！！！] 必須把連動狀態存入 Storage，否則跳轉後會被教室踢回大廳！
+        sessionStorage.setItem('mobileLinked', 'true');
+        localStorage.setItem('mobileLinked', 'true');
+        window.isDeviceLinked = true;
+
+        // 3. 自動跳轉進入剛才選擇的目標教室 (打開設定目標的彈窗)
+        if (targetRoomUrl) {
+            console.log('準備打開教室設定：', targetRoomUrl);
+            setTimeout(() => {
+                if (typeof openSetupModal === 'function') {
+                    openSetupModal(targetRoomUrl);
+                } else if (typeof showRoomSetup === 'function') {
+                    showRoomSetup(targetRoomUrl);
+                } else {
+                    window.location.href = targetRoomUrl;
+                }
+            }, 500); // 給 0.5 秒讓使用者看到綠色的成功提示
+        }
     }
 });

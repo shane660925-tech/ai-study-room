@@ -169,29 +169,21 @@
     <div id="standalone-setup-modal" class="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
         <div class="bg-[#111827] border border-blue-500/30 p-8 rounded-3xl w-full max-w-sm text-center">
             <h2 class="text-2xl font-black text-blue-500 mb-6">單機翻轉設定</h2>
-            
             <input id="sa-room-type" type="hidden" value="immersive">
-            
             <div class="mb-4 text-left">
                 <label class="text-xs text-gray-400 font-bold mb-1 block">讀書目標</label>
                 <input id="sa-goal" type="text" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="例：完成微積分習題">
             </div>
-            
             <div class="mb-8 text-left">
                 <label class="text-xs text-gray-400 font-bold mb-1 block">專注時間 (分鐘)</label>
                 <input id="sa-time" type="number" class="w-full bg-black border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" value="25">
             </div>
-
-            <button id="btn-sa-ready" onclick="prepareStandaloneFlip()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all">
-                下一步：準備翻轉
-            </button>
-
+            <button id="btn-sa-ready" onclick="prepareStandaloneFlip()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all">下一步：準備翻轉</button>
             <div id="sa-flip-instruction" class="hidden mt-4 animate-pulse">
                 <i class="fas fa-mobile-alt text-4xl text-blue-400 mb-3 animate-bounce"></i>
                 <p class="text-yellow-400 font-bold text-lg">請將手機螢幕朝下蓋在桌上！</p>
                 <p class="text-xs text-gray-400 mt-2">聽到「叮」聲即代表成功傳送至教室</p>
             </div>
-            
             <button onclick="closeStandaloneModal()" class="mt-4 text-gray-500 text-sm hover:text-white">取消</button>
         </div>
     </div>
@@ -201,12 +193,8 @@
             <h2 class="text-xl font-black text-white mb-2">偵測到您使用行動裝置！</h2>
             <p class="text-sm text-gray-400 mb-6">請問您要將此設備作為：</p>
             <div class="flex flex-col gap-4">
-                <button id="btn-role-main" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all border border-blue-400/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                    [A] 主螢幕 (視訊自習)
-                </button>
-                <button id="btn-role-sensor" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all border border-indigo-400/50">
-                    [B] 翻轉感測器 (單機翻轉)
-                </button>
+                <button id="btn-role-main" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all border border-blue-400/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]">[A] 主螢幕 (視訊自習)</button>
+                <button id="btn-role-sensor" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all border border-indigo-400/50">[B] 翻轉感測器 (單機翻轉)</button>
             </div>
             <button onclick="closeAllEntryModals()" class="mt-6 text-gray-500 text-sm hover:text-white transition-colors">取消</button>
         </div>
@@ -240,37 +228,30 @@
     <script src="/js/lobby-main.js"></script>
 
     <script>
-        // ================= 修改點 6：新增 v2.2.7 裝置分流與彈窗邏輯 =================
         let targetRoomUrl = '';
 
-        // 判斷是否為行動裝置
         function isMobileDevice() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
-        // 攔截原本的進入教室點擊，進行分流
+        // 修改點：攔截入口，進行分流
         function handleRoomEntry(url) {
             targetRoomUrl = url;
             if (isMobileDevice()) {
-                // 【情境 2】行動裝置：顯示 [A] 或 [B] 選擇彈窗
                 document.getElementById('device-choice-modal').classList.remove('hidden');
                 document.getElementById('device-choice-modal').classList.add('flex');
             } else {
-                // 【情境 1】PC 裝置：直接顯示連動詢問彈窗
                 showSyncPromptModal();
             }
         }
 
-        // 顯示詢問 QR Code 連動彈窗
         function showSyncPromptModal() {
             document.getElementById('device-choice-modal').classList.add('hidden');
             document.getElementById('device-choice-modal').classList.remove('flex');
-            
             document.getElementById('sync-prompt-modal').classList.remove('hidden');
             document.getElementById('sync-prompt-modal').classList.add('flex');
         }
 
-        // 關閉所有新加入的彈窗
         function closeAllEntryModals() {
             document.getElementById('device-choice-modal').classList.add('hidden');
             document.getElementById('device-choice-modal').classList.remove('flex');
@@ -279,7 +260,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 確保每次從教室退回大廳時，清除手機連動狀態，讓 QR Code 狀態重置
+            // 基礎重置 (防呆)
             localStorage.removeItem('mobileLinked');
             sessionStorage.removeItem('mobileLinked');
 
@@ -293,7 +274,6 @@
             if (btnRoleSensor) {
                 btnRoleSensor.addEventListener('click', () => {
                     closeAllEntryModals();
-                    // 引導至單機翻轉大廳
                     window.location.href = 'flip-room.html'; 
                 });
             }
@@ -302,12 +282,8 @@
             if (btnSyncCancel) {
                 btnSyncCancel.addEventListener('click', () => {
                     closeAllEntryModals();
-                    // 呼叫原本寫好的進入教室檢查機制
-                    if (typeof enterClassroomWithCheck === 'function') {
-                        enterClassroomWithCheck(targetRoomUrl);
-                    } else {
-                        window.location.href = targetRoomUrl;
-                    }
+                    // 修改點：直接跳轉，不使用 enterClassroomWithCheck 以避免原生彈窗
+                    window.location.href = targetRoomUrl;
                 });
             }
 
@@ -315,7 +291,6 @@
             if (btnSyncConfirm) {
                 btnSyncConfirm.addEventListener('click', () => {
                     closeAllEntryModals();
-                    // 畫面平滑滾動到 QR Code 區塊
                     const syncModule = document.getElementById('syncModule');
                     if (syncModule) {
                         syncModule.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -328,12 +303,12 @@
             }
         });
 
-        // 針對透過瀏覽器「上一頁」回到大廳的情況做強制更新
+        // 修改點：完美解決狀態重置 - 偵測透過瀏覽器「上一頁」回到大廳的情況做強制更新
         window.addEventListener('pageshow', (event) => {
             if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
                 localStorage.removeItem('mobileLinked');
                 sessionStorage.removeItem('mobileLinked');
-                window.location.reload(); // 強制重整以刷新 QR Code
+                window.location.reload(); 
             }
         });
     </script>

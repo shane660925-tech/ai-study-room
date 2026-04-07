@@ -590,7 +590,21 @@ async function endSession() {
         console.error("存檔失敗:", err); 
     }
     
-    if(socket) socket.disconnect();
+    // --- [新增] 退出教室時重置連動與翻轉狀態 ---
+    sessionStorage.removeItem('mobileLinked');
+    localStorage.removeItem('mobileLinked');
+
+    if(socket && socket.connected) {
+        // 發送解除翻轉的狀態更新給伺服器
+        socket.emit("update_status", { status: "IDLE", name: myUsername, isFlipped: false });
+        
+        // 等待 200 毫秒，確保伺服器處理完狀態更新再斷線，避免斷線太快導致訊息遺失
+        await new Promise(resolve => setTimeout(resolve, 200));
+        socket.disconnect();
+    } else if (socket) {
+        socket.disconnect();
+    }
+    
     window.location.href = 'index.html';
 }
 
