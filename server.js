@@ -231,6 +231,18 @@ io.on('connection', (socket) => {
     socket.emit('update_rank', onlineUsers);
     socket.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
 
+    // 接收手機端的連動請求，並轉發給電腦大廳
+    socket.on('request_link_device', (data) => {
+        // 這裡的 data.syncToken 就是電腦大廳的 socket.id
+        console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
+        
+        // 將成功連動的訊號，單獨發送給那個大廳的電腦
+        io.to(data.syncToken).emit('deviceLinked', { 
+            success: true, 
+            mobileName: data.studentName 
+        });
+    });
+
     // 修改 server.js 中的 join_team 邏輯
     socket.on('join_team', async (data) => {
         const { teamId, username, roomType } = data;

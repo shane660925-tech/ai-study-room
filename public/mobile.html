@@ -73,11 +73,15 @@
     <script src="/js/flip.js"></script>
 
     <script>
-        // 針對「單機跳轉模式」的專屬 UI 處理
+        // [新增] 建立 Socket 連線
+        const socket = io();
+
+        // 針對「單機跳轉模式」與「大廳連動模式」的專屬 UI 處理
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const isStandalone = urlParams.get('standalone') === 'true';
             const targetRoom = urlParams.get('targetRoom');
+            const syncToken = urlParams.get('sync'); // [新增] 抓取網址中的 syncToken
             
             if (isStandalone) {
                 // 1. 修改標題與提示
@@ -97,6 +101,11 @@
                 if (savedName) {
                     document.getElementById('nameInputGroup').classList.add('hidden');
                 }
+            } else if (syncToken) {
+                // [新增] 如果帶有 sync 參數，代表是從 PC 大廳掃碼來的
+                document.getElementById('setupTitle').innerText = "大廳連動就緒";
+                document.getElementById('setupSubTitle').innerText = "請輸入暱稱並點擊啟動連線";
+                document.getElementById('startBtnText').innerText = "連線至主大廳";
             }
         });
 
@@ -108,10 +117,29 @@
 
         startBtn.addEventListener('click', () => {
             const name = document.getElementById('syncName').value.trim();
+            const urlParams = new URLSearchParams(window.location.search);
+            const syncToken = urlParams.get('sync'); // [新增] 再次確認網址上的 syncToken
+
             if(name) {
                 setupArea.classList.add('hidden');
                 syncArea.classList.remove('hidden');
                 document.getElementById('displayName').innerText = name;
+                
+                // [新增] 如果有 syncToken，向伺服器發出連動請求
+                if (syncToken) {
+                    console.log("發送連動請求給大廳：", syncToken);
+                    // 把資訊傳給後端
+                    socket.emit('request_link_device', { 
+                        syncToken: syncToken, 
+                        studentName: name 
+                    });
+
+                    // 改變徽章外觀，提示連動成功
+                    const badge = document.getElementById('connectionBadge');
+                    badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連動';
+                    badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter';
+                }
+
                 // 注意：flip.js 裡面的 startTracking 會被觸發
             }
         });

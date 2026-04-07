@@ -4,6 +4,103 @@
  * 負責：手機連動 QR Code 初始化、防呆進入自習室檢查
  */
 
+// ================= 新增：v2.2.7 裝置分流與彈窗邏輯 =================
+let targetRoomUrl = '';
+
+// 判斷是否為行動裝置
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// 攔截原本的進入教室點擊，進行分流
+function handleRoomEntry(url) {
+    targetRoomUrl = url;
+    if (isMobileDevice()) {
+        // 【情境 2】行動裝置：顯示 [A] 或 [B] 選擇彈窗
+        document.getElementById('device-choice-modal').classList.remove('hidden');
+        document.getElementById('device-choice-modal').classList.add('flex');
+    } else {
+        // 【情境 1】PC 裝置：直接顯示連動詢問彈窗
+        showSyncPromptModal();
+    }
+}
+
+// 顯示詢問 QR Code 連動彈窗
+function showSyncPromptModal() {
+    document.getElementById('device-choice-modal').classList.add('hidden');
+    document.getElementById('device-choice-modal').classList.remove('flex');
+    
+    document.getElementById('sync-prompt-modal').classList.remove('hidden');
+    document.getElementById('sync-prompt-modal').classList.add('flex');
+}
+
+// 關閉所有新加入的彈窗
+function closeAllEntryModals() {
+    document.getElementById('device-choice-modal').classList.add('hidden');
+    document.getElementById('device-choice-modal').classList.remove('flex');
+    document.getElementById('sync-prompt-modal').classList.add('hidden');
+    document.getElementById('sync-prompt-modal').classList.remove('flex');
+}
+
+// 綁定彈窗內的按鈕事件
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- 裝置選擇彈窗 (行動裝置) 按鈕 ---
+    const btnRoleMain = document.getElementById('btn-role-main');
+    if (btnRoleMain) {
+        // 選擇 [A] 主螢幕 -> 詢問是否掃碼連動
+        btnRoleMain.addEventListener('click', showSyncPromptModal);
+    }
+
+    const btnRoleSensor = document.getElementById('btn-role-sensor');
+    if (btnRoleSensor) {
+        // 選擇 [B] 翻轉感測器 -> 跳轉單機翻轉模式 (套用你現有的邏輯)
+        btnRoleSensor.addEventListener('click', () => {
+            closeAllEntryModals();
+            window.location.href = 'flip-room.html'; 
+        });
+    }
+
+    // --- 連動詢問彈窗 按鈕 ---
+    const btnSyncCancel = document.getElementById('btn-sync-cancel');
+    if (btnSyncCancel) {
+        // 取消連動 -> 以一般模式進入目標教室
+        btnSyncCancel.addEventListener('click', () => {
+            closeAllEntryModals();
+            // 呼叫原本寫好的進入教室檢查機制
+            if (typeof enterClassroomWithCheck === 'function') {
+                enterClassroomWithCheck(targetRoomUrl);
+            } else {
+                window.location.href = targetRoomUrl;
+            }
+        });
+    }
+
+    const btnSyncConfirm = document.getElementById('btn-sync-confirm');
+    if (btnSyncConfirm) {
+        // 確定連動 -> 畫面引導至 QR Code 區塊
+        btnSyncConfirm.addEventListener('click', () => {
+            closeAllEntryModals();
+            
+            // 畫面平滑滾動到 QR Code 區塊 (對應你 HTML 裡的 id="syncModule")
+            const syncModule = document.getElementById('syncModule');
+            if (syncModule) {
+                syncModule.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // 加入一點高光動畫提示使用者看這裡
+                syncModule.classList.add('ring-4', 'ring-blue-500', 'ring-offset-2', 'ring-offset-black', 'transition-all', 'duration-500');
+                setTimeout(() => {
+                    syncModule.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-2', 'ring-offset-black');
+                }, 2000);
+            }
+            
+            // 備註：在這裡你的 WebSocket 應該要處於監聽狀態，
+            // 當收到另一支手機掃碼成功 (deviceLinked 事件) 時，再自動執行 enterClassroomWithCheck(targetRoomUrl);
+        });
+    }
+});
+// =========================================================================
+
 // 註冊頁面專屬初始化事件 (當 core.js 完成登入後會自動呼叫)
 window.pageSpecificInit = function() {
     initSyncQRCode();
@@ -43,13 +140,18 @@ window.enterClassroomWithCheck = function(roomUrl) {
     }
 };
 
-// [專業大廳專屬] 初始化手機連動 QR Code
+// [專業大廳專屬] 初始化手機連動 QR Code (修正版，加上識別碼)
 function initSyncQRCode() {
     const qrcodeContainer = document.getElementById("qrcode");
     if(!qrcodeContainer) return;
     
+    // 使用 socket.id 讓手機知道要跟哪個大廳連動
+    // 確保這裡抓得到 socket，如果你的 socket 變數名稱不同請記得修改
+    const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
+    
     const baseUrl = window.location.origin; 
-    const mobileUrl = `${baseUrl}/mobile.html`;
+    // 把專屬 ID 塞進網址裡，例如： https://你的網域/mobile.html?sync=abc123xyz
+    const mobileUrl = `${baseUrl}/mobile.html?sync=${syncToken}`;
     
     qrcodeContainer.innerHTML = "";
     new QRCode(qrcodeContainer, {
@@ -192,6 +294,7 @@ socket.on("status_updated", (data) => {
         }
     }
 });
+
 // =========================================================================
 // [新增] 社會性死亡特效：接收 flip_failed 事件
 // =========================================================================
@@ -287,7 +390,40 @@ document.head.appendChild(shamingStyle);
 function showPublicShamingToast(userName) {
     const toast = document.createElement('div');
     toast.className = 'shaming-toast';
-    toast.innerHTML = `<i class="fas fa-skull-crossbones animate-bounce text-xl text-black"></i> <span>快看！<b>${userName}</b> 剛剛放棄了專注！</span> <i class="fas fa-hand-point-down text-xl text-black"></i>`;
+    toast.innerHTML = `<i class="fas fa-skull-crossbones animate-bounce text-xl text-black"></i> <span>快看！<b>${userName}</b>剛剛放棄了專注！</span> <i class="fas fa-hand-point-down text-xl text-black"></i>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 5000); // 5秒後自動移除
 }
+
+// =========================================================================
+// [新增] 監聽手機掃碼連動成功事件
+// =========================================================================
+socket.on('deviceLinked', (data) => {
+    console.log('✅ 收到手機連動成功訊號！', data);
+    
+    // 給予畫面提示 (可選，讓使用者知道連動成功了)
+    const syncModule = document.getElementById('syncModule');
+    if (syncModule) {
+        syncModule.classList.add('ring-4', 'ring-green-500'); // 變成綠色框
+        setTimeout(() => syncModule.classList.remove('ring-4', 'ring-green-500'), 2000);
+    }
+
+    // 自動進入剛才選擇的目標教室！
+    if (targetRoomUrl) {
+        console.log('準備進入教室：', targetRoomUrl);
+        // 確保彈窗都關閉
+        closeAllEntryModals();
+        
+        // 執行進入教室的動作 (稍微延遲 0.5 秒，讓使用者看到綠色成功提示)
+        setTimeout(() => {
+            if (typeof enterClassroomWithCheck === 'function') {
+                enterClassroomWithCheck(targetRoomUrl);
+            } else {
+                window.location.href = targetRoomUrl;
+            }
+        }, 500);
+    } else {
+        // 如果他只是單純在首頁掃碼，還沒點擊任何教室
+        alert("✅ 手機連動成功！現在您可以點擊進入任何一間教室了。");
+    }
+});
