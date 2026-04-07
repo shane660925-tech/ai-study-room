@@ -157,7 +157,6 @@ window.copyMobileUrl = function() {
     });
 };
 
-// [新增] 讓使用者在大廳也能手動斷開手機連線
 window.cancelDeviceSync = function() {
     window.isDeviceLinked = false;
     sessionStorage.removeItem('mobileLinked');
@@ -364,6 +363,9 @@ function showPublicShamingToast(userName) {
 }
 
 socket.on('deviceLinked', (data) => {
+    // 阻擋殘留的事件觸發
+    if (sessionStorage.getItem('mobileLinked') === 'true') return;
+    
     console.log('✅ 收到手機連線訊號，等待翻轉！', data);
     
     window.isDeviceLinked = true;
@@ -372,7 +374,6 @@ socket.on('deviceLinked', (data) => {
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
         syncModule.classList.add('ring-4', 'ring-blue-500');
-        // [修改] 加入手動取消連線按鈕！防呆大升級！
         syncModule.innerHTML = `
             <div class="text-green-500 text-sm font-black mb-4 flex items-center gap-2 justify-center">
                 <i class="fas fa-link"></i> 已與手機連線成功
@@ -390,7 +391,6 @@ socket.on('deviceLinked', (data) => {
 socket.on('mobile_sync_update', (data) => {
     if (data.type === 'FLIP_COMPLETED') {
         console.log("💻 收到手機翻轉成功的訊號！");
-        
         alert("✅ 連動成功！手機已確認朝下置放。"); 
         
         const syncModule = document.getElementById('syncModule');
@@ -425,42 +425,36 @@ socket.on('mobile_sync_update', (data) => {
         }
     }
 });
+
 // =========================================================================
-// [新增] 每次載入大廳時，強制重置手機連線狀態與 UI
+// [終極防護] 每次載入大廳時，強制重置手機連線狀態與還原 QR Code
 // =========================================================================
 window.addEventListener('DOMContentLoaded', () => {
-    // 1. 強制清除本地端的手機連線記憶
     localStorage.removeItem('mobileLinked');
     sessionStorage.removeItem('mobileLinked');
+    window.isDeviceLinked = false;
 
-    // 2. 重置核心變數 (與 lobby-core.js 保持一致)
-    window.isMobileConnected = false;
-    window.isMobileFlipped = false;
-    if (window.AppSync) {
-        window.AppSync = { connected: false, flipped: false };
-    }
-
-    // 3. 觸發 UI 更新函數 (確保還原為未連線狀態)
-    if (typeof updateSyncModuleUI === 'function') {
-        updateSyncModuleUI(false, false);
-    }
-
-    // 4. 如果你的 QR Code 覆蓋層有特定的 ID，可以加這段強制隱藏
-    // (請確認這個 ID 是不是你附圖中覆蓋層的 ID，如果是別的請替換)
-    const syncOverlay = document.getElementById('sync-overlay'); // TODO: 請確認你的覆蓋層 ID
-    if (syncOverlay) {
-        syncOverlay.classList.add('hidden');
-        syncOverlay.classList.remove('flex');
-    }
-
-    // 5. 確保剛進大廳時，再跟伺服器宣告一次「我沒有連線」
+    // 確保剛進大廳時，發送斷線訊號給伺服器，清除舊的連線狀態
     setTimeout(() => {
-        if (typeof socket !== 'undefined' && typeof myUsername !== 'undefined') {
-            socket.emit('mobile_sync', { 
-                username: myUsername, 
-                connected: false, 
-                isFlipped: false 
-            });
+        const userName = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '';
+        if (typeof socket !== 'undefined' && userName) {
+            socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: userName });
         }
     }, 500);
+
+    // 強制把 QR Code 區塊還原成最乾淨的初始狀態
+    const syncModule = document.getElementById('syncModule');
+    if (syncModule) {
+        syncModule.innerHTML = `
+            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2">
+                <i class="fas fa-qrcode"></i> 手機連動 QR CODE
+            </div>
+            <div id="qrcode" class="p-2 bg-white rounded-xl shadow-2xl shadow-blue-500/20"></div>
+            <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">請用手機掃描並完成翻轉<br>即可在 AI 教室中獲得誤判豁免</p>
+            <button onclick="copyMobileUrl()" class="mt-4 text-[10px] text-blue-500 font-mono underline hover:text-blue-400 transition-colors">COPY MOBILE LINK</button>
+        `;
+        if (typeof initSyncQRCode === 'function') {
+            initSyncQRCode();
+        }
+    }
 });
