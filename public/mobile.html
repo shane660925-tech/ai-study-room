@@ -22,9 +22,9 @@
 
     <div id="warningOverlay" class="fixed inset-0 bg-[#7f1d1d] z-[9999] flex flex-col items-center justify-center hidden transition-all duration-300">
         <i class="fas fa-exclamation-triangle text-7xl text-red-500 mb-6 animate-bounce drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"></i>
-        <h1 class="text-3xl font-black text-white mb-2 tracking-widest">偵測到違規！</h1>
-        <p class="text-red-300 font-bold text-lg">手機翻轉中斷</p>
-        <p class="text-xs text-red-400 mt-12 bg-black/30 px-4 py-2 rounded-full border border-red-500/30">已即時通報至教室與大廳</p>
+        <h1 class="text-3xl font-black text-white mb-2 tracking-widest">請將手機蓋回！</h1>
+        <p class="text-red-300 font-bold text-lg mt-4">違規倒數: <span id="warningCounter" class="text-5xl text-yellow-400 font-mono ml-2 font-black drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">5</span> 秒</p>
+        <p class="text-xs text-red-400 mt-12 bg-black/30 px-4 py-2 rounded-full border border-red-500/30">倒數結束將通報大廳並強制退出</p>
     </div>
 
     <div id="setupView" class="text-center p-8 w-full max-w-sm">
@@ -90,17 +90,38 @@
         const socket = io();
         let hasFlipped = false;
         let studentName = "";
+        
+        let flipWarningTimer = null;
+        let flipWarningCount = 5;
 
-        // [獨立函數] 專門處理翻轉邏輯，放寬到 130 度就判定為翻轉
+        // [新增] 監聽來自電腦端的「強制斷開連線」事件
+        socket.on('mobile_sync_update', (data) => {
+            if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
+                if (flipWarningTimer) clearInterval(flipWarningTimer);
+                hasFlipped = false;
+                
+                // 恢復成未連線的初始狀態
+                document.getElementById('flippedOverlay').classList.add('hidden');
+                document.getElementById('warningOverlay').classList.add('hidden');
+                document.getElementById('syncView').classList.add('hidden');
+                document.getElementById('setupView').classList.remove('hidden');
+                
+                alert("✅ 電腦端自習已結束！手機連動已斷開。");
+            }
+        });
+
         function handleOrientation(event) {
             if (event.beta === null) return;
-            
-            // 降低閾值到 130，避免部分手機鏡頭太凸無法平放桌面
             const isFaceDown = Math.abs(event.beta) > 130;
 
             if (isFaceDown) {
                 if (!hasFlipped) {
                     hasFlipped = true;
+                    // 取消倒數計時器
+                    if (flipWarningTimer) {
+                        clearInterval(flipWarningTimer);
+                        flipWarningTimer = null;
+                    }
                     document.getElementById('flippedOverlay').classList.remove('hidden');
                     document.getElementById('warningOverlay').classList.add('hidden');
                     
@@ -113,8 +134,35 @@
                     document.getElementById('flippedOverlay').classList.add('hidden');
                     document.getElementById('warningOverlay').classList.remove('hidden');
                     
+                    // 重置倒數秒數
+                    flipWarningCount = 5;
+                    document.getElementById('warningCounter').innerText = flipWarningCount;
+                    
                     socket.emit('update_status', { name: studentName, isFlipped: false });
-                    socket.emit('flip_failed', { name: studentName }); 
+                    // 通知電腦端也開始顯示倒數
+                    socket.emit('mobile_sync_update', { type: 'FLIP_WARNING', studentName: studentName });
+
+                    // 手機端開始 5 秒倒數
+                    flipWarningTimer = setInterval(() => {
+                        flipWarningCount--;
+                        document.getElementById('warningCounter').innerText = flipWarningCount;
+                        
+                        if (flipWarningCount <= 0) {
+                            clearInterval(flipWarningTimer);
+                            flipWarningTimer = null;
+                            
+                            // 倒數結束！發送致命違規事件，這會觸發全域社會性死亡廣播
+                            socket.emit('flip_failed', { name: studentName });
+                            
+                            // 將手機畫面重置
+                            hasFlipped = false;
+                            document.getElementById('warningOverlay').classList.add('hidden');
+                            document.getElementById('syncView').classList.add('hidden');
+                            document.getElementById('setupView').classList.remove('hidden');
+                            
+                            alert("🚨 嚴重違規！您已被強制登出教室！");
+                        }
+                    }, 1000);
                 }
             }
         }
@@ -174,7 +222,6 @@
                     badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
                 }
 
-                // [核心修正] 要求 iOS 13+ 陀螺儀存取權限！(沒有這段 iOS 永遠不會有翻轉反應)
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission()
                         .then(permissionState => {
@@ -186,7 +233,6 @@
                         })
                         .catch(console.error);
                 } else {
-                    // 非 iOS 設備直接監聽
                     if (syncToken) window.addEventListener('deviceorientation', handleOrientation);
                 }
             }

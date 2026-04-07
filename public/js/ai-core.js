@@ -13,7 +13,7 @@ const STABLE_THRESHOLD = 3;
 let aiFaceIssue = null; 
 let lastHeartbeat = 0; 
 
-// [修改] 確保一進來就讀取 sessionStorage 知道是否連動
+// 確保一進來就讀取 sessionStorage 知道是否連動
 let isPhoneFlipped = sessionStorage.getItem('mobileLinked') === 'true';
 
 let isPauseMode = false;      
@@ -27,7 +27,7 @@ let violationDetails = {
     "🪑 偵測離座": 0,
     "💤 偵測趴睡": 0,
     "🚫 切換分頁": 0,
-    "📱 手機翻轉中斷": 0 // [新增]
+    "📱 手機翻轉中斷": 0 
 };
 
 // --- 介面更新邏輯 ---
@@ -75,30 +75,59 @@ if (typeof io !== 'undefined') {
     socket = io();
     window.appSocket = socket;
     
-    // [新增] 監聽手機端傳來的翻轉中斷事件，立刻判為違規
-    socket.on('flip_failed', (data) => {
-        if (data.name === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
-            console.log("🚨 接收到手機拿起事件，判定違規！");
-            isPhoneFlipped = false; // 拔除本地豁免狀態
-            
-            // 強制直接進入違規狀態 (跳過 STABLE_THRESHOLD 的緩衝)
-            const overlay = document.getElementById("distractionOverlay");
-            const overlayText = document.getElementById("overlayText");
-            const statusBubble = document.getElementById("myStatusBubble");
-
-            myStatus = "DISTRACTED";
-            if (overlay) {
-                overlay.style.opacity = 1;
-                overlayText.innerHTML = `❌ 違規中<br><span class="text-xs">📱 手機翻轉中斷</span>`;
+    // [新增] 監聽手機端的狀態變化事件 (用於顯示電腦版 5 秒警告)
+    socket.on('mobile_sync_update', (data) => {
+        if (data.studentName === myUsername) {
+            if (data.type === 'FLIP_WARNING') {
+                const overlay = document.getElementById("distractionOverlay");
+                const overlayText = document.getElementById("overlayText");
+                window.pcWarningCount = 5;
+                
+                if (overlay && overlayText) {
+                    overlay.style.opacity = 1;
+                    overlay.style.backgroundColor = "rgba(153, 27, 27, 0.95)"; // 深紅色背景
+                    overlay.style.backdropFilter = "blur(10px)";
+                    overlayText.innerHTML = `⚠️ 手機已翻開！<br><span class="text-6xl font-mono mt-4 mb-2 block text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">${window.pcWarningCount}</span><br><span class="text-sm font-bold text-red-300">倒數結束將通報全班並強制退出</span>`;
+                    
+                    if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
+                    window.pcWarningTimer = setInterval(() => {
+                        window.pcWarningCount--;
+                        if (window.pcWarningCount > 0) {
+                            overlayText.innerHTML = `⚠️ 手機已翻開！<br><span class="text-6xl font-mono mt-4 mb-2 block text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">${window.pcWarningCount}</span><br><span class="text-sm font-bold text-red-300">倒數結束將通報全班並強制退出</span>`;
+                        } else {
+                            clearInterval(window.pcWarningTimer);
+                        }
+                    }, 1000);
+                }
+            } else if (data.type === 'FLIP_COMPLETED') {
+                // 手機又蓋回去了，取消電腦端警告
+                if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
+                const overlay = document.getElementById("distractionOverlay");
+                if (overlay) overlay.style.opacity = 0;
             }
-            if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
-            
-            captureViolation("📱 手機翻轉中斷");
-            socket.emit("update_status", { status: myStatus, name: myUsername, isFlipped: false });
         }
     });
 
-    // [新增] 強制狀態同步 (解決過場時遺漏事件的問題)
+    // [修改] 監聽手機最終 0 秒違規事件 (這也會同步觸發大廳的碎裂特效)
+    socket.on('flip_failed', (data) => {
+        if (data.name === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
+            console.log("🚨 接收到手機最終違規，強制退出！");
+            isPhoneFlipped = false; 
+            
+            if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
+            
+            // 紀錄嚴重違規並通報
+            captureViolation("🚨 嚴重違規：手機翻轉中斷");
+            
+            // 清除連動狀態，避免跳轉卡死
+            sessionStorage.removeItem('mobileLinked');
+            localStorage.removeItem('mobileLinked');
+            
+            alert("🚨 您已違反翻轉專注規則，系統已通報全班並強制將您退出教室！");
+            window.location.href = 'index.html'; // 強制踢回大廳
+        }
+    });
+
     socket.on('force_status_sync', (data) => {
         if (data.isFlipped !== undefined) {
             isPhoneFlipped = data.isFlipped;
@@ -216,7 +245,7 @@ if (typeof io !== 'undefined') {
 
 // 偵測手機翻轉 (Device Orientation)
 window.addEventListener('deviceorientation', (event) => {
-    // [修改防呆] 如果已經連動了手機，這台主設備(即使是平板)也不該自己偵測翻轉！
+    // 如果已經連動了手機，這台主設備(即使是平板)也不該自己偵測翻轉！
     if (sessionStorage.getItem('mobileLinked') === 'true') return; 
 
     if (event.beta === null) return;
@@ -610,6 +639,10 @@ async function endSession() {
 
     if(socket && socket.connected) {
         socket.emit("update_status", { status: "IDLE", name: myUsername, isFlipped: false });
+        
+        // [新增] 傳送斷開指令給手機端，讓它回到初始畫面
+        socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: myUsername });
+
         await new Promise(resolve => setTimeout(resolve, 200));
         socket.disconnect();
     } else if (socket) {

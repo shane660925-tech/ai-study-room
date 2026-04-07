@@ -17,8 +17,8 @@ function isMobileDevice() {
 function handleRoomEntry(url) {
     targetRoomUrl = url;
     
-    // [新增] 如果已經連動過，直接進入設定目標畫面，不要再跳出詢問彈窗
-    if (window.isDeviceLinked) {
+    // 1. 如果已經連動「且完成翻轉」了 (存入了 sessionStorage)，直接進入設定目標畫面
+    if (sessionStorage.getItem('mobileLinked') === 'true') {
         if (typeof openSetupModal === 'function') {
             openSetupModal(targetRoomUrl);
         } else if (typeof showRoomSetup === 'function') {
@@ -29,6 +29,13 @@ function handleRoomEntry(url) {
         return;
     }
 
+    // 2. [核心防呆] 如果手機已經掃碼了，但還沒翻轉 (企圖偷溜進去)
+    if (window.isDeviceLinked) {
+        alert("⏳ 等待手機翻轉中...\n\n請將手機「螢幕朝下」蓋在桌上，系統偵測到後就會自動帶您進入教室！");
+        return; // 程式中斷，絕對不讓他進入教室！
+    }
+
+    // 3. 都還沒連動的正常流程
     if (isMobileDevice()) {
         // 【情境 2】行動裝置：顯示 [A] 或 [B] 選擇彈窗
         document.getElementById('device-choice-modal').classList.remove('hidden');
