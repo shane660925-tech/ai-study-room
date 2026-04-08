@@ -6,12 +6,12 @@
 let myUsername = localStorage.getItem('studyVerseUser');
 const socket = io();
 
-// [修正] 確保變數掛在 window 下，讓所有 JS 檔案都能共用
+// 確保變數掛在 window 下，讓所有 JS 檔案都能共用
 window.isMobileConnected = false; 
 window.isMobileFlipped = false;
 window.AppSync = { connected: false, flipped: false }; // 兼容 team-lobby
 
-// [新增] 核心監聽器：只要伺服器廣播狀態更新，這裡就同步變數
+// [核心監聽器]：精確掌握手機真實連線狀態
 socket.on('mobile_sync_update', (data) => {
     if (data.username === myUsername || data.name === myUsername) {
         window.isMobileConnected = data.connected;
@@ -48,7 +48,7 @@ function checkLogin() {
 }
 
 // ==========================================
-// [核心修復] 監聽伺服器每秒廣播 (解決同電腦分頁測試，大廳未連動的問題)
+// [修復] 監聽伺服器每秒廣播：移除導致幽靈連線的強制 True Bug
 // ==========================================
 socket.on('update_rank', (users) => {
     if (!myUsername) return;
@@ -56,42 +56,65 @@ socket.on('update_rank', (users) => {
     // 從伺服器名單中尋找自己的最新狀態
     const myData = users.find(u => u.name === myUsername);
     
-    // 只要伺服器端確認有收到過翻轉狀態，就強制更新大廳的變數
-    if (myData && typeof myData.isFlipped !== 'undefined') {
-        window.isMobileConnected = true;
-        window.isMobileFlipped = myData.isFlipped === true;
+    if (myData) {
+        // ⚠️ 修正：不再強制把 isMobileConnected 設為 true
+        // 只有在我們確定手機已經連線的情況下，才透過排行榜更新翻轉狀態
+        if (typeof myData.isFlipped !== 'undefined' && window.isMobileConnected) {
+            window.isMobileFlipped = myData.isFlipped === true;
+        }
         
-        // 若是在專業大廳 (index.html)，連帶更新右側的 QR Code 視覺
+        // 更新右側的 QR Code 視覺
         if (typeof updateSyncModuleUI === 'function') {
             updateSyncModuleUI(window.isMobileConnected, window.isMobileFlipped);
         }
     }
 });
 
-// 負責將專業大廳的 QR Code 替換為成功狀態的函數
+// ==========================================
+// [修復] 安全的 QR Code 狀態更新機制 (不刪除原有的 QR 圖案)
+// ==========================================
 function updateSyncModuleUI(connected, flipped) {
     const syncModule = document.getElementById('syncModule');
     const qrcodeContainer = document.getElementById('qrcode');
     if (!syncModule || !qrcodeContainer) return;
 
+    // 建立或取得懸浮覆蓋層 (Overlay)，避免動到原本的 QR Code Canvas
+    let overlay = document.getElementById('sync-overlay-status');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'sync-overlay-status';
+        overlay.className = 'absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-md bg-[#050b14]/95 rounded-xl transition-all duration-300';
+        qrcodeContainer.style.position = 'relative'; // 確保容器可以包住絕對定位的覆蓋層
+        qrcodeContainer.appendChild(overlay);
+    }
+
+    // 找出真正的 QR Code 元素 (排除我們的 overlay)
+    const qrElements = Array.from(qrcodeContainer.children).filter(el => el.id !== 'sync-overlay-status');
+
     if (connected && flipped) {
         syncModule.style.borderColor = '#22c55e'; 
         syncModule.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.3)';
-        qrcodeContainer.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-full text-green-500 animate-pulse bg-black/60 rounded-xl p-4 w-full backdrop-blur-sm">
-                <i class="fas fa-check-circle text-6xl mb-3 shadow-green-500/50 drop-shadow-lg"></i>
-                <span class="text-sm font-black tracking-widest uppercase mt-2">已連動並深度專注</span>
-            </div>
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `
+            <i class="fas fa-check-circle text-6xl mb-3 text-green-500 shadow-green-500/50 drop-shadow-lg animate-pulse"></i>
+            <span class="text-sm font-black tracking-widest uppercase mt-2 text-green-500">已連動並深度專注</span>
         `;
+        qrElements.forEach(el => el.style.opacity = '0'); // 隱藏底部 QR Code
     } else if (connected && !flipped) {
         syncModule.style.borderColor = '#eab308'; 
         syncModule.style.boxShadow = '0 0 20px rgba(234, 179, 8, 0.3)';
-        qrcodeContainer.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-full text-yellow-500 animate-pulse bg-black/60 rounded-xl p-4 w-full backdrop-blur-sm">
-                <i class="fas fa-mobile-alt text-6xl mb-3 shadow-yellow-500/50 drop-shadow-lg"></i>
-                <span class="text-sm font-black tracking-widest uppercase mt-2">連動成功．等待翻轉</span>
-            </div>
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `
+            <i class="fas fa-mobile-alt text-6xl mb-3 text-yellow-500 shadow-yellow-500/50 drop-shadow-lg animate-pulse"></i>
+            <span class="text-sm font-black tracking-widest uppercase mt-2 text-yellow-500">連動成功．等待翻轉</span>
         `;
+        qrElements.forEach(el => el.style.opacity = '0'); // 隱藏底部 QR Code
+    } else {
+        // [關鍵修復]：斷線時，隱藏覆蓋層，瞬間讓 QR Code 恢復顯示！
+        syncModule.style.borderColor = ''; 
+        syncModule.style.boxShadow = '';
+        overlay.style.display = 'none';
+        qrElements.forEach(el => el.style.opacity = '1'); // 讓原本的 QR Code 浮現
     }
 }
 
@@ -154,12 +177,10 @@ socket.on('update_weekly_rank', (data) => {
     }).join('');
 });
 
-// 監聽來自手機端的狀態更新
+// 監聽來自手機端的狀態更新 (僅同步翻轉狀態，不強制觸發連線)
 socket.on('update_status', (data) => {
     if (data.name === myUsername) {
-        window.isMobileConnected = true;
         window.isMobileFlipped = data.isFlipped;
-        console.log(`[同步] 手機連線: ${window.isMobileConnected}, 翻轉狀態: ${window.isMobileFlipped}`);
         if (typeof updateSyncModuleUI === 'function') updateSyncModuleUI(window.isMobileConnected, window.isMobileFlipped);
     }
 });
