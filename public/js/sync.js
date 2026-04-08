@@ -8,7 +8,7 @@ let username = "";
 let wakeLock = null; // 用於防止休眠
 let vibrationInterval = null; // 用於持續震動
 
-// 當畫面載入完成後執行
+// 當畫面載入完成後執行 (已修正：合併為單一區塊)
 document.addEventListener('DOMContentLoaded', () => {
     // 自動嘗試載入大廳的姓名
     const savedName = localStorage.getItem('studyVerseUser');
@@ -24,6 +24,22 @@ document.addEventListener('DOMContentLoaded', () => {
         cb.classList.replace('bg-red-500/20', 'bg-green-500/20');
         cb.classList.replace('text-red-500', 'text-green-500');
         cb.innerHTML = '<i class="fas fa-wifi text-[8px]"></i> 連線正常';
+
+        // ==========================================
+        // 連線時主動發送狀態給大廳 (解決未翻轉無反應問題)
+        // ==========================================
+        const urlParams = new URLSearchParams(window.location.search);
+        // 優先抓取網址上的 name，若無則用 localStorage 或全域 username
+        const currentName = urlParams.get('name') || savedName || username;
+        
+        if (currentName) {
+            // 主動告訴大廳：手機已連線，但目前尚未翻轉 (isFlipped: false)
+            socket.emit('mobile_sync_update', {
+                studentName: currentName,
+                connected: true,
+                isFlipped: false
+            });
+        }
     });
 
     socket.on('disconnect', () => {
