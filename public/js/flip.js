@@ -147,12 +147,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let warningSeconds = 5;
     let isWarningState = false;
     
-    // 🔥 修正：在這裡正確賦予全域的初始姓名，避免重複宣告與 undefined 錯誤
-    let myName = localStorage.getItem('studyVerseUser') || "神秘學員";
-    
     window.isCheckingOut = false; // 防護鎖：標記是否正在準備跳轉退房
 
+    // 先抓網址上的參數，沒有再抓本機快取，最後才給預設值
     const urlParams = new URLSearchParams(window.location.search);
+    let myName = urlParams.get('name') || localStorage.getItem('studyVerseUser') || "學員";
+
     let targetMinutes = parseInt(urlParams.get('duration') || localStorage.getItem('studyVerseDuration') || 25);
     const targetSeconds = targetMinutes * 60; 
     let isCompleted = false; 
@@ -169,7 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     if (urlParams.get('standalone') === 'true') {
         const inputNameEl = document.getElementById('inputName');
-        myName = inputNameEl?.value.trim() || localStorage.getItem('studyVerseUser') || "游擊隊員"; 
+        // 【修正核心】：只有當 inputName 元素存在且有填寫時才覆蓋名字，否則維持 URL 或 localStorage 抓到的名字
+        if (inputNameEl && inputNameEl.value.trim() !== "") {
+            myName = inputNameEl.value.trim();
+        } 
 
         isTracking = false; 
         isFocusing = false; 

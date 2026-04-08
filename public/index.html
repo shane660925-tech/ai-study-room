@@ -234,7 +234,6 @@
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
-        // 修改點：攔截入口，進行分流
         function handleRoomEntry(url) {
             targetRoomUrl = url;
             if (isMobileDevice()) {
@@ -260,11 +259,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 基礎重置 (防呆)
             localStorage.removeItem('mobileLinked');
             sessionStorage.removeItem('mobileLinked');
 
-            // --- 綁定彈窗內的按鈕事件 ---
             const btnRoleMain = document.getElementById('btn-role-main');
             if (btnRoleMain) {
                 btnRoleMain.addEventListener('click', showSyncPromptModal);
@@ -282,7 +279,6 @@
             if (btnSyncCancel) {
                 btnSyncCancel.addEventListener('click', () => {
                     closeAllEntryModals();
-                    // 修改點：直接跳轉，不使用 enterClassroomWithCheck 以避免原生彈窗
                     window.location.href = targetRoomUrl;
                 });
             }
@@ -303,32 +299,27 @@
             }
         });
 
-        // 在 index.html 或 lobby-core.js 中加入或修改 pageshow 事件
-window.addEventListener('pageshow', (event) => {
-    // 不管是不是透過上一頁回來，只要重新載入大廳，一律強制清除連動狀態
-    localStorage.removeItem('mobileLinked');
-    sessionStorage.removeItem('mobileLinked');
-    window.isMobileLinked = false;
+        window.addEventListener('pageshow', (event) => {
+            localStorage.removeItem('mobileLinked');
+            sessionStorage.removeItem('mobileLinked');
+            window.isMobileLinked = false;
 
-    // 強制隱藏「連動成功」的文字框 (請確認你的覆蓋層 ID，例如 syncOverlay 或 successBox)
-    const successOverlay = document.getElementById('sync-success-overlay'); // 請替換成你實際覆蓋 QRcode 的元素 ID
-    if (successOverlay) {
-        successOverlay.classList.add('hidden');
-        successOverlay.style.display = 'none';
-    }
+            const successOverlay = document.getElementById('sync-success-overlay'); 
+            if (successOverlay) {
+                successOverlay.classList.add('hidden');
+                successOverlay.style.display = 'none';
+            }
 
-    // 重置 QR Code 區域的透明度與狀態
-    const qrContainer = document.getElementById('qrcode-container'); // 請替換成你實際裝 QRcode 的元素 ID
-    if (qrContainer) {
-        qrContainer.style.opacity = '1';
-        qrContainer.classList.remove('pointer-events-none');
-    }
+            const qrContainer = document.getElementById('qrcode-container'); 
+            if (qrContainer) {
+                qrContainer.style.opacity = '1';
+                qrContainer.classList.remove('pointer-events-none');
+            }
 
-    // 如果是透過上一頁回來，保險起見直接強制重整，獲取全新的 Socket ID
-    if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
-        window.location.reload(); 
-    }
-});
+            if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+                window.location.reload(); 
+            }
+        });
     </script>
 </body>
 </html>

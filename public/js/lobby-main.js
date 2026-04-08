@@ -14,7 +14,8 @@ window.isDeviceLinked = false;
 if (typeof QRCode !== 'undefined') {
     const originalQRCode = QRCode;
     QRCode = function(el, options) {
-        const username = localStorage.getItem('studyVerseUser') || 'Commander';
+        // 修正處 A：增加導覽列姓名檢查並改為預設「學員」
+        const username = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '學員';
         const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
         
         if (typeof options === 'string' && options.includes('mobile.html')) {
@@ -36,18 +37,28 @@ setInterval(() => {
     const username = localStorage.getItem('studyVerseUser');
     if (!username) return;
 
+    // A. 處理所有輸入框 (鎖定並替換)
     const textInputs = document.querySelectorAll('input[type="text"]');
     textInputs.forEach(input => {
-        // 如果是剛進系統的登入大廳的第一個創建身分框，則跳過不鎖定
         if (input.id === 'setupName' && document.getElementById('loginOverlay') && !document.getElementById('loginOverlay').classList.contains('hidden')) return;
         
-        // 只要預設是 Commander，或是 ID 包含 name 的輸入框，強制替換並鎖定
-        if (input.value === 'Commander' || input.id.toLowerCase().includes('name')) {
+        const inputId = input.id.toLowerCase();
+        if (input.value === 'Commander' || (inputId.includes('name') && !inputId.includes('team'))) {
             input.value = username;
             input.readOnly = true; 
             input.classList.add('bg-gray-800', 'text-gray-400', 'cursor-not-allowed', 'opacity-80', 'pointer-events-none');
         }
     });
+
+    // B. 👉 處理純文字 (將「歡迎回來，COMMANDER」等字眼動態替換)
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walk.nextNode()) {
+        // 為了避免大小寫問題，統一掃描大寫 COMMANDER 並替換
+        if (node.nodeValue.includes('COMMANDER')) {
+            node.nodeValue = node.nodeValue.replace(/COMMANDER/g, username);
+        }
+    }
 }, 500);
 
 function isMobileDevice() {
@@ -106,7 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnRoleSensor) {
         btnRoleSensor.addEventListener('click', () => {
             closeAllEntryModals();
-            window.location.href = 'flip-room.html'; 
+            // 👉 修改這裡：跳轉單機模式時，把名字帶進網址
+            const currentName = localStorage.getItem('studyVerseUser') || '';
+            window.location.href = `/flip-room.html?name=${encodeURIComponent(currentName)}`; 
         });
     }
 
@@ -149,7 +162,9 @@ window.enterClassroomWithCheck = function(roomUrl) {
         const goStandalone = confirm("📱 偵測到您正在使用手機！\n\n是否進入「單機翻轉大廳」選擇專屬教室或隊伍？\n(將獲得專屬游擊隊標記與計分)");
         
         if (goStandalone) {
-            window.location.href = '/flip-room.html';
+            // 👉 修改這裡：跳轉單機模式時，把名字帶進網址
+            const currentName = localStorage.getItem('studyVerseUser') || '';
+            window.location.href = `/flip-room.html?name=${encodeURIComponent(currentName)}`;
         } else {
             if (typeof openSetupModal === 'function') {
                 openSetupModal(roomUrl);
@@ -405,7 +420,6 @@ function showPublicShamingToast(userName) {
 }
 
 socket.on('deviceLinked', (data) => {
-    // 阻擋殘留的事件觸發
     if (sessionStorage.getItem('mobileLinked') === 'true') return;
     
     console.log('✅ 收到手機連線訊號，等待翻轉！', data);
@@ -453,9 +467,6 @@ socket.on('mobile_sync_update', (data) => {
         localStorage.setItem('mobileLinked', 'true');
         window.isDeviceLinked = true;
 
-        // =========================================================================
-        // (3) 小隊連動自動導航：尋找目前打開的彈窗中的「下一步/完成」按鈕並自動點擊
-        // =========================================================================
         let isTeamModalOpen = false;
         const openModals = Array.from(document.querySelectorAll('.fixed.inset-0')).filter(m => !m.classList.contains('hidden') && window.getComputedStyle(m).display !== 'none');
         
@@ -469,11 +480,10 @@ socket.on('mobile_sync_update', (data) => {
             
             if (nextBtn) {
                 isTeamModalOpen = true;
-                setTimeout(() => nextBtn.click(), 300); // 延遲0.3秒點擊，讓動畫順暢
+                setTimeout(() => nextBtn.click(), 300); 
             }
         });
 
-        // 如果目前不是在小隊彈窗內，才走原本的一般大廳教室跳轉邏輯
         if (!isTeamModalOpen && targetRoomUrl) {
             console.log('準備打開教室設定：', targetRoomUrl);
             setTimeout(() => {
@@ -489,23 +499,19 @@ socket.on('mobile_sync_update', (data) => {
     }
 });
 
-// =========================================================================
-// [終極防護] 每次載入大廳時，強制重置手機連線狀態與還原 QR Code
-// =========================================================================
 window.addEventListener('DOMContentLoaded', () => {
     localStorage.removeItem('mobileLinked');
     sessionStorage.removeItem('mobileLinked');
     window.isDeviceLinked = false;
 
-    // 確保剛進大廳時，發送斷線訊號給伺服器，清除舊的連線狀態
     setTimeout(() => {
-        const userName = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '';
+        // 修正處 B：增加導覽列姓名檢查並改為預設「學員」
+        const userName = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '學員';
         if (typeof socket !== 'undefined' && userName) {
             socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: userName });
         }
     }, 500);
 
-    // 強制把 QR Code 區塊還原成最乾淨的初始狀態
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
         syncModule.innerHTML = `
