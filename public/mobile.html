@@ -52,7 +52,6 @@
         </div>
 
         <p class="text-[10px] text-slate-500 mt-6 uppercase tracking-widest">⚠️ 翻轉後請勿手動關閉螢幕電源</p>
-        
         <a href="/flip-room.html" class="inline-block mt-8 text-xs text-gray-600 underline">返回總部大廳</a>
     </div>
 
@@ -61,6 +60,7 @@
             <i id="statusIcon" class="fas fa-arrow-down text-5xl mb-3 text-blue-500 animate-bounce"></i>
             <p id="statusText" class="font-bold text-blue-400 tracking-widest">請將手機蓋上</p>
         </div>
+        
         <div class="space-y-3">
             <h2 id="displayName" class="text-2xl font-black">---</h2>
             <div class="flex items-center justify-center gap-2">
@@ -87,161 +87,168 @@
     <script src="/js/flip.js"></script>
 
     <script>
-        const socket = io();
-        let hasFlipped = false;
-        let studentName = "";
-        
-        let flipWarningTimer = null;
-        let flipWarningCount = 5;
+    const socket = io();
+    let hasFlipped = false;
+    let studentName = "";
+    let flipWarningTimer = null;
+    let flipWarningCount = 5;
 
-        // [新增] 監聽來自電腦端的「強制斷開連線」事件
-        socket.on('mobile_sync_update', (data) => {
-            if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
-                if (flipWarningTimer) clearInterval(flipWarningTimer);
-                hasFlipped = false;
-                
-                // 恢復成未連線的初始狀態
-                document.getElementById('flippedOverlay').classList.add('hidden');
-                document.getElementById('warningOverlay').classList.add('hidden');
-                document.getElementById('syncView').classList.add('hidden');
-                document.getElementById('setupView').classList.remove('hidden');
-                
-                alert("✅ 電腦端自習已結束！手機連動已斷開。");
-            }
-        });
+    socket.on('mobile_sync_update', (data) => {
+        if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
+            if (flipWarningTimer) clearInterval(flipWarningTimer);
+            hasFlipped = false;
+            document.getElementById('flippedOverlay').classList.add('hidden');
+            document.getElementById('warningOverlay').classList.add('hidden');
+            document.getElementById('syncView').classList.add('hidden');
+            document.getElementById('setupView').classList.remove('hidden');
+            alert("✅ 電腦端自習已結束！手機連動已斷開。");
+        }
+    });
 
-        function handleOrientation(event) {
-            if (event.beta === null) return;
-            const isFaceDown = Math.abs(event.beta) > 130;
+    function handleOrientation(event) {
+        if (event.beta === null) return;
+        const isFaceDown = Math.abs(event.beta) > 130;
 
-            if (isFaceDown) {
-                if (!hasFlipped) {
-                    hasFlipped = true;
-                    // 取消倒數計時器
-                    if (flipWarningTimer) {
-                        clearInterval(flipWarningTimer);
-                        flipWarningTimer = null;
-                    }
-                    document.getElementById('flippedOverlay').classList.remove('hidden');
-                    document.getElementById('warningOverlay').classList.add('hidden');
-                    
-                    socket.emit('update_status', { name: studentName, isFlipped: true });
-                    socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName });
+        if (isFaceDown) {
+            if (!hasFlipped) {
+                hasFlipped = true;
+                if (flipWarningTimer) {
+                    clearInterval(flipWarningTimer);
+                    flipWarningTimer = null;
                 }
-            } else {
-                if (hasFlipped) {
-                    hasFlipped = false;
-                    document.getElementById('flippedOverlay').classList.add('hidden');
-                    document.getElementById('warningOverlay').classList.remove('hidden');
-                    
-                    // 重置倒數秒數
-                    flipWarningCount = 5;
+                document.getElementById('flippedOverlay').classList.remove('hidden');
+                document.getElementById('warningOverlay').classList.add('hidden');
+                
+                socket.emit('update_status', { name: studentName, isFlipped: true });
+                
+                // 【修復跳轉】確保把 syncToken 帶上，讓電腦端能正確接收訊號
+                const urlParams = new URLSearchParams(window.location.search);
+                const syncToken = urlParams.get('sync');
+                socket.emit('mobile_sync_update', { 
+                    type: 'FLIP_COMPLETED', 
+                    studentName: studentName,
+                    syncToken: syncToken 
+                });
+
+                // 【修復跳轉】單機模式：補上翻轉後手機端的跳轉邏輯
+                const isStandalone = urlParams.get('standalone') === 'true';
+                const targetRoom = urlParams.get('targetRoom');
+                if (isStandalone && targetRoom) {
+                    window.location.href = `${targetRoom}?name=${encodeURIComponent(studentName)}&isMobile=true`;
+                }
+            }
+        } else {
+            if (hasFlipped) {
+                hasFlipped = false;
+                document.getElementById('flippedOverlay').classList.add('hidden');
+                document.getElementById('warningOverlay').classList.remove('hidden');
+                
+                flipWarningCount = 5;
+                document.getElementById('warningCounter').innerText = flipWarningCount;
+                
+                socket.emit('update_status', { name: studentName, isFlipped: false });
+                socket.emit('mobile_sync_update', { type: 'FLIP_WARNING', studentName: studentName });
+
+                flipWarningTimer = setInterval(() => {
+                    flipWarningCount--;
                     document.getElementById('warningCounter').innerText = flipWarningCount;
                     
-                    socket.emit('update_status', { name: studentName, isFlipped: false });
-                    // 通知電腦端也開始顯示倒數
-                    socket.emit('mobile_sync_update', { type: 'FLIP_WARNING', studentName: studentName });
-
-                    // 手機端開始 5 秒倒數
-                    flipWarningTimer = setInterval(() => {
-                        flipWarningCount--;
-                        document.getElementById('warningCounter').innerText = flipWarningCount;
+                    if (flipWarningCount <= 0) {
+                        clearInterval(flipWarningTimer);
+                        flipWarningTimer = null;
                         
-                        if (flipWarningCount <= 0) {
-                            clearInterval(flipWarningTimer);
-                            flipWarningTimer = null;
-                            
-                            // 倒數結束！發送致命違規事件，這會觸發全域社會性死亡廣播
-                            socket.emit('flip_failed', { name: studentName });
-                            
-                            // 將手機畫面重置
-                            hasFlipped = false;
-                            document.getElementById('warningOverlay').classList.add('hidden');
-                            document.getElementById('syncView').classList.add('hidden');
-                            document.getElementById('setupView').classList.remove('hidden');
-                            
-                            alert("🚨 嚴重違規！您已被強制登出教室！");
-                        }
-                    }, 1000);
-                }
+                        socket.emit('flip_failed', { name: studentName });
+                        hasFlipped = false;
+                        document.getElementById('warningOverlay').classList.add('hidden');
+                        document.getElementById('syncView').classList.add('hidden');
+                        document.getElementById('setupView').classList.remove('hidden');
+                        
+                        alert("🚨 嚴重違規！您已被強制登出教室！");
+                    }
+                }, 1000);
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isStandalone = urlParams.get('standalone') === 'true';
+        const targetRoom = urlParams.get('targetRoom');
+        const syncToken = urlParams.get('sync'); 
+        const urlName = urlParams.get('name'); 
+
+        // 【精準修正】只針對「學員暱稱」的 ID 進行鎖定，絕對不影響其他輸入框
+        if (urlName) {
+            const nameInput = document.getElementById('syncName');
+            if (nameInput) {
+                nameInput.value = urlName;
+                nameInput.readOnly = true;
+                nameInput.style.opacity = '0.6';
+                nameInput.style.pointerEvents = 'none';
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const isStandalone = urlParams.get('standalone') === 'true';
-            const targetRoom = urlParams.get('targetRoom');
-            const syncToken = urlParams.get('sync'); 
-            const urlName = urlParams.get('name'); 
+        if (isStandalone) {
+            document.getElementById('setupTitle').innerText = "準備進入教室";
+            document.getElementById('setupSubTitle').innerText = "點擊下方按鈕後翻轉手機即可進入";
+            let roomName = "自習教室";
+            if (targetRoom === 'immersive-room.html') roomName = "沉浸式自習室";
+            if (targetRoom === 'managed-room.html') roomName = "模擬線上教室";
+            document.getElementById('startBtnText').innerText = `進入 ${roomName}`;
+            document.getElementById('targetRoomHint').innerText = `翻轉後，系統將自動跳轉至「${roomName}」並開始計時。`;
             
-            if (urlName) {
-                const nameInput = document.getElementById('syncName');
-                nameInput.value = urlName;
-                nameInput.setAttribute('readonly', 'true');
-                nameInput.classList.add('opacity-50', 'cursor-not-allowed');
+            const savedName = localStorage.getItem('studyVerseUser');
+            if (savedName && !urlName) document.getElementById('nameInputGroup').classList.add('hidden');
+        } else if (syncToken) {
+            document.getElementById('setupTitle').innerText = "大廳連動就緒";
+            document.getElementById('setupSubTitle').innerText = "請確認暱稱並點擊啟動連線";
+            document.getElementById('startBtnText').innerText = "連線至主大廳";
+        }
+    });
+
+    const setupArea = document.getElementById('setupView');
+    const syncArea = document.getElementById('syncView');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    startBtn.addEventListener('click', () => {
+        const name = document.getElementById('syncName').value.trim();
+        const urlParams = new URLSearchParams(window.location.search);
+        const syncToken = urlParams.get('sync'); 
+
+        if(name) {
+            studentName = name; 
+            setupArea.classList.add('hidden');
+            syncArea.classList.remove('hidden');
+            document.getElementById('displayName').innerText = name;
+            
+            if (syncToken) {
+                socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
+                const badge = document.getElementById('connectionBadge');
+                badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';
+                badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
             }
 
-            if (isStandalone) {
-                document.getElementById('setupTitle').innerText = "準備進入教室";
-                document.getElementById('setupSubTitle').innerText = "點擊下方按鈕後翻轉手機即可進入";
-                let roomName = "自習教室";
-                if (targetRoom === 'immersive-room.html') roomName = "沉浸式自習室";
-                if (targetRoom === 'managed-room.html') roomName = "模擬線上教室";
-                document.getElementById('startBtnText').innerText = `進入 ${roomName}`;
-                document.getElementById('targetRoomHint').innerText = `翻轉後，系統將自動跳轉至「${roomName}」並開始計時。`;
-                
-                const savedName = localStorage.getItem('studyVerseUser');
-                if (savedName && !urlName) document.getElementById('nameInputGroup').classList.add('hidden');
-            } else if (syncToken) {
-                document.getElementById('setupTitle').innerText = "大廳連動就緒";
-                document.getElementById('setupSubTitle').innerText = "請確認暱稱並點擊啟動連線";
-                document.getElementById('startBtnText').innerText = "連線至主大廳";
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            if (syncToken || urlParams.get('standalone') === 'true') window.addEventListener('deviceorientation', handleOrientation);
+                        } else {
+                            alert("⚠️ 權限被拒絕！請允許「動作與方向」權限，否則無法偵測翻轉！(可能需要至手機設定中重置網頁權限)");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
             }
-        });
+        }
+    });
 
-        const setupArea = document.getElementById('setupView');
-        const syncArea = document.getElementById('syncView');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-
-        startBtn.addEventListener('click', () => {
-            const name = document.getElementById('syncName').value.trim();
-            const urlParams = new URLSearchParams(window.location.search);
-            const syncToken = urlParams.get('sync'); 
-
-            if(name) {
-                studentName = name; 
-                setupArea.classList.add('hidden');
-                syncArea.classList.remove('hidden');
-                document.getElementById('displayName').innerText = name;
-                
-                if (syncToken) {
-                    socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
-                    const badge = document.getElementById('connectionBadge');
-                    badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';
-                    badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
-                }
-
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                if (syncToken) window.addEventListener('deviceorientation', handleOrientation);
-                            } else {
-                                alert("⚠️ 權限被拒絕！請允許「動作與方向」權限，否則無法偵測翻轉！(可能需要至手機設定中重置網頁權限)");
-                            }
-                        })
-                        .catch(console.error);
-                } else {
-                    if (syncToken) window.addEventListener('deviceorientation', handleOrientation);
-                }
-            }
-        });
-
-        stopBtn.addEventListener('click', () => {
-            syncArea.classList.add('hidden');
-            setupArea.classList.remove('hidden');
-        });
+    stopBtn.addEventListener('click', () => {
+        syncArea.classList.add('hidden');
+        setupArea.classList.remove('hidden');
+    });
     </script>
 </body>
 </html>

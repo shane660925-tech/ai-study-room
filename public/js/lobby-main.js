@@ -8,6 +8,48 @@
 let targetRoomUrl = '';
 window.isDeviceLinked = false; 
 
+// =========================================================================
+// (1) QR Code 攔截器：不管系統哪個角落產生 QR Code，自動把 ID 綁進網址
+// =========================================================================
+if (typeof QRCode !== 'undefined') {
+    const originalQRCode = QRCode;
+    QRCode = function(el, options) {
+        const username = localStorage.getItem('studyVerseUser') || 'Commander';
+        const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
+        
+        if (typeof options === 'string' && options.includes('mobile.html')) {
+            if (!options.includes('name=')) options += (options.includes('?') ? '&' : '?') + 'name=' + encodeURIComponent(username);
+            if (!options.includes('sync=')) options += '&sync=' + syncToken;
+        } else if (typeof options === 'object' && options.text && options.text.includes('mobile.html')) {
+            if (!options.text.includes('name=')) options.text += (options.text.includes('?') ? '&' : '?') + 'name=' + encodeURIComponent(username);
+            if (!options.text.includes('sync=')) options.text += '&sync=' + syncToken;
+        }
+        return new originalQRCode(el, options);
+    };
+    QRCode.CorrectLevel = originalQRCode.CorrectLevel;
+}
+
+// =========================================================================
+// (2) 全域彈窗巡邏員：每 0.5 秒掃描畫面，替換 Commander 並鎖定名字輸入框
+// =========================================================================
+setInterval(() => {
+    const username = localStorage.getItem('studyVerseUser');
+    if (!username) return;
+
+    const textInputs = document.querySelectorAll('input[type="text"]');
+    textInputs.forEach(input => {
+        // 如果是剛進系統的登入大廳的第一個創建身分框，則跳過不鎖定
+        if (input.id === 'setupName' && document.getElementById('loginOverlay') && !document.getElementById('loginOverlay').classList.contains('hidden')) return;
+        
+        // 只要預設是 Commander，或是 ID 包含 name 的輸入框，強制替換並鎖定
+        if (input.value === 'Commander' || input.id.toLowerCase().includes('name')) {
+            input.value = username;
+            input.readOnly = true; 
+            input.classList.add('bg-gray-800', 'text-gray-400', 'cursor-not-allowed', 'opacity-80', 'pointer-events-none');
+        }
+    });
+}, 500);
+
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
@@ -411,7 +453,28 @@ socket.on('mobile_sync_update', (data) => {
         localStorage.setItem('mobileLinked', 'true');
         window.isDeviceLinked = true;
 
-        if (targetRoomUrl) {
+        // =========================================================================
+        // (3) 小隊連動自動導航：尋找目前打開的彈窗中的「下一步/完成」按鈕並自動點擊
+        // =========================================================================
+        let isTeamModalOpen = false;
+        const openModals = Array.from(document.querySelectorAll('.fixed.inset-0')).filter(m => !m.classList.contains('hidden') && window.getComputedStyle(m).display !== 'none');
+        
+        openModals.forEach(modal => {
+            const buttons = Array.from(modal.querySelectorAll('button'));
+            const nextBtn = buttons.find(btn => 
+                (btn.innerText.includes('下一步') || btn.innerText.includes('完成') || btn.innerText.includes('繼續')) && 
+                !btn.closest('.hidden') && 
+                window.getComputedStyle(btn).display !== 'none'
+            );
+            
+            if (nextBtn) {
+                isTeamModalOpen = true;
+                setTimeout(() => nextBtn.click(), 300); // 延遲0.3秒點擊，讓動畫順暢
+            }
+        });
+
+        // 如果目前不是在小隊彈窗內，才走原本的一般大廳教室跳轉邏輯
+        if (!isTeamModalOpen && targetRoomUrl) {
             console.log('準備打開教室設定：', targetRoomUrl);
             setTimeout(() => {
                 if (typeof openSetupModal === 'function') {
