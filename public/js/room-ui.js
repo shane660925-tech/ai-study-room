@@ -16,7 +16,7 @@ window.updateLeaderUI = function() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const inputNameEl = document.getElementById('inputName');
-    const myName = String(inputNameEl?.value || urlParams.get('name') || "Commander").trim();
+    const myName = String(localStorage.getItem('studyVerseUser') || inputNameEl?.value || urlParams.get('name') || "學員").trim();
     const leaderName = String(window.currentTeamLeader || "").trim();
     const isAuditMode = urlParams.get('audit') === 'true'; 
 
@@ -186,7 +186,7 @@ window.dismissAlert = function() {
 
 document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
-    const userName = urlParams.get('name') || "Commander";
+    const userName = localStorage.getItem('studyVerseUser') || urlParams.get('name') || "指揮官";
     const userMode = urlParams.get('mode') || "standard";
     
     document.getElementById('inputName').value = userName;
