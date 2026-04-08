@@ -7,6 +7,113 @@
 let warningCheckTimer = null; 
 
 // ==========================================
+// [新增] 集中管理違規畫面與警告 UI (接管自 ai-core)
+// ==========================================
+window.RoomUI = {
+    pcWarningTimer: null,
+    pcWarningCount: 5,
+
+    /**
+     * 顯示違規警告畫面
+     * @param {string} type - 違規類型 (PHONE_FLIP, PHONE, SLEEP, LEAVE, DISTRACTED)
+     * @param {number} duration - 針對手機翻轉的倒數秒數 (預設 5 秒)
+     */
+    showWarning: function(type, duration = 5) {
+        const overlay = document.getElementById('distractionOverlay');
+        const overlayText = document.getElementById('overlayText');
+        const overlayIcon = document.getElementById('overlayIcon');
+        const myDeskFrame = document.getElementById('myDeskFrame');
+        const myStatusBubble = document.getElementById('myStatusBubble');
+
+        if (!overlay || !overlayText || !overlayIcon) return;
+
+        // 1. 顯示覆蓋層與紅框
+        overlay.classList.remove('opacity-0');
+        overlay.classList.add('opacity-100');
+        
+        if (myDeskFrame) {
+            myDeskFrame.classList.remove('border-blue-500/30');
+            myDeskFrame.classList.add('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.6)]');
+        }
+        if (myStatusBubble) {
+            myStatusBubble.classList.remove('bg-green-500', 'shadow-[0_0_8px_#22c55e]');
+            myStatusBubble.classList.add('bg-red-500', 'shadow-[0_0_8px_#ef4444]');
+        }
+
+        // 2. 清除舊的國家級警報計時器
+        if (this.pcWarningTimer) {
+            clearInterval(this.pcWarningTimer);
+            this.pcWarningTimer = null;
+        }
+
+        // 3. 根據違規類型切換畫面內容
+        if (type === 'PHONE_FLIP') {
+            this.pcWarningCount = duration;
+            overlayIcon.className = "fas fa-mobile-alt text-white text-4xl animate-bounce";
+            
+            const updateFlipUI = () => {
+                overlayText.innerHTML = `⚠️ 國家級警報：手機已翻開！<br><span class="text-7xl font-mono mt-6 mb-4 block text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,1)]">${this.pcWarningCount}</span><br><span class="text-xl font-black text-red-200">倒數結束將強制退出並通報全班</span>`;
+            };
+            
+            updateFlipUI();
+            this.pcWarningTimer = setInterval(() => {
+                this.pcWarningCount--;
+                if (this.pcWarningCount > 0) {
+                    updateFlipUI();
+                } else {
+                    clearInterval(this.pcWarningTimer);
+                    // 時間到，強制結束 (呼叫 endSession)
+                    if (typeof window.endSession === 'function') window.endSession();
+                }
+            }, 1000);
+        } 
+        else if (type === 'PHONE') {
+            overlayIcon.className = "fas fa-mobile text-white text-4xl";
+            overlayText.innerHTML = "偵測到使用手機！<br><span class='text-sm mt-2 block text-red-200'>請放下手機，保持專注</span>";
+        }
+        else if (type === 'SLEEP') {
+            overlayIcon.className = "fas fa-bed text-white text-4xl";
+            overlayText.innerHTML = "偵測到趴睡！<br><span class='text-sm mt-2 block text-red-200'>請抬起頭，保持清醒</span>";
+        }
+        else if (type === 'LEAVE') {
+            overlayIcon.className = "fas fa-walking text-white text-4xl";
+            overlayText.innerHTML = "偵測到離座！<br><span class='text-sm mt-2 block text-red-200'>請回到座位繼續專注</span>";
+        }
+        else {
+            overlayIcon.className = "fas fa-eye-slash text-white text-4xl";
+            overlayText.innerHTML = "偵測到分心！<br><span class='text-sm mt-2 block text-red-200'>請維持專注，AI 持續觀測中</span>";
+        }
+    },
+
+    /**
+     * 隱藏違規警告畫面，恢復正常綠色狀態
+     */
+    hideWarning: function() {
+        if (this.pcWarningTimer) {
+            clearInterval(this.pcWarningTimer);
+            this.pcWarningTimer = null;
+        }
+
+        const overlay = document.getElementById('distractionOverlay');
+        const myDeskFrame = document.getElementById('myDeskFrame');
+        const myStatusBubble = document.getElementById('myStatusBubble');
+
+        if (overlay) {
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+        }
+        if (myDeskFrame) {
+            myDeskFrame.classList.remove('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.6)]');
+            myDeskFrame.classList.add('border-blue-500/30');
+        }
+        if (myStatusBubble) {
+            myStatusBubble.classList.remove('bg-red-500', 'shadow-[0_0_8px_#ef4444]');
+            myStatusBubble.classList.add('bg-green-500', 'shadow-[0_0_8px_#22c55e]');
+        }
+    }
+};
+
+// ==========================================
 // [核心修復] 暴露給 ai-core.js 呼叫的介面更新方法
 // ==========================================
 

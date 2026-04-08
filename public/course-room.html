@@ -78,7 +78,7 @@
                 <div class="group">
                     <label class="text-[10px] text-gray-500 font-bold ml-1 uppercase group-focus-within:text-blue-500 transition-colors">Step 2: Session Time / 預計時間</label>
                     <div class="mt-1 flex items-center bg-black p-4 rounded-xl border border-gray-700 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
-                        <input id="inputTime" type="number" class="w-full bg-transparent text-white text-lg outline-none font-mono" value="25">
+                        <input id="inputTime" type="number" min="1" max="180" class="w-full bg-transparent text-white text-lg outline-none font-mono" value="25">
                         <span class="text-gray-400 text-sm ml-2">min</span>
                     </div>
                 </div>
@@ -98,9 +98,14 @@
         </div>
 
         <div class="px-6 py-4">
-            <div class="flex justify-between items-end mb-2">
+            <div class="flex justify-between items-center mb-2">
                 <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Session Timer</span>
-                <span id="myTimerDisplay" class="text-2xl font-mono font-bold text-white">00:00</span>
+                <div class="flex items-center">
+                    <span id="myTimerDisplay" class="text-2xl font-mono font-bold text-white">00:00</span>
+                    <button id="breakBtn" disabled class="ml-3 px-4 py-2 bg-gray-700 text-gray-400 rounded-xl font-bold text-sm shadow-lg transition-all cursor-not-allowed border border-gray-600">
+                        <i class="fas fa-coffee mr-2"></i>休息 (未解鎖)
+                    </button>
+                </div>
             </div>
             <div class="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden">
                 <div id="timerProgress" class="h-full bg-blue-500 w-0 transition-all duration-1000"></div>
@@ -192,7 +197,11 @@
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
     </main>
 
+   <script src="./js/study-timer.js"></script>
+    <script src="./js/break-manager.js"></script>
+    <script src="./js/room-ui.js"></script>
     <script type="module" src="./js/ai-core.js"></script>
-    <script src="/js/room-ui.js"></script>
+</body>
+</html>
 </body>
 </html>

@@ -16,8 +16,9 @@ let lastHeartbeat = 0;
 let isPhoneFlipped = sessionStorage.getItem('mobileLinked') === 'true';
 let isFlipWarningActive = false; 
 
-let isPauseMode = false;      
-let pauseEndTime = 0;         
+// [新增] 接收來自 break-manager.js 的開關，合法休息時暫停抓違規
+window.isAIPaused = false; 
+
 let lastViolationTime = 0;    
 let remoteUsers = [];
 let isAuditMode = false; 
@@ -78,17 +79,9 @@ if (typeof io !== 'undefined') {
     socket.on('mobile_sync_update', (data) => {
         if (data.studentName === myUsername) {
             if (data.type === 'FLIP_WARNING') {
-                // [修改] 啟動全螢幕國家級警報！
                 isFlipWarningActive = true;
                 myStatus = "DISTRACTED";
                 socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
-                
-                const statusBubble = document.getElementById("myStatusBubble");
-                if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
-
-                const overlay = document.getElementById("distractionOverlay");
-                const overlayText = document.getElementById("overlayText");
-                window.pcWarningCount = 5;
                 
                 // 播放國家級警報音效
                 if (!window.alertAudio) {
@@ -97,32 +90,10 @@ if (typeof io !== 'undefined') {
                 }
                 window.alertAudio.play().catch(e => console.log("音效播放受阻", e));
                 
-                if (overlay && overlayText) {
-                    // 強制覆蓋全螢幕與最上層 Z-index
-                    overlay.style.position = 'fixed';
-                    overlay.style.top = '0';
-                    overlay.style.left = '0';
-                    overlay.style.width = '100vw';
-                    overlay.style.height = '100vh';
-                    overlay.style.zIndex = '2147483647';
-                    overlay.style.opacity = 1;
-                    overlay.style.backgroundColor = "rgba(153, 27, 27, 0.95)"; 
-                    overlay.style.backdropFilter = "blur(10px)";
-                    
-                    overlayText.innerHTML = `⚠️ 國家級警報：手機已翻開！<br><span class="text-7xl font-mono mt-6 mb-4 block text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,1)]">${window.pcWarningCount}</span><br><span class="text-xl font-black text-red-200">倒數結束將強制退出並通報全班</span>`;
-                    
-                    if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
-                    window.pcWarningTimer = setInterval(() => {
-                        window.pcWarningCount--;
-                        if (window.pcWarningCount > 0) {
-                            overlayText.innerHTML = `⚠️ 國家級警報：手機已翻開！<br><span class="text-7xl font-mono mt-6 mb-4 block text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,1)]">${window.pcWarningCount}</span><br><span class="text-xl font-black text-red-200">倒數結束將強制退出並通報全班</span>`;
-                        } else {
-                            clearInterval(window.pcWarningTimer);
-                        }
-                    }, 1000);
-                }
+                // [瘦身改寫] 交給 RoomUI 處理畫面，不再寫死 HTML
+                if (window.RoomUI) window.RoomUI.showWarning('PHONE_FLIP', 5);
+
             } else if (data.type === 'FLIP_COMPLETED') {
-                // 手機蓋回去了，解除警報
                 if (window.alertAudio) {
                     window.alertAudio.pause();
                     window.alertAudio.currentTime = 0;
@@ -131,29 +102,15 @@ if (typeof io !== 'undefined') {
                 isFlipWarningActive = false;
                 myStatus = "FOCUSED";
                 
-                if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
-                const overlay = document.getElementById("distractionOverlay");
-                if (overlay) {
-                    overlay.style.opacity = 0;
-                    // 恢復原狀，以免影響一般的分心警告
-                    setTimeout(() => {
-                        overlay.style.position = 'absolute';
-                        overlay.style.width = '100%';
-                        overlay.style.height = '100%';
-                        overlay.style.zIndex = '30';
-                    }, 300);
-                }
-                
-                const statusBubble = document.getElementById("myStatusBubble");
-                if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]";
+                // [瘦身改寫] 關閉畫面警告
+                if (window.RoomUI) window.RoomUI.hideWarning();
                 
                 socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: true });
             }
         }
     });
 
-   socket.on('flip_failed', (data) => {
-        // 【防呆機制】：優先讀取 data.name，若無則讀取 data.username，若真的都沒有才顯示 "某位同學"
+    socket.on('flip_failed', (data) => {
         const targetName = data.name || data.username || "某位同學";
 
         if (targetName === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
@@ -164,7 +121,7 @@ if (typeof io !== 'undefined') {
                 window.alertAudio.pause();
                 window.alertAudio.currentTime = 0;
             }
-            if (window.pcWarningTimer) clearInterval(window.pcWarningTimer);
+            if (window.RoomUI) window.RoomUI.hideWarning();
             
             captureViolation("🚨 嚴重違規：手機翻轉中斷");
             
@@ -174,7 +131,6 @@ if (typeof io !== 'undefined') {
             alert("🚨 您已違反翻轉專注規則，系統已通報全班並強制將您退出教室！");
             window.location.href = 'index.html'; 
         } else if (targetName !== myUsername) {
-            // 使用安全處理過的名字進行社死廣播
             showPublicShamingToast(targetName);
             
             const bbContent = document.getElementById('blackboardContent'); 
@@ -320,47 +276,6 @@ window.addEventListener('deviceorientation', (event) => {
     }
 });
 
-window.requestBreak = function(type) {
-    if (isPauseMode) return;
-    const minutes = (type === 'toilet') ? 5 : 2;
-    isPauseMode = true;
-    pauseEndTime = Date.now() + minutes * 60000;
-    myStatus = "BREAK";
-    socket.emit("update_status", { status: "BREAK", reason: type, name: myUsername, isFlipped: isPhoneFlipped });
-    const overlay = document.getElementById("distractionOverlay");
-    const overlayText = document.getElementById("overlayText");
-    overlay.style.opacity = 1;
-    overlay.style.backgroundColor = "rgba(10, 20, 50, 0.9)";
-    overlay.style.backdropFilter = "blur(10px)";
-    if (window.breakCountdown) clearInterval(window.breakCountdown);
-    window.breakCountdown = setInterval(() => {
-        const remaining = Math.ceil((pauseEndTime - Date.now()) / 1000);
-        if (remaining <= 0 || !isPauseMode) {
-            clearInterval(window.breakCountdown);
-            if (isPauseMode) endBreak();
-        } else {
-            const m = Math.floor(remaining / 60);
-            const s = remaining % 60;
-            overlayText.innerHTML = `
-                <div class="animate-bounce mb-2 text-5xl">${type === 'toilet' ? '🚽' : '💧'}</div>
-                <span class="text-xl font-bold tracking-widest">生理需求中</span><br>
-                <span class="text-2xl font-mono text-blue-400">${m}:${s.toString().padStart(2,'0')}</span><br>
-                <button onclick="endBreak()" class="mt-8 px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-sm font-bold shadow-lg transition-all active:scale-95">我回來了</button>`;
-        }
-    }, 1000);
-};
-
-window.endBreak = function() {
-    isPauseMode = false;
-    myStatus = "FOCUSED";
-    if (window.breakCountdown) clearInterval(window.breakCountdown);
-    const overlay = document.getElementById("distractionOverlay");
-    overlay.style.opacity = 0;
-    overlay.style.backgroundColor = "rgba(0,0,0,0.8)";
-    overlay.style.backdropFilter = "none";
-    socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: isPhoneFlipped });
-};
-
 async function captureViolation(reason) {
     totalViolationCount++;
     if (reason.includes("手機")) violationDetails["📱 使用手機"]++;
@@ -386,8 +301,9 @@ async function captureViolation(reason) {
     });
 }
 
+// [修改] 考慮 window.isAIPaused 避免在合法休息時計算切換分頁違規
 document.addEventListener("visibilitychange", () => {
-    if (document.hidden && currentRoomMode === 'simulated' && !isPauseMode && !isAuditMode) {
+    if (document.hidden && currentRoomMode === 'simulated' && !window.isAIPaused && !isAuditMode) {
         totalViolationCount++;
         violationDetails["🚫 切換分頁"]++;
         socket.emit("report_violation", {
@@ -433,8 +349,23 @@ async function initApp() {
     const name = nameInput?.value || "學員";
     const goal = document.getElementById('inputGoal')?.value || "專注學習";
     const minInput = document.getElementById('inputTime');
-    const min = minInput ? parseInt(minInput.value) : 25;
     
+    // ==========================================
+    // [新增] 嚴格的時間防呆驗證邏輯
+    // ==========================================
+    let min = minInput && minInput.value ? parseInt(minInput.value) : 25;
+    
+    if (isNaN(min) || min <= 0) {
+        min = 25; // 預設值
+    }
+    
+    if (min > 180) {
+        alert("⚠️ 為了你的健康，專注時間最多只能設定 180 分鐘喔！");
+        if (minInput) minInput.value = 180; // 自動幫他改回 180
+        return; // ⛔ 直接終止函數，不讓他進入教室！
+    }
+    // ==========================================
+
     myUsername = name; 
     sessionStartTime = Date.now(); 
     
@@ -448,23 +379,12 @@ async function initApp() {
     document.getElementById("mySidebarAvatar").src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${name}`;
     updateUIMode(currentRoomMode);
 
-    const endTime = Date.now() + min * 60000;
-    const timerInterval = setInterval(() => {
-        if (isPauseMode) return; 
-        const diff = Math.ceil((endTime - Date.now()) / 1000);
-        const timerDisplay = document.getElementById("myTimerDisplay");
-        const progress = document.getElementById("timerProgress");
-        if (diff <= 0) {
-            clearInterval(timerInterval);
-            alert("🎉 達成專注目標！");
-            endSession(); 
-        } else {
-            const m = Math.floor(diff / 60).toString().padStart(2, '0');
-            const s = (diff % 60).toString().padStart(2, '0');
-            if(timerDisplay) timerDisplay.innerText = `${m}:${s}`;
-            if(progress) progress.style.width = `${((min * 60 - diff) / (min * 60)) * 100}%`;
-        }
-    }, 1000);
+    // 呼叫 StudyTimer 來處理主計時器！
+    if (window.StudyTimer) {
+        window.StudyTimer.start(min);
+    } else {
+        console.error("找不到計時器大腦！請檢查 study-timer.js 是否有正確載入");
+    }
 
     if(socket) socket.emit("join_room", { 
         name: name, 
@@ -497,7 +417,11 @@ async function initAI() {
 }
 
 async function predictLoop() {
-    if (isPauseMode || isFlipWarningActive) { requestAnimationFrame(predictLoop); return; }
+    // [新增] 如果現在處於合法休息 (isAIPaused)，就跳過預測迴圈
+    if (window.isAIPaused || isFlipWarningActive) { 
+        requestAnimationFrame(predictLoop); 
+        return; 
+    }
 
     if (isAuditMode) {
         const now = performance.now();
@@ -553,34 +477,48 @@ async function predictLoop() {
 }
 
 function handleDistractionBuffer(issue, now) {
-    const overlay = document.getElementById("distractionOverlay");
-    const statusBubble = document.getElementById("myStatusBubble");
-    const overlayText = document.getElementById("overlayText");
     let prevStatus = myStatus;
     
-    if (issue === "✍️ 抄筆記中...") {
-        distractionStartTime = 0; distractionCounter = 0; overlay.style.opacity = 0; myStatus = "FOCUSED";
-    } else if (issue) {
+    // 1. 如果處於合法休息時間，無條件清空警告
+    if (window.isAIPaused) {
+        distractionCounter = 0; 
+        distractionStartTime = 0; 
+        myStatus = "FOCUSED";
+        if (window.RoomUI) window.RoomUI.hideWarning();
+    }
+    else if (issue === "✍️ 抄筆記中...") {
+        distractionStartTime = 0; 
+        distractionCounter = 0; 
+        myStatus = "FOCUSED";
+        if (window.RoomUI) window.RoomUI.hideWarning();
+    } 
+    else if (issue) {
         distractionCounter++; 
         if (distractionCounter >= STABLE_THRESHOLD) { 
             if (distractionStartTime === 0) distractionStartTime = now;
             const elapsed = (now - distractionStartTime) / 1000;
             let limit = (currentRoomMode === "2" || currentRoomMode === "simulated") ? 5 : 10;
+            
+            // [瘦身改寫] 分類違規型態，供 RoomUI 顯示對應圖示
+            let type = "DISTRACTED";
+            if (issue.includes("手機")) type = "PHONE";
+            else if (issue.includes("趴睡")) type = "SLEEP";
+            else if (issue.includes("離座")) type = "LEAVE";
+
             if (elapsed < limit) {
-                overlay.style.opacity = 0.8;
-                overlayText.innerHTML = `${issue}<br><span class="text-xs">警告: ${Math.ceil(limit - elapsed)}s</span>`;
                 myStatus = "FOCUSED"; 
+                if (window.RoomUI) window.RoomUI.showWarning(type);
             } else {
-                myStatus = (issue === "💤 偵測到趴睡") ? "SLEEPING" : "DISTRACTED";
-                overlay.style.opacity = 1;
-                overlayText.innerHTML = `❌ 違規中<br><span class="text-xs">${issue}</span>`;
-                if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
+                myStatus = (issue.includes("趴睡")) ? "SLEEPING" : "DISTRACTED";
+                if (window.RoomUI) window.RoomUI.showWarning(type);
                 if (currentRoomMode === 'simulated' && myStatus !== prevStatus) captureViolation(issue);
             }
         }
     } else {
-        distractionCounter = 0; distractionStartTime = 0; myStatus = "FOCUSED"; overlay.style.opacity = 0;
-        if (statusBubble) statusBubble.className = "w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]";
+        distractionCounter = 0; 
+        distractionStartTime = 0; 
+        myStatus = "FOCUSED"; 
+        if (window.RoomUI) window.RoomUI.hideWarning();
     }
     
     if(socket && (prevStatus !== myStatus || now - lastHeartbeat > 3000)) {
@@ -610,7 +548,11 @@ function generateFinalReport(seconds) {
 }
 
 async function endSession() {
-    const elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+    // [修改] 取得扣除「暫停/休息」時間後的真實專注時長
+    let elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+    if (window.StudyTimer && window.StudyTimer.totalSeconds > 0) {
+        elapsedSeconds = window.StudyTimer.totalSeconds - window.StudyTimer.remainingSeconds;
+    }
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
     const minRequired = 20;
 
@@ -739,8 +681,3 @@ window.sendReaction = (emoji) => {
     showFloatingEmoji(emoji);
     if(socket) socket.emit("send_reaction", { emoji, username: myUsername });
 };
-
-setInterval(() => {
-    const clockTime = document.getElementById('clockTime');
-    if(clockTime) clockTime.innerText = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-}, 1000);
