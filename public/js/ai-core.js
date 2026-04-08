@@ -78,7 +78,20 @@ if (typeof io !== 'undefined') {
     
     socket.on('mobile_sync_update', (data) => {
         if (data.studentName === myUsername) {
+            
+            // ==========================================
+            // [新增] 取得目前的休息狀態 (相容新舊版)
+            // ==========================================
+            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || isPauseMode;
+
             if (data.type === 'FLIP_WARNING') {
+                
+                // 🛑 【關鍵防呆】如果是休息時間，直接 return 略過，不觸發5秒警告！
+                if (isCurrentlyBreaking) {
+                    console.log("☕ 休息時間，允許翻開手機！(忽略警告)");
+                    return; 
+                }
+
                 isFlipWarningActive = true;
                 myStatus = "DISTRACTED";
                 socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
@@ -114,6 +127,18 @@ if (typeof io !== 'undefined') {
         const targetName = data.name || data.username || "某位同學";
 
         if (targetName === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
+            
+            // ==========================================
+            // [新增] 取得目前的休息狀態，防止5秒後被強制退出
+            // ==========================================
+            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || isPauseMode;
+
+            // 🛑 【關鍵防呆】如果是休息時間，直接 return 略過，不判定違規！
+            if (isCurrentlyBreaking) {
+                console.log("☕ 休息時間，允許翻開手機！(忽略最終違規)");
+                return; 
+            }
+
             console.log("🚨 接收到手機最終違規，強制退出！");
             isPhoneFlipped = false; 
             
@@ -415,13 +440,18 @@ async function initAI() {
         };
     }
 }
-
 async function predictLoop() {
-    // [新增] 如果現在處於合法休息 (isAIPaused)，就跳過預測迴圈
-    if (window.isAIPaused || isFlipWarningActive) { 
+    // ==========================================
+    // [升級] 取得目前的休息狀態 (相容新版 BreakManager 與舊版)
+    // ==========================================
+    const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || typeof isPauseMode !== 'undefined' && isPauseMode;
+
+    // 如果現在處於合法休息，或是正在處理手機翻轉警告，就跳過預測迴圈讓 AI 閉上眼睛
+    if (isCurrentlyBreaking || isFlipWarningActive) { 
         requestAnimationFrame(predictLoop); 
         return; 
     }
+    // ==========================================
 
     if (isAuditMode) {
         const now = performance.now();
