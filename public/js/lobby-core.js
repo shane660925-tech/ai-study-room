@@ -26,6 +26,34 @@ socket.on('mobile_sync_update', (data) => {
     }
 });
 
+// [新增] 監聽手機端「掃描成功」的瞬間 (亮黃燈)
+socket.on('deviceLinked', (data) => {
+    if (data.username === myUsername) {
+        window.isMobileConnected = true;
+        window.isMobileFlipped = false; // 剛掃描，尚未翻轉
+        window.AppSync = { connected: true, flipped: false };
+        console.log("📱 手機已成功掃描連線！切換為等待翻轉狀態");
+        
+        if (typeof updateSyncModuleUI === 'function') {
+            updateSyncModuleUI(true, false);
+        }
+    }
+});
+
+// [新增] 監聽手機端「斷線」的瞬間 (恢復 QR Code)
+socket.on('deviceDisconnected', (data) => {
+    if (data.username === myUsername) {
+        window.isMobileConnected = false;
+        window.isMobileFlipped = false;
+        window.AppSync = { connected: false, flipped: false };
+        console.log("📱 手機已斷線！恢復 QR Code 顯示");
+        
+        if (typeof updateSyncModuleUI === 'function') {
+            updateSyncModuleUI(false, false);
+        }
+    }
+});
+
 // 初始化檢查登入狀態
 function checkLogin() {
     if (!myUsername) {
