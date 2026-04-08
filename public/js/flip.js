@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 🚀 極短的無聲空白音訊 (輔助保持 iOS 音訊通道永遠活著)
-    const silentAudio = new Audio('data:audio/mp3;base64,//MkxAAQAAAAAAAAAAAAAAAAAAAAAAAWQQhwAANAA0QQAACsMAAAAB4AA/8oAAgAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA');
+    const silentAudio = new Audio('data:audio/mp3;base64,//MkxAAQAAAAAAAAAAAAAAAAAAAAAAAWQQhwAANAA0QQAACsMAAAAB4AA/8oAAgAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA//IAAgAAAAD/8gACAAAAAP/yAAIAAAAA');
     silentAudio.loop = true;
     silentAudio.setAttribute('playsinline', '');
     document.body.appendChild(silentAudio);
@@ -146,7 +146,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let warningCountdownInterval;
     let warningSeconds = 5;
     let isWarningState = false;
-    let myName = "";
+    
+    // 🔥 修正：在這裡正確賦予全域的初始姓名，避免重複宣告與 undefined 錯誤
+    let myName = localStorage.getItem('studyVerseUser') || "神秘學員";
     
     window.isCheckingOut = false; // 防護鎖：標記是否正在準備跳轉退房
 

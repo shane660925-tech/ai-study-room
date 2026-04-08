@@ -152,8 +152,11 @@ if (typeof io !== 'undefined') {
         }
     });
 
-    socket.on('flip_failed', (data) => {
-        if (data.name === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
+   socket.on('flip_failed', (data) => {
+        // 【防呆機制】：優先讀取 data.name，若無則讀取 data.username，若真的都沒有才顯示 "某位同學"
+        const targetName = data.name || data.username || "某位同學";
+
+        if (targetName === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
             console.log("🚨 接收到手機最終違規，強制退出！");
             isPhoneFlipped = false; 
             
@@ -170,18 +173,19 @@ if (typeof io !== 'undefined') {
             
             alert("🚨 您已違反翻轉專注規則，系統已通報全班並強制將您退出教室！");
             window.location.href = 'index.html'; 
-        } else if (data.name !== myUsername) {
-            showPublicShamingToast(data.name);
+        } else if (targetName !== myUsername) {
+            // 使用安全處理過的名字進行社死廣播
+            showPublicShamingToast(targetName);
             
             const bbContent = document.getElementById('blackboardContent'); 
             if (bbContent) {
-                bbContent.innerText = `🚨 系統廣播：${data.name} 手機翻轉中斷！`;
+                bbContent.innerText = `🚨 系統廣播：${targetName} 手機翻轉中斷！`;
                 bbContent.classList.add('text-red-400');
                 setTimeout(() => bbContent.classList.remove('text-red-400'), 4000);
             }
         }
     });
-
+    
     socket.on('force_status_sync', (data) => {
         if (data.isFlipped !== undefined) {
             isPhoneFlipped = data.isFlipped;

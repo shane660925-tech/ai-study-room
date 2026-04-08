@@ -61,13 +61,48 @@ window.cancelJoinRequest = function() {
 // ==========================================
 if (typeof socket !== 'undefined' && !window.isTeamSocketBound) {
     
-    socket.on('mobile_sync_update', (data) => {
-        if (typeof myUsername !== 'undefined' && data.username === myUsername) {
-            if (!window.AppSync) window.AppSync = { connected: false, flipped: false };
-            window.AppSync.connected = data.connected;
-            window.AppSync.flipped = data.isFlipped;
+    // 在 lobby-team.js 中找到這段並替換：
+socket.on('mobile_sync_update', (data) => {
+    if (typeof myUsername !== 'undefined' && data.username === myUsername) {
+        if (!window.AppSync) window.AppSync = { connected: false, flipped: false };
+        window.AppSync.connected = data.connected;
+        window.AppSync.flipped = data.isFlipped;
+
+        // 取得 UI 元素 (對應 team-modals.js 中的 HTML)
+        const statusBox = document.getElementById('joinSyncStatusBox');
+        const statusDot = document.getElementById('joinSyncStatusDot');
+        const statusText = document.getElementById('joinSyncStatusText');
+        const joinBtn = document.getElementById('finalJoinTeamBtn');
+
+        if (statusDot && statusText) {
+            if (data.isFlipped) {
+                // 狀態 3：綠燈 (已翻轉)
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]';
+                statusText.innerText = '翻轉成功！獲取進入許可';
+                statusText.className = 'text-xs text-green-400 font-mono font-bold';
+                statusBox.className = 'flex items-center gap-3 px-5 py-3 mt-4 bg-green-900/20 rounded-xl border border-green-500/50 w-full justify-center transition-all';
+                
+                // 解鎖進入按鈕
+                if (joinBtn) {
+                    joinBtn.disabled = false;
+                    joinBtn.className = 'w-full py-3 rounded-lg text-sm font-black text-white bg-green-600 hover:bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)] cursor-pointer flex justify-center items-center gap-2 transition-all';
+                    joinBtn.innerHTML = '<i class="fas fa-door-open"></i> 進入隊伍教室';
+                }
+            } else if (data.connected) {
+                // 狀態 2：黃燈 (已連動手機，等待翻轉)
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_8px_#facc15]';
+                statusText.innerText = '已連動手機，請將手機翻面蓋上...';
+                statusText.className = 'text-xs text-yellow-300 font-mono';
+                statusBox.className = 'flex items-center gap-3 px-5 py-3 mt-4 bg-yellow-900/20 rounded-xl border border-yellow-500/50 w-full justify-center transition-all';
+            } else {
+                // 狀態 1：紅燈 (初始或斷線)
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse';
+                statusText.innerText = '等待手機連動與翻轉...';
+                statusText.className = 'text-xs text-orange-200 font-mono';
+            }
         }
-    });
+    }
+});
 
     socket.on('update_rank', (data) => {
         if (typeof myUsername !== 'undefined') {
