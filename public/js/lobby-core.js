@@ -13,10 +13,25 @@ window.AppSync = { connected: false, flipped: false }; // 兼容 team-lobby
 
 // [核心監聽器]：精確掌握手機真實連線狀態
 socket.on('mobile_sync_update', (data) => {
-    if (data.username === myUsername || data.name === myUsername) {
-        window.isMobileConnected = data.connected;
-        window.isMobileFlipped = data.isFlipped;
-        window.AppSync = { connected: data.connected, flipped: data.isFlipped };
+    // 增加相容 studentName，避免遺漏任何訊號
+    const targetName = data.username || data.name || data.studentName;
+    
+    if (targetName === myUsername) {
+        // 【修復】: 確保每次掃描 QR Code 連動時，若缺少 connected 屬性不被誤判為 false
+        // 若為明確斷線指令，則設為 false；否則既然收到同步訊號，即代表手機已連線
+        if (data.type === 'FORCE_DISCONNECT' || data.connected === false) {
+            window.isMobileConnected = false;
+        } else if (typeof data.connected !== 'undefined') {
+            window.isMobileConnected = data.connected;
+        } else {
+            window.isMobileConnected = true; 
+        }
+
+        if (typeof data.isFlipped !== 'undefined') {
+            window.isMobileFlipped = data.isFlipped;
+        }
+
+        window.AppSync = { connected: window.isMobileConnected, flipped: window.isMobileFlipped };
         console.log("核心同步成功:", window.AppSync);
         
         // 同步觸發大廳 UI 更新
@@ -39,9 +54,6 @@ function checkLogin() {
         // 登入後向伺服器註冊身份
         socket.emit('join', { name: myUsername, role: 'student' });
         
-        // [新增] 主動向伺服器請求一次當前的連線狀態，確保 UI 不會漏掉廣播而卡住
-        socket.emit('check_mobile_status', { name: myUsername });
-        
         fetchUserStats();
 
         // 呼叫各頁面專屬的初始化邏輯 (由各別的 main.js 或 team.js 定義)
@@ -52,7 +64,7 @@ function checkLogin() {
 }
 
 // ==========================================
-// [強化狀態偵測] 監聽伺服器每秒廣播：從排行榜精準判斷連線狀態
+// [修復] 監聽伺服器每秒廣播：移除導致幽靈連線的強制 True Bug
 // ==========================================
 socket.on('update_rank', (users) => {
     if (!myUsername) return;
@@ -61,13 +73,11 @@ socket.on('update_rank', (users) => {
     const myData = users.find(u => u.name === myUsername);
     
     if (myData) {
-        // 只要在名單內，就代表手機是「連線中」
-        window.isMobileConnected = true;
-        
-        // 看到狀態是「深度專注」或 isFlipped 為 true，才判定為翻轉(綠燈)
-        window.isMobileFlipped = (myData.status === '深度專注中' || myData.isFlipped === true);
-        
-        window.AppSync = { connected: window.isMobileConnected, flipped: window.isMobileFlipped };
+        // ⚠️ 修正：不再強制把 isMobileConnected 設為 true
+        // 只有在我們確定手機已經連線的情況下，才透過排行榜更新翻轉狀態
+        if (typeof myData.isFlipped !== 'undefined' && window.isMobileConnected) {
+            window.isMobileFlipped = myData.isFlipped === true;
+        }
         
         // 更新右側的 QR Code 視覺
         if (typeof updateSyncModuleUI === 'function') {
@@ -77,7 +87,7 @@ socket.on('update_rank', (users) => {
 });
 
 // ==========================================
-// [修正文字內容] 安全的 QR Code 狀態更新機制 
+// [修復] 安全的 QR Code 狀態更新機制 (不刪除原有的 QR 圖案)
 // ==========================================
 function updateSyncModuleUI(connected, flipped) {
     const syncModule = document.getElementById('syncModule');
@@ -103,22 +113,16 @@ function updateSyncModuleUI(connected, flipped) {
         overlay.style.display = 'flex';
         overlay.innerHTML = `
             <i class="fas fa-check-circle text-6xl mb-3 text-green-500 shadow-green-500/50 drop-shadow-lg animate-pulse"></i>
-            <span class="text-sm font-black tracking-widest uppercase mt-2 text-green-500">連動翻轉已完成</span>
+            <span class="text-sm font-black tracking-widest uppercase mt-2 text-green-500">已連動並深度專注</span>
         `;
         qrElements.forEach(el => el.style.opacity = '0'); // 隱藏底部 QR Code
     } else if (connected && !flipped) {
         syncModule.style.borderColor = '#eab308'; 
         syncModule.style.boxShadow = '0 0 20px rgba(234, 179, 8, 0.3)';
         overlay.style.display = 'flex';
-        // 完全按照要求的文字更新
         overlay.innerHTML = `
-            <div class="relative mb-3">
-                <i class="fas fa-mobile-alt text-6xl text-yellow-500 animate-pulse"></i>
-                <i class="fas fa-arrow-down absolute -right-2 bottom-0 text-xl text-yellow-500 animate-bounce"></i>
-            </div>
-            <span class="text-xs font-black tracking-tighter text-yellow-400 leading-relaxed px-2 text-center mt-2">
-                已與手機連線成功，<br>請將手機螢幕朝下蓋在桌上以進入教室
-            </span>
+            <i class="fas fa-mobile-alt text-6xl mb-3 text-yellow-500 shadow-yellow-500/50 drop-shadow-lg animate-pulse"></i>
+            <span class="text-sm font-black tracking-widest uppercase mt-2 text-yellow-500">連動成功．等待翻轉</span>
         `;
         qrElements.forEach(el => el.style.opacity = '0'); // 隱藏底部 QR Code
     } else {
@@ -189,10 +193,16 @@ socket.on('update_weekly_rank', (data) => {
     }).join('');
 });
 
-// 監聽來自手機端的狀態更新 (僅同步翻轉狀態，不強制觸發連線)
+// ==========================================
+// 監聽來自手機端的狀態更新
+// ==========================================
 socket.on('update_status', (data) => {
     if (data.name === myUsername) {
+        // 【修復】：只要手機主動發送 status 更新，就代表確實連線中，確保黃色等待圖示能正常顯示
+        window.isMobileConnected = true; 
         window.isMobileFlipped = data.isFlipped;
+        window.AppSync = { connected: true, flipped: data.isFlipped };
+
         if (typeof updateSyncModuleUI === 'function') updateSyncModuleUI(window.isMobileConnected, window.isMobileFlipped);
     }
 });
