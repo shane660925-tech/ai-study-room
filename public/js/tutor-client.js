@@ -140,25 +140,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 800);
         });
     }
-});
-// (將這段貼在 tutor-client.js 檔案的最後面，document.addEventListener 裡面)
-    
+
     if (typeof socket !== 'undefined') {
-        // 接收導師黑板公告
+        // 接收導師黑板公告 (原有保留)
         socket.on('receive_tutor_announcement', (data) => {
             const blackboard = document.getElementById('blackboardContent');
             if (blackboard) {
                 blackboard.innerText = data.message;
                 // 加一點閃爍動畫提示學生黑板更新了
                 const boardContainer = document.getElementById('blackboard');
-                boardContainer.classList.add('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
-                setTimeout(() => {
-                    boardContainer.classList.remove('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
-                }, 2000);
+                if (boardContainer) {
+                    boardContainer.classList.add('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
+                    setTimeout(() => {
+                        boardContainer.classList.remove('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
+                    }, 2000);
+                }
             }
         });
 
-        // 接收導師的重大違規警告
+        // 接收導師的重大違規警告 (原有保留)
         socket.on('receive_tutor_warning', (data) => {
             const myName = document.getElementById('inputName').value;
             // 如果警告的對象是我
@@ -166,4 +166,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.triggerViolation(data.reason || "導師已向您發出嚴重警告，請立即調整狀態！");
             }
         });
+
+        // ==========================================
+        // 新增：接收導師互動與廣播事件
+        // ==========================================
+
+        // 1. 監聽大喇叭廣播
+        socket.on('receive_broadcast_alert', (data) => {
+            alert(`📢 導師廣播：\n${data.message}`);
+            // 若您有提示音效，可在此觸發
+            // new Audio('/sounds/alert.mp3').play();
+        });
+
+        // 2. 監聽黑板公告更新
+        socket.on('update_blackboard', (data) => {
+            // 假設學生端有一個顯示黑板的 HTML 標籤 ID 是 studentBlackboard
+            const blackboard = document.getElementById('studentBlackboard'); 
+            if (blackboard) {
+                blackboard.innerText = data.message;
+            }
+        });
+
+        // 3. 監聽導師警告 (因為後端是廣播給所有人，所以這裡要判斷是不是警告自己)
+        socket.on('receive_warning', (data) => {
+            const myStudentName = document.getElementById('inputName') ? document.getElementById('inputName').value : '';
+            if (data.targetName === myStudentName) { 
+                alert(`⚠️ 導師警告：\n${data.reason}`);
+                
+                // 可選：讓畫面閃爍紅光的特效
+                document.body.style.transition = "background-color 0.2s";
+                document.body.style.backgroundColor = "rgba(220, 38, 38, 0.5)"; // 紅色
+                setTimeout(() => {
+                    document.body.style.backgroundColor = ""; // 恢復原狀
+                }, 1500);
+            }
+        });
+
+        // 4. 監聽個別指派任務
+        socket.on('receive_task', (data) => {
+            const myStudentName = document.getElementById('inputName') ? document.getElementById('inputName').value : '';
+            if (data.targetName === myStudentName) { 
+                alert(`📝 導師指派專屬任務：\n${data.task}`);
+            }
+        });
     }
+});

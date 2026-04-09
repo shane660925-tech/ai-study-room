@@ -61,11 +61,6 @@ app.get('/api/user-stats', async (req, res) => {
         res.status(500).json({ error: '資料庫讀取錯誤' });
     }
 });
-// 新增這個路由，用來回應擴充功能的 iframe 請求
-app.get('/sidepanel-view', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'sidepanel-view.html'));
-});
-
 
 app.post('/api/save-focus', async (req, res) => {
     const { username, roomType, focusSeconds, comment, score, creditDelta } = req.body;
@@ -297,6 +292,34 @@ io.on('connection', (socket) => {
             tutorRoomSchedules.get(username).lastMobileFlip = isFlipped ? new Date() : null;
             updateTutorStatus(username, roomId);
         }
+    });
+
+    // 1. 接收大喇叭廣播
+    socket.on('send_tutor_announcement', (data) => {
+        console.log('收到大喇叭廣播:', data);
+        // 轉發給學生端專屬的廣播事件
+        io.emit('receive_broadcast_alert', data); 
+    });
+
+    // 2. 接收黑板公告更新
+    socket.on('tutor_announcement', (data) => {
+        console.log('收到黑板更新:', data);
+        // 轉發給學生的黑板更新事件 (原有的命名)
+        io.emit('receive_tutor_announcement', data); 
+    });
+
+    // 3. 接收個別警告
+    socket.on('tutor_warn_student', (data) => {
+        console.log('收到教師警告:', data);
+        // 為了確保萬無一失，同時觸發「舊版違規畫面」與「新版紅光特效」
+        io.emit('receive_tutor_warning', data); 
+        io.emit('receive_warning', data);       
+    });
+
+    // 4. 接收指派任務
+    socket.on('tutor_assign_task', (data) => {
+        console.log('收到指派任務:', data);
+        io.emit('receive_task', data);
     });
 
     // ==========================================

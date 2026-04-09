@@ -47,7 +47,7 @@
             letter-spacing: 0.1em;
         }
 
-        /* 🚨 螢幕閃爍紅光效果 (您新增的需求) */
+        /* 🚨 螢幕閃爍紅光效果 */
         .violation-flash {
             animation: border-red-flash 0.5s infinite;
         }
@@ -57,6 +57,15 @@
             100% { box-shadow: inset 0 0 30px red, 0 0 30px rgba(220,38,38,0.5); }
         }
 
+        /* 📢 大喇叭播報動畫 */
+        .speaker-bounce {
+            animation: speaker-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes speaker-pop {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
         /* 狀態列動態樣式切換輔助 */
         .status-red #status-text { color: #f87171; text-shadow: 0 0 8px rgba(248,113,113,0.6); }
         .status-red { border-color: rgba(220,38,38,0.4); background: rgba(127,29,29,0.2); }
@@ -64,6 +73,22 @@
 </head>
 <body class="h-screen flex flex-col md:flex-row bg-[#05070a] text-white overflow-hidden">
     
+    <div id="speaker-overlay" class="fixed inset-0 z-[10010] bg-black/80 backdrop-blur-md flex items-center justify-center hidden">
+        <div class="bg-gradient-to-b from-blue-900/40 to-black border-2 border-blue-500/50 p-8 rounded-3xl max-w-lg w-full text-center shadow-[0_0_50px_rgba(59,130,246,0.3)] speaker-bounce">
+            <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-blue-400 shadow-lg">
+                <i class="fas fa-bullhorn text-5xl text-white animate-pulse"></i>
+            </div>
+            <h3 class="text-2xl font-black text-blue-400 mb-2 uppercase tracking-tighter">Teacher's Broadcast / 教師廣播</h3>
+            <div id="speaker-content" class="text-xl text-white font-bold bg-blue-950/50 p-6 rounded-2xl border border-blue-500/30 mb-6 min-h-[100px] flex items-center justify-center">
+                正在接收訊息...
+            </div>
+            <button onclick="closeSpeaker()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                我收到了
+            </button>
+        </div>
+    </div>
+    <audio id="voice-player" class="hidden"></audio>
+
     <div id="violation-overlay" class="fixed inset-0 z-[10005] bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6" style="display:none;">
         <div class="alert-content bg-[#0a0505] border-2 border-red-600 rounded-3xl p-10 max-w-lg w-full text-center violation-flash">
             <div class="w-24 h-24 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/50">
@@ -219,9 +244,13 @@
             </div>
             
             <div class="flex items-center gap-4">
-                <div id="breakButtons" class="flex gap-2">
-                    <button onclick="requestBreak('toilet')" class="bg-gray-800 hover:bg-amber-600/20 text-gray-300 hover:text-amber-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-amber-500/50 transition-all font-bold shadow-sm">🚽 洗手間</button>
-                    <button onclick="requestBreak('water')" class="bg-gray-800 hover:bg-cyan-600/20 text-gray-300 hover:text-cyan-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-cyan-500/50 transition-all font-bold shadow-sm">💧 喝水</button>
+                <div id="breakButtons" class="flex gap-2 bg-black/40 p-1 rounded-2xl border border-white/5">
+                    <button onclick="requestBreak('toilet')" class="bg-gray-800 hover:bg-amber-600/20 text-gray-300 hover:text-amber-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-amber-500/50 transition-all font-bold flex items-center gap-2">
+                        <i class="fas fa-restroom"></i> 洗手間
+                    </button>
+                    <button onclick="requestBreak('water')" class="bg-gray-800 hover:bg-cyan-600/20 text-gray-300 hover:text-cyan-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-cyan-500/50 transition-all font-bold flex items-center gap-2">
+                        <i class="fas fa-tint"></i> 喝水
+                    </button>
                 </div>
 
                 <button onclick="endSession()" class="bg-red-950/40 hover:bg-red-600 text-red-500 hover:text-white text-xs px-5 py-2 rounded-xl font-bold transition-all border border-red-900/50 hover:shadow-[0_0_15px_rgba(220,38,38,0.4)]">結束自習</button>
@@ -229,14 +258,34 @@
         </header>
 
         <div class="flex-1 p-6 overflow-y-auto">
-            <div id="blackboard" class="mb-8 bg-[#0a0e17] border border-amber-500/30 p-5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] max-w-4xl mx-auto relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                <h3 class="text-[10px] font-black text-amber-500/70 mb-3 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fas fa-bullhorn"></i> Tutor's Announcement / 導師專屬公告
-                </h3>
-                <p id="blackboardContent" class="text-lg text-amber-100/90 font-handwriting leading-relaxed pl-2 border-l border-amber-500/20">
-                    歡迎進入 VIP 教室。本次學習由專屬導師全程觀測，請保持最高專注。
-                </p>
+            <div class="flex justify-between items-center mb-4 px-2">
+                <div class="flex items-center gap-3">
+                    <span class="text-gray-400 text-sm"><i class="fas fa-info-circle"></i> 若需暫離，請點擊右側按鈕報備</span>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="requestBreak('water', 1)" class="bg-cyan-900/30 hover:bg-cyan-700/80 text-cyan-400 hover:text-white border border-cyan-500/50 px-4 py-1.5 rounded-full text-sm font-bold transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)]">
+                        <i class="fas fa-glass-water"></i> 喝水 (1 min)
+                    </button>
+                    <button onclick="requestBreak('toilet', 5)" class="bg-blue-900/30 hover:bg-blue-700/80 text-blue-400 hover:text-white border border-blue-500/50 px-4 py-1.5 rounded-full text-sm font-bold transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)]">
+                        <i class="fas fa-restroom"></i> 上廁所 (5 min)
+                    </button>
+                </div>
+            </div>
+
+            <div id="blackboardContainer" class="bg-[#0a0e17] border-2 border-amber-500/40 rounded-xl p-5 mb-6 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-start gap-4 transition-all duration-300">
+                <div class="text-4xl text-amber-500/80 mt-1">
+                    <i class="fas fa-chalkboard"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-end mb-2 border-b border-amber-500/20 pb-2">
+                        <h3 class="text-amber-500 font-bold text-lg tracking-widest">導師黑板</h3>
+                        <span id="blackboardTime" class="text-xs text-amber-500/50">等待指示中...</span>
+                    </div>
+                    <p id="blackboardContent" class="text-gray-200 text-lg tracking-wide font-serif leading-relaxed">
+                        目前無新公告，請保持專注。
+                    </p>
+                </div>
             </div>
 
             <div class="cam-grid" id="mainGrid">
@@ -277,6 +326,14 @@
 
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
     </main>
+
+    <script>
+        function closeSpeaker() {
+            document.getElementById('speaker-overlay').classList.add('hidden');
+            const player = document.getElementById('voice-player');
+            player.pause();
+        }
+    </script>
 
     <script src="/js/tutor-client.js"></script>
     <script type="module" src="./js/ai-core.js"></script>

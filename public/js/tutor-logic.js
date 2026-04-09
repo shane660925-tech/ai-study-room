@@ -23,6 +23,71 @@ function safeDOM(id, callback) {
 // 這裡預留對接原本的 Socket.io 邏輯
 const socket = io(); 
 
+// ==========================================
+// 新增：1. 監聽導師公告 (更新黑板 + 播放大喇叭音效)
+// ==========================================
+socket.on('receive_tutor_announcement', (data) => {
+    const blackboardContent = document.getElementById('blackboardContent');
+    const blackboardTime = document.getElementById('blackboardTime');
+    const blackboardContainer = document.getElementById('blackboardContainer');
+
+    if (blackboardContent) {
+        // 更新文字與時間
+        blackboardContent.innerText = data.message;
+        const now = new Date();
+        blackboardTime.innerText = `最新發布：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        
+        // 加上視覺閃爍特效吸引注意力 ( Tailwind classes )
+        blackboardContainer.classList.add('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.4)]');
+        setTimeout(() => {
+            blackboardContainer.classList.remove('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.4)]');
+        }, 3000);
+    }
+
+    // 觸發「大喇叭」音效
+    try {
+        // 請確保您的專案目錄下有這個音檔，或者換成您現有的音檔路徑
+        const alertSound = new Audio('/sounds/alert.mp3'); 
+        alertSound.play().catch(e => console.log("瀏覽器自動播放限制，需使用者互動後才能播放音效", e));
+    } catch(e) {
+        console.log('無法播放大喇叭音效', e);
+    }
+});
+
+// ==========================================
+// 新增：2. 生理需求暫離按鈕邏輯
+// ==========================================
+window.requestBreak = function(type, minutes) {
+    const typeName = type === 'toilet' ? '上廁所' : '喝水';
+    
+    // 跳出確認視窗
+    if(confirm(`確定要暫離去「${typeName}」 ${minutes} 分鐘嗎？\n(系統將通知導師，超時將會扣除專注分數)`)) {
+        
+        // 發送暫離狀態給後端/導師端 (讓導師儀表板知道他離開了)
+        socket.emit('student_status_update', { 
+            status: 'break', 
+            reason: typeName,
+            duration: minutes 
+        });
+
+        // 視覺回饋：更改畫面上自己的狀態標籤 (選用，依據您原本的 class 調整)
+        const statusText = document.querySelector('.text-green-400, .text-green-500'); 
+        if(statusText) {
+            statusText.innerHTML = `<span class="text-yellow-400"><i class="fas fa-clock"></i> 暫離中 (${typeName})</span>`;
+        }
+        
+        // 本地彈窗提示
+        alert(`已報備！請在 ${minutes} 分鐘內回到座位。`);
+        
+        // 可選功能：設定一個定時器，時間到自動提醒學生
+        setTimeout(() => {
+            alert(`⚠️ 您的「${typeName}」時間已結束！請盡速回到座位並恢復專注狀態。`);
+            // 通知後端時間已到
+            socket.emit('student_status_update', { status: 'focusing', reason: 'returned' });
+        }, minutes * 60 * 1000);
+    }
+};
+
 // --- 3. 實作「點名按鈕」範例邏輯 (對接報鎖解決方案) ---
 // 未來你可以在這裡安心地寫任何按鈕邏輯
 safeDOM('call-roll-btn', (btn) => {

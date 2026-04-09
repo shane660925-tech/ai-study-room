@@ -5,9 +5,8 @@
 
 const socket = io();
 
-// 記錄目前在線的學生資料與目前選擇的教室視角
+// 記錄目前在線的學生資料
 let activeStudents = [];
-let currentRoomFilter = 'ALL';
 
 // ==========================================
 // 1. 系統時鐘與日誌功能
@@ -20,6 +19,29 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// 發送全班大喇叭廣播
+function sendAnnouncement() {
+    const inputField = document.getElementById('announceInput');
+    const message = inputField.value.trim();
+
+    if (!message) {
+        alert('請先輸入要廣播的內容喔！');
+        return;
+    }
+
+    // 透過 Socket 傳給後端 (整合原本的事件與日誌功能)
+    if (typeof socket !== 'undefined') {
+        socket.emit('send_tutor_announcement', { message: message }); 
+        
+        // 發送後清空輸入框並給予提示
+        inputField.value = '';
+        alert("廣播已發送！");
+        addLog('已發送廣播: ' + message, "text-red-400"); // 寫入 AI 日誌區塊
+    } else {
+        alert('尚未連線到伺服器');
+    }
+}
 
 function addLog(message, colorClass = "text-amber-100") {
     const logContainer = document.getElementById('logContainer');
@@ -47,6 +69,23 @@ socket.on('disconnect', () => {
 socket.on('update_rank', (users) => {
     activeStudents = users;
     renderStudents();
+});
+
+socket.on('receive_tutor_announcement', (data) => {
+    // 1. 更新黑板文字
+    const blackboardContent = document.getElementById('blackboardContent');
+    if (blackboardContent) {
+        blackboardContent.innerText = data.message;
+    }
+
+    // 2. 加回「大喇叭」音效 (請確保路徑有這個音檔，或是換成瀏覽器內建逼逼聲)
+    try {
+        // 如果您有提示音檔
+        const alertSound = new Audio('/sounds/alert.mp3'); 
+        alertSound.play();
+    } catch(e) {
+        console.log('無法播放音效', e);
+    }
 });
 
 // ==========================================
@@ -116,29 +155,6 @@ window.playChime = function() {
 // 4. UI 介面互動邏輯
 // ==========================================
 
-// 教室視角切換
-window.setRoomFilter = function(room) {
-    currentRoomFilter = room;
-    
-    // 重置所有按鈕樣式
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.replace('bg-amber-600', 'bg-[#0a0e17]');
-        btn.classList.replace('text-white', 'text-gray-400');
-        btn.classList.add('hover:bg-amber-900/40', 'hover:text-amber-100');
-    });
-    
-    // 亮起當前按鈕
-    const activeBtn = document.getElementById(`filter-${room}`);
-    if(activeBtn) {
-        activeBtn.classList.replace('bg-[#0a0e17]', 'bg-amber-600');
-        activeBtn.classList.replace('text-gray-400', 'text-white');
-        activeBtn.classList.remove('hover:bg-amber-900/40', 'hover:text-amber-100');
-    }
-    
-    addLog(`切換視角至：${room === 'ALL' ? '全部教室' : room}`, "text-gray-400");
-    renderStudents();
-};
-
 // 右側面板 Tab 切換
 window.switchTab = function(tabName) {
     ['violations', 'summary'].forEach(name => {
@@ -161,10 +177,8 @@ window.switchTab = function(tabName) {
 function renderStudents() {
     const grid = document.getElementById('studentGrid');
     
-    // 依據當前教室視角過濾學生
-    const filteredStudents = currentRoomFilter === 'ALL' 
-        ? activeStudents 
-        : activeStudents.filter(s => String(s.room) === String(currentRoomFilter));
+    // 因為已經移除了教室切換功能，所以直接顯示所有學生
+    const filteredStudents = activeStudents;
 
     // 更新在線人數
     document.getElementById('onlineCount').innerText = filteredStudents.length;

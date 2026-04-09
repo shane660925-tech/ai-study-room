@@ -26,6 +26,17 @@
                 <button onclick="updateBlackboard()" class="w-full mt-2 bg-amber-600 hover:bg-amber-500 py-2.5 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] active:scale-95 uppercase text-white">同步至學生端</button>
             </div>
 
+            <div>
+                <label class="block text-xs font-bold text-amber-500/70 mb-2 uppercase tracking-widest">
+                    <i class="fas fa-bullhorn mr-1"></i> 全班大喇叭廣播
+                </label>
+                <div class="flex flex-col gap-2">
+                    <input type="text" id="announceInput" placeholder="輸入要廣播的文字..." class="w-full bg-black/50 border border-amber-500/30 rounded-lg p-3 text-sm focus:outline-none focus:border-amber-500 text-amber-50">
+                    <button onclick="sendAnnouncement()" class="w-full bg-red-900/30 hover:bg-red-800/60 py-2.5 rounded-lg text-xs font-bold transition-all border border-red-500/30 text-red-400 flex justify-center items-center gap-2 active:scale-95 shadow-[0_0_10px_rgba(220,38,38,0.1)]">
+                        發送廣播
+                    </button>
+                </div>
+            </div>
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="exportCSV()" class="bg-black/40 hover:bg-black/80 py-3 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 border border-amber-500/20 text-amber-100">
                     <i class="fas fa-file-csv text-green-400 text-lg"></i>匯出報表
@@ -83,14 +94,6 @@
                 </div>
             </div>
         </header>
-
-        <div class="px-8 py-4 border-b border-amber-500/20 flex gap-3 bg-[#05070a]">
-            <span class="text-xs font-bold text-amber-500/70 self-center mr-2 uppercase tracking-widest">教室視角切換:</span>
-            <button onclick="setRoomFilter('ALL')" id="filter-ALL" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-amber-600 text-white shadow shadow-amber-500/20 transition-all">全部教室</button>
-            <button onclick="setRoomFilter('2')" id="filter-2" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">沉浸式自習室</button>
-            <button onclick="setRoomFilter('simulated')" id="filter-simulated" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">模擬線上教室</button>
-            <button onclick="setRoomFilter('1')" id="filter-1" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">線上課程專區</button>
-        </div>
 
         <section id="studentGrid" class="flex-1 p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8 overflow-y-auto custom-scroll content-start">
         </section>
