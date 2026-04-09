@@ -76,13 +76,26 @@ if (typeof io !== 'undefined') {
     socket = io();
     window.appSocket = socket;
     
+    // ==========================================
+    // [修復] 身分登錄：一連線就告訴伺服器我在這，否則排行榜會沒人
+    // ==========================================
+    socket.on('connect', () => {
+        console.log("✅ Socket 已連線，正在登錄身分...");
+        socket.emit("update_status", { 
+            status: "FOCUSED", 
+            name: myUsername, 
+            isFlipped: isPhoneFlipped,
+            isCaptain: isAuditMode 
+        });
+    });
+
     socket.on('mobile_sync_update', (data) => {
         if (data.studentName === myUsername) {
             
             // ==========================================
             // [新增] 取得目前的休息狀態 (相容新舊版)
             // ==========================================
-            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || isPauseMode;
+            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
 
             if (data.type === 'FLIP_WARNING') {
                 
@@ -131,7 +144,7 @@ if (typeof io !== 'undefined') {
             // ==========================================
             // [新增] 取得目前的休息狀態，防止5秒後被強制退出
             // ==========================================
-            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || isPauseMode;
+            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
 
             // 🛑 【關鍵防呆】如果是休息時間，直接 return 略過，不判定違規！
             if (isCurrentlyBreaking) {
@@ -184,8 +197,19 @@ if (typeof io !== 'undefined') {
         if (window.addJoinRequest) window.addJoinRequest(data);
     });
 
+    // ==========================================
+    // [修復] 排行榜渲染與左下角專注時間更新
+    // ==========================================
     socket.on("update_rank", (users) => {
         remoteUsers = users; 
+        
+        // 更新左下角個人頭像旁的專注分鐘 (myFocusTime)
+        const me = users.find(u => u.name === myUsername);
+        if (me) {
+            const myFocusTimeEl = document.getElementById('myFocusTime');
+            if (myFocusTimeEl) myFocusTimeEl.innerText = `${me.focusMinutes || 0}m`;
+        }
+
         const rankContainer = document.getElementById("tab-rank");
         if (rankContainer) {
             const sortedUsers = [...users].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -440,32 +464,33 @@ async function initAI() {
         };
     }
 }
-async function predictLoop() {
-    // ==========================================
-    // [升級] 取得目前的休息狀態 (相容新版 BreakManager 與舊版)
-    // ==========================================
-    const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || typeof isPauseMode !== 'undefined' && isPauseMode;
 
-    // 如果現在處於合法休息，或是正在處理手機翻轉警告，就跳過預測迴圈讓 AI 閉上眼睛
+async function predictLoop() {
+    const now = performance.now();
+    const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
+
+    // ==========================================
+    // [修復] 狀態維護：每 10 秒主動告訴伺服器我還在專注，維持排行榜與教師端數據
+    // ==========================================
+    if (socket && (now - lastHeartbeat > 10000)) {
+        lastHeartbeat = now;
+        socket.emit("update_status", { 
+            status: isCurrentlyBreaking ? "PAUSED" : myStatus, 
+            name: myUsername, 
+            isFlipped: isPhoneFlipped 
+        });
+    }
+
     if (isCurrentlyBreaking || isFlipWarningActive) { 
         requestAnimationFrame(predictLoop); 
         return; 
     }
-    // ==========================================
 
     if (isAuditMode) {
-        const now = performance.now();
-        if (socket && (now - lastHeartbeat > 3000)) {
-            lastHeartbeat = now;
-            myStatus = "FOCUSED";
-            socket.emit("update_status", { status: "FOCUSED", name: myUsername, isCaptain: true, isFlipped: isPhoneFlipped });
-        }
         requestAnimationFrame(predictLoop);
         return; 
     }
 
-    const now = performance.now();
-    
     if (videoElement && videoElement.readyState >= 2 && videoElement.currentTime !== lastVideoTime) {
         lastVideoTime = videoElement.currentTime;
         let didCheckRun = false; 
