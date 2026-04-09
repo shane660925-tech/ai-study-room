@@ -61,6 +61,11 @@ app.get('/api/user-stats', async (req, res) => {
         res.status(500).json({ error: '資料庫讀取錯誤' });
     }
 });
+// 新增這個路由，用來回應擴充功能的 iframe 請求
+app.get('/sidepanel-view', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'sidepanel-view.html'));
+});
+
 
 app.post('/api/save-focus', async (req, res) => {
     const { username, roomType, focusSeconds, comment, score, creditDelta } = req.body;

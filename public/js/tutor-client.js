@@ -141,3 +141,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+// (將這段貼在 tutor-client.js 檔案的最後面，document.addEventListener 裡面)
+    
+    if (typeof socket !== 'undefined') {
+        // 接收導師黑板公告
+        socket.on('receive_tutor_announcement', (data) => {
+            const blackboard = document.getElementById('blackboardContent');
+            if (blackboard) {
+                blackboard.innerText = data.message;
+                // 加一點閃爍動畫提示學生黑板更新了
+                const boardContainer = document.getElementById('blackboard');
+                boardContainer.classList.add('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
+                setTimeout(() => {
+                    boardContainer.classList.remove('shadow-[0_0_30px_rgba(245,158,11,0.6)]');
+                }, 2000);
+            }
+        });
+
+        // 接收導師的重大違規警告
+        socket.on('receive_tutor_warning', (data) => {
+            const myName = document.getElementById('inputName').value;
+            // 如果警告的對象是我
+            if (data.targetName === myName) {
+                window.triggerViolation(data.reason || "導師已向您發出嚴重警告，請立即調整狀態！");
+            }
+        });
+    }

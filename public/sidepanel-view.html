@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>StudyVerse 面板</title>
+  <style>
+    body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; background-color: #f4f7f6; }
+    
+    /* 隱藏原本的切換按鈕，因為現在由系統自動判斷身分 */
+    .tabs { display: none; } 
+    
+    .view-container { padding: 15px; display: none; }
+    .view-container.active { display: block; }
+
+    /* ================= 學生端樣式 ================= */
+    .status-card { text-align: center; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; border-top: 5px solid #ccc; transition: all 0.3s; }
+    .status-card.red { border-top-color: #e74c3c; background: #fdf2f2; }
+    .status-card.yellow { border-top-color: #f1c40f; background: #fffcf2; }
+    .status-card.green { border-top-color: #27ae60; background: #ebfaef; }
+    
+    .status-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #333; }
+    .status-desc { font-size: 13px; color: #666; margin-bottom: 15px; }
+    
+    #qrcode-img { width: 160px; height: 160px; border: 1px solid #ddd; padding: 5px; background: white; border-radius: 8px; display: none; margin: 0 auto; }
+    .loading-qr { width: 160px; height: 160px; line-height: 160px; background: #eee; color: #999; margin: 0 auto; border-radius: 8px; font-size: 12px; text-align: center; }
+
+    .flow-placeholder { margin-top: 20px; padding: 15px; border: 2px dashed #bdc3c7; border-radius: 8px; color: #7f8c8d; font-size: 12px; text-align: center; background: #f9f9f9; }
+
+    /* ================= 教師端樣式 ================= */
+    .list-title { margin: 0 0 10px 0; font-size: 1.1em; color: #2c3e50; display: flex; justify-content: space-between; align-items: center; }
+    .student-item { background: white; margin-bottom: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; border-left: 5px solid #ccc; transition: all 0.3s; }
+    .student-item.status-focus { border-left-color: #27ae60; }
+    .student-item.status-unfocus { border-left-color: #e74c3c; }
+    
+    .student-header { padding: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .student-name { font-weight: bold; color: #333; }
+    .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; color: white; }
+    .bg-green { background: #27ae60; }
+    .bg-red { background: #e74c3c; }
+  </style>
+</head>
+<body>
+
+  <div id="view-student" class="view-container">
+    <div id="student-status-card" class="status-card red">
+      <div id="student-status-title" class="status-title">紅燈：尚未連線</div>
+      <div id="student-status-desc" class="status-desc">哈囉 <span id="display-name"></span>，請掃描專屬 QR Code</div>
+      
+      <div id="qr-loading" class="loading-qr">正在產生專屬 QR Code...</div>
+      <img id="qrcode-img" src="" alt="QR Code">
+    </div>
+
+    <div class="flow-placeholder">
+      [ 預留區塊 ] <br> 未來「心流校驗按鈕」將會顯示於此處
+    </div>
+  </div>
+
+  <div id="view-teacher" class="view-container">
+    <h3 class="list-title">
+      即時狀態 
+      <span style="font-size: 12px; font-weight: normal; color: #7f8c8d;">(<span id="count">0</span> 人在線)</span>
+    </h3>
+    <div id="student-list">
+      <div style="text-align:center; color:#999; margin-top:20px;">等待學生加入中...</div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  
+  <script>
+    // 1. 從網址抓取擴充功能傳來的身分與姓名
+    const urlParams = new URLSearchParams(window.location.search);
+    const role = urlParams.get('role') || 'student';
+    const userName = urlParams.get('name') || '未知學生';
+
+    // 2. 智慧顯示：老師就只看得到老師畫面，學生只看得到學生畫面！
+    if (role === 'teacher') {
+      document.getElementById('view-teacher').classList.add('active');
+    } else {
+      document.getElementById('view-student').classList.add('active');
+      document.getElementById('display-name').innerText = userName;
+    }
+
+    // 3. 連線到後端
+    const socket = io();
+
+    // ================= 學生端專屬邏輯 =================
+    if (role === 'student') {
+      socket.on('connect', () => {
+          // 產生 QR Code，並把學生的名字包進去
+          const qrUrl = `https://study-universe.onrender.com/mobile.html?sync=${socket.id}&name=${encodeURIComponent(userName)}`;
+          const qrImg = document.getElementById('qrcode-img');
+          
+          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrUrl)}`;
+          qrImg.onload = () => {
+              document.getElementById('qr-loading').style.display = 'none';
+              qrImg.style.display = 'block';
+          };
+      });
+
+      // 監聽手機連線狀態... (這裡保留你原本的燈號切換邏輯)
+      socket.on('deviceLinked', (data) => {
+          if (data.success) {
+              updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
+          }
+      });
+    }
+
+    // ================= 教師端專屬邏輯 =================
+    if (role === 'teacher') {
+      // 這裡保留你原本接收學生狀態、渲染列表的邏輯
+      socket.on('update_status', (data) => {
+          // ... 更新畫面邏輯 ...
+      });
+    }
+
+    // 輔助函數：切換燈號
+    function updateStudentUI(color, title, desc) {
+        const card = document.getElementById('student-status-card');
+        card.className = `status-card ${color}`;
+        document.getElementById('student-status-title').innerText = title;
+        document.getElementById('student-status-desc').innerText = desc;
+    }
+  </script>
+</body>
+</html>
