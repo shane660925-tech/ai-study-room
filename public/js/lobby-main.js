@@ -7,6 +7,7 @@
 // ================= 新增：v2.2.7 裝置分流與彈窗邏輯 =================
 let targetRoomUrl = '';
 window.isDeviceLinked = false; 
+let rollCallTimer = null; // 點名計時器變數
 
 // =========================================================================
 // (1) QR Code 攔截器：不管系統哪個角落產生 QR Code，自動把 ID 綁進網址
@@ -14,7 +15,6 @@ window.isDeviceLinked = false;
 if (typeof QRCode !== 'undefined') {
     const originalQRCode = QRCode;
     QRCode = function(el, options) {
-        // 修正處 A：增加導覽列姓名檢查並改為預設「學員」
         const username = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '學員';
         const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
         
@@ -37,7 +37,6 @@ setInterval(() => {
     const username = localStorage.getItem('studyVerseUser');
     if (!username) return;
 
-    // A. 處理所有輸入框 (鎖定並替換)
     const textInputs = document.querySelectorAll('input[type="text"]');
     textInputs.forEach(input => {
         if (input.id === 'setupName' && document.getElementById('loginOverlay') && !document.getElementById('loginOverlay').classList.contains('hidden')) return;
@@ -50,11 +49,9 @@ setInterval(() => {
         }
     });
 
-    // B. 👉 處理純文字 (將「歡迎回來，COMMANDER」等字眼動態替換)
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while (node = walk.nextNode()) {
-        // 為了避免大小寫問題，統一掃描大寫 COMMANDER 並替換
         if (node.nodeValue.includes('COMMANDER')) {
             node.nodeValue = node.nodeValue.replace(/COMMANDER/g, username);
         }
@@ -108,6 +105,17 @@ function closeAllEntryModals() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 監聽點名事件
+    if (typeof socket !== 'undefined') {
+        socket.on('admin_action', (data) => {
+            console.log('收到來自老師的動作:', data);
+            if (data.action === 'start_roll_call') {
+                // 這裡觸發顯示彈窗的 function
+                showRollCallModal(data.duration); 
+            }
+        });
+    }
+
     const btnRoleMain = document.getElementById('btn-role-main');
     if (btnRoleMain) {
         btnRoleMain.addEventListener('click', showSyncPromptModal);
@@ -117,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnRoleSensor) {
         btnRoleSensor.addEventListener('click', () => {
             closeAllEntryModals();
-            // 👉 修改這裡：跳轉單機模式時，把名字帶進網址
             const currentName = localStorage.getItem('studyVerseUser') || '';
             window.location.href = `/flip-room.html?name=${encodeURIComponent(currentName)}`; 
         });
@@ -160,9 +167,7 @@ window.enterClassroomWithCheck = function(roomUrl) {
 
     if (isMobileDevice) {
         const goStandalone = confirm("📱 偵測到您正在使用手機！\n\n是否進入「單機翻轉大廳」選擇專屬教室或隊伍？\n(將獲得專屬游擊隊標記與計分)");
-        
         if (goStandalone) {
-            // 👉 修改這裡：跳轉單機模式時，把名字帶進網址
             const currentName = localStorage.getItem('studyVerseUser') || '';
             window.location.href = `/flip-room.html?name=${encodeURIComponent(currentName)}`;
         } else {
@@ -310,7 +315,6 @@ function loadScriptAsync(src) {
 
 socket.on("status_updated", (data) => {
     const userCard = document.getElementById(`user-card-${data.name}`); 
-    
     if (userCard) {
         if (data.isFlipped) {
             userCard.classList.add('is-mobile-flip');
@@ -323,7 +327,6 @@ socket.on("status_updated", (data) => {
         } else {
             userCard.classList.remove('is-mobile-flip');
             userCard.setAttribute('title', data.status === "FOCUSED" ? '在線專注中' : '一般狀態');
-            
             const statusText = userCard.querySelector('.status-text');
             if (statusText) {
                 statusText.textContent = data.status === "FOCUSED" ? "專注中" : "閒置";
@@ -335,7 +338,6 @@ socket.on("status_updated", (data) => {
 
 socket.on('flip_failed', (data) => {
     const userName = data.name;
-
     const userCard = document.getElementById(`user-card-${userName}`);
     if (userCard) {
         userCard.classList.add('flip-failed-shatter');
@@ -365,7 +367,6 @@ socket.on('flip_failed', (data) => {
     const shatterSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2855/2855-preview.mp3');
     shatterSound.volume = 0.6;
     shatterSound.play().catch(() => {});
-
     showPublicShamingToast(userName);
 });
 
@@ -421,9 +422,6 @@ function showPublicShamingToast(userName) {
 
 socket.on('deviceLinked', (data) => {
     if (sessionStorage.getItem('mobileLinked') === 'true') return;
-    
-    console.log('✅ 收到手機連線訊號，等待翻轉！', data);
-    
     window.isDeviceLinked = true;
     closeAllEntryModals(); 
     
@@ -446,9 +444,7 @@ socket.on('deviceLinked', (data) => {
 
 socket.on('mobile_sync_update', (data) => {
     if (data.type === 'FLIP_COMPLETED') {
-        console.log("💻 收到手機翻轉成功的訊號！");
         alert("✅ 連動成功！手機已確認朝下置放。"); 
-        
         const syncModule = document.getElementById('syncModule');
         if (syncModule) {
             syncModule.classList.remove('ring-4', 'ring-blue-500');
@@ -462,7 +458,6 @@ socket.on('mobile_sync_update', (data) => {
                 <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">您的手機正在作為翻轉感測器運作中<br>請勿將手機翻回正面</p>
             `;
         }
-
         sessionStorage.setItem('mobileLinked', 'true');
         localStorage.setItem('mobileLinked', 'true');
         window.isDeviceLinked = true;
@@ -472,12 +467,7 @@ socket.on('mobile_sync_update', (data) => {
         
         openModals.forEach(modal => {
             const buttons = Array.from(modal.querySelectorAll('button'));
-            const nextBtn = buttons.find(btn => 
-                (btn.innerText.includes('下一步') || btn.innerText.includes('完成') || btn.innerText.includes('繼續')) && 
-                !btn.closest('.hidden') && 
-                window.getComputedStyle(btn).display !== 'none'
-            );
-            
+            const nextBtn = buttons.find(btn => (btn.innerText.includes('下一步') || btn.innerText.includes('完成') || btn.innerText.includes('繼續')) && !btn.closest('.hidden') && window.getComputedStyle(btn).display !== 'none');
             if (nextBtn) {
                 isTeamModalOpen = true;
                 setTimeout(() => nextBtn.click(), 300); 
@@ -485,7 +475,6 @@ socket.on('mobile_sync_update', (data) => {
         });
 
         if (!isTeamModalOpen && targetRoomUrl) {
-            console.log('準備打開教室設定：', targetRoomUrl);
             setTimeout(() => {
                 if (typeof openSetupModal === 'function') {
                     openSetupModal(targetRoomUrl);
@@ -505,7 +494,6 @@ window.addEventListener('DOMContentLoaded', () => {
     window.isDeviceLinked = false;
 
     setTimeout(() => {
-        // 修正處 B：增加導覽列姓名檢查並改為預設「學員」
         const userName = localStorage.getItem('studyVerseUser') || document.getElementById('navName')?.innerText || '學員';
         if (typeof socket !== 'undefined' && userName) {
             socket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: userName });
@@ -527,3 +515,68 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// =========================================================================
+// (3) 新增：點名系統邏輯
+// =========================================================================
+function showRollCallModal(duration) {
+    const overlay = document.getElementById('rollcall-overlay');
+    const timerText = document.getElementById('rollcall-timer-text');
+    const timerBar = document.getElementById('rollcall-timer-bar');
+    const checkInBtn = document.getElementById('check-in-btn');
+
+    if (!overlay || !timerText) return;
+
+    let timeLeft = duration;
+    overlay.classList.remove('hidden');
+
+    // 倒數計時邏輯
+    clearInterval(rollCallTimer);
+    rollCallTimer = setInterval(() => {
+        timeLeft--;
+        timerText.innerText = timeLeft;
+        
+        // 更新進度條長度
+        if (timerBar) {
+            const percent = (timeLeft / duration) * 100;
+            timerBar.style.width = `${percent}%`;
+        }
+
+        if (timeLeft <= 0) {
+            autoFailRollCall();
+        }
+    }, 1000);
+
+    // 簽到按鈕點擊
+    if (checkInBtn) {
+        checkInBtn.onclick = () => {
+            submitCheckIn();
+        };
+    }
+}
+
+function submitCheckIn() {
+    if (typeof socket !== 'undefined') {
+        socket.emit('student_check_in', {
+            timestamp: Date.now(),
+            status: 'SUCCESS'
+        });
+    }
+    closeRollCall();
+}
+
+function autoFailRollCall() {
+    if (typeof socket !== 'undefined') {
+        socket.emit('student_check_in', {
+            timestamp: Date.now(),
+            status: 'MISSED'
+        });
+    }
+    closeRollCall();
+}
+
+function closeRollCall() {
+    clearInterval(rollCallTimer);
+    const overlay = document.getElementById('rollcall-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}

@@ -1,8 +1,8 @@
 @charset "UTF-8";
 /* =========================================================== */
-/* STUDY VERSE V2.2.1 - ADMIN CSS (教師後台專用樣式)           */
+/* STUDY VERSE V2.2.1 - ADMIN CSS (教師後台專用樣式)             */
 /* 負責範圍：違規卡片、側邊欄日誌、結算報告與學生群組卡片        */
-/* 依賴說明：動畫引擎 (slideInLeft 等) 由 global.css 支援       */
+/* 依賴說明：動畫引擎 (slideInLeft 等) 由 global.css 支援        */
 /* =========================================================== */
 
 /* ----------------------------------------------------------- */
@@ -62,9 +62,9 @@ body {
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); 
 }
 
-/* 教師端專屬狀態脈衝動畫 */
+/* 教師端專屬狀態脈衝動畫 (已整合點名警示脈衝) */
 .status-pulse { 
-    animation: pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+    animation: pulseRed 2s infinite, pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
 }
 
 /* 專屬搖晃動畫引擎 */
@@ -111,4 +111,34 @@ body {
 .summary-report-card:hover {
     transform: scale(1.02);
     border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* ----------------------------------------------------------- */
+/* 5. 點名系統專用樣式 (Roll Call System)                      */
+/* ----------------------------------------------------------- */
+
+/* 戰情面板進場動畫 */
+#tutor-roll-panel {
+    animation: panelSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes panelSlideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* 自定義捲軸 (用於點名異常名單) */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+/* 警示脈衝效果引擎 */
+@keyframes pulseRed {
+    0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0); }
 }

@@ -141,6 +141,9 @@ const disconnectTimeouts = {};
 // 在 server.js 建立一個記憶體變數來存儲所有人的翻轉狀態
 const globalUserStatus = {}; 
 
+// --- 特約教室 (Tutor Room) 專屬記憶體狀態 ---
+const tutorRoomSchedules = new Map();
+
 // ==========================================
 // 隊伍狀態與隊長機制管理
 // ==========================================
@@ -225,28 +228,86 @@ function removeUserFromTeam(username, roomId) {
 const pendingJoinRequestsMap = {};
 const userToSocketMap = {}; 
 
+// 核心判定函數：計算綠燈/黃燈/紅燈 (特約教室專用)
+function updateTutorStatus(username, roomId) {
+    const info = tutorRoomSchedules.get(username);
+    if (!info) return;
+
+    let newStatus = 'RED'; // 預設紅燈 (缺件或斷線)
+
+    if (info.pc && info.mobile) {
+        // 雙機都在線，檢查手機是否翻轉
+        newStatus = info.lastMobileFlip ? 'GREEN' : 'YELLOW';
+    } else if (info.pc || info.mobile) {
+        newStatus = 'YELLOW'; // 只有一機在線
+    }
+
+    info.status = newStatus;
+
+    // 廣播給該教室的所有人（包括老師端）更新名單
+    io.to(roomId).emit('tutor_list_update', {
+        username,
+        status: newStatus,
+        devices: { pc: !!info.pc, mobile: !!info.mobile }
+    });
+}
+
 io.on('connection', (socket) => {
     console.log('🔌 指揮官已連線：', socket.id);
 
     socket.emit('update_rank', onlineUsers);
     socket.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
 
-    // 接收手機端的連動請求，並轉發給電腦大廳
-    socket.on('request_link_device', (data) => {
-        // 這裡的 data.syncToken 就是電腦大廳的 socket.id
-        console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
+    // ==========================================
+    // 特約教室 (Tutor Room) 核心邏輯
+    // ==========================================
+    
+    // 1. 學生進入特約教室 (雙機分開加入)
+    socket.on('join_tutor_room', (data) => {
+        const { username, roomId, deviceType } = data; // deviceType: 'pc' 或 'mobile'
         
-        // 將成功連動的訊號，單獨發送給那個大廳的電腦
+        socket.join(roomId);
+        socket.username = username;
+        socket.roomId = roomId;
+        socket.deviceType = deviceType;
+
+        // 初始化或更新雙機映射
+        if (!tutorRoomSchedules.has(username)) {
+            tutorRoomSchedules.set(username, { pc: null, mobile: null, status: 'RED' });
+        }
+        
+        const userDevices = tutorRoomSchedules.get(username);
+        userDevices[deviceType] = socket.id;
+
+        console.log(`[特約教室] ${username} 使用 ${deviceType} 進入了 ${roomId}`);
+        
+        // 立即檢查一次狀態
+        updateTutorStatus(username, roomId);
+    });
+
+    // 2. 監聽手機翻轉狀態 (特約教室專用，取消豁免權)
+    socket.on('tutor_mobile_sync', (data) => {
+        const { username, isFlipped, roomId } = data;
+        if (tutorRoomSchedules.has(username)) {
+            tutorRoomSchedules.get(username).lastMobileFlip = isFlipped ? new Date() : null;
+            updateTutorStatus(username, roomId);
+        }
+    });
+
+    // ==========================================
+    // 原有功能與連動邏輯
+    // ==========================================
+
+    socket.on('request_link_device', (data) => {
+        console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
         io.to(data.syncToken).emit('deviceLinked', { 
             success: true, 
             mobileName: data.studentName 
         });
     });
 
-    // 修改 server.js 中的 join_team 邏輯
     socket.on('join_team', async (data) => {
         const { teamId, username, roomType } = data;
-        
         const { data: team } = await supabase
             .from('teams')
             .select('*')
@@ -254,7 +315,6 @@ io.on('connection', (socket) => {
             .single();
 
         if (team && team.needs_approval) {
-            // 通知隊長 (透過隊伍 ID 頻道發送通知)
             io.to(`team_${teamId}`).emit('admin_notification', {
                 type: 'JOIN_REQUEST',
                 username: username,
@@ -262,21 +322,17 @@ io.on('connection', (socket) => {
                 msg: `學員 ${username} 申請加入您的隊伍，請審核。`,
                 roomType: roomType
             });
-            
-            // 同時也發給隊長個人
             io.to(`user_${team.captain}`).emit('join_request_received', {
                 username: username,
                 teamId: teamId
             });
         } else if (team) {
-            // 不需審核，直接核准
             socket.emit('join_team_approved', { teamId, teamName: team.name });
         }
     });
 
     socket.on('create_team_room', (data) => {
         const roomId = data.teamName;
-        
         if (!teamLeaderStates[roomId]) {
             teamLeaderStates[roomId] = {
                 leader: data.username,
@@ -284,7 +340,6 @@ io.on('connection', (socket) => {
                 members: [data.username]
             }
         }
-        
         socket.join(roomId);
         socket.username = data.username;
         socket.currentRoom = roomId;
@@ -339,54 +394,44 @@ io.on('connection', (socket) => {
     });
 
     socket.on('reply_join_team', (data) => {
-        console.log("收到隊長審核回覆:", data);
         const targetSocketId = userToSocketMap[data.requestUser] || data.requestSocketId;
-        
         if (data.approved) {
             const team = teamLeaderStates[data.teamName];
             const activeTeamData = activeTeams.find(t => t.id === data.teamName);
-            
             const maxMembers = activeTeamData ? (activeTeamData.maxMembers || 4) : 4;
             if (team && team.members.length >= maxMembers) {
                  socket.emit('admin_action', { type: 'ERROR', content: '隊伍已滿，無法再批准加入！' });
                  return;
             }
-
             if (team && !team.members.includes(data.requestUser)) {
                 team.members.push(data.requestUser);
                 broadcastActiveTeams(); 
             }
-
-            // 🚀 關鍵：從伺服器記憶體中直接抓取建立隊伍時的 roomType 和 realName
             const actualRoomType = activeTeamData ? activeTeamData.roomType : data.roomType;
             const actualRealName = activeTeamData ? activeTeamData.name : data.realTeamName;
-
             if (targetSocketId) {
                 io.to(targetSocketId).emit('join_team_approved', { 
                     teamName: data.teamName,
                     realTeamName: actualRealName,
                     targetUser: data.requestUser,
-                    roomType: actualRoomType // 確保把正確的教室類型回傳給學生
+                    roomType: actualRoomType
                 });
             } 
-            
             io.emit('join_team_approved_broadcast', {
                  teamName: data.teamName,
                  realTeamName: actualRealName,
                  targetUser: data.requestUser,
                  roomType: actualRoomType
             });
-
         } else {
             if (targetSocketId) {
                 io.to(targetSocketId).emit('join_team_rejected', { message: '隊長拒絕了您的加入申請。', targetUser: data.requestUser });
             }
-             io.emit('join_team_rejected_broadcast', {
+            io.emit('join_team_rejected_broadcast', {
                  message: '隊長拒絕了您的加入申請。',
                  targetUser: data.requestUser
             });
         }
-        
         if (data.requestSocketId) delete pendingJoinRequestsMap[data.requestSocketId];
         if (data.requestUser) delete userToSocketMap[data.requestUser];
     });
@@ -394,15 +439,12 @@ io.on('connection', (socket) => {
     socket.on('join_team_room', (data) => {
         const roomId = data.teamName;
         const team = teamLeaderStates[roomId];
-        
         if (team && !team.members.includes(data.username)) {
             team.members.push(data.username);
         }
-        
         socket.join(roomId);
         socket.username = data.username;
         socket.currentRoom = roomId;
-
         io.to(roomId).emit('team_leader_update', { leader: team ? team.leader : null });
         broadcastUpdateRank();
         broadcastActiveTeams();
@@ -412,14 +454,11 @@ io.on('connection', (socket) => {
         teamData.createdAt = Date.now();
         teamData.currentMembers = 1;
         activeTeams.push(teamData);
-        
         teamLeaderStates[teamData.id] = {
             leader: teamData.creator || '匿名使用者',
             auditMode: teamData.auditMode || 'none',
             members: [teamData.creator || '匿名使用者']
         };
-
-        console.log(`🚩 [新隊伍] ${teamData.name} (${teamData.id}) 已建立。`);
         io.emit('update_active_teams', activeTeams);
         broadcastUpdateRank();
     });
@@ -430,12 +469,10 @@ io.on('connection', (socket) => {
     
     socket.on('join_room', async (data) => {
         const username = data.name || '神秘學員';
-        socket.username = username; // 將名字綁定到 socket 物件上
+        socket.username = username;
 
-        // 重要：當使用者重新進入新房間時，立即檢查他是否有「已翻轉」的紀錄
         if (globalUserStatus[username]) {
             socket.emit('force_status_sync', { isFlipped: globalUserStatus[username].isFlipped });
-            // 同步給房間內其他人
             io.emit('update_status', { name: username, isFlipped: globalUserStatus[username].isFlipped });
         }
         
@@ -466,11 +503,10 @@ io.on('connection', (socket) => {
                     streak: dbUser ? dbUser.streak : 1,
                     role: dbUser ? dbUser.role : 'student',
                     isFlipped: globalUserStatus[username] ? !!globalUserStatus[username].isFlipped : false,
-                    isStandalone: globalUserStatus[username] ? !!globalUserStatus[username].isStandalone : false, // 🚀 補上這行
+                    isStandalone: globalUserStatus[username] ? !!globalUserStatus[username].isStandalone : false,
                     roomMode: data.roomMode || '1'
                 };
                 onlineUsers.push(user);
-                
                 socket.join(user.roomMode);
                 
                 let roomName = "一般自習";
@@ -485,36 +521,24 @@ io.on('connection', (socket) => {
                 user.integrity_score = dbUser ? (dbUser.integrity_score ?? 100) : user.integrity_score;
                 if (data.roomMode) user.roomMode = data.roomMode;
                 if (data.teamId) user.teamId = data.teamId;
-                
                 socket.join(user.roomMode);
                 addTeacherLog(`🔄 ${username} 重新連線成功`);
             }
-            
             broadcastUpdateRank();
-            
             if (user.teamId) {
                 socket.join(user.teamId);
                 const team = teamLeaderStates[user.teamId];
-                if (team) {
-                    if (!team.members.includes(username)) {
-                        team.members.push(username);
-                    }
+                if (team && !team.members.includes(username)) {
+                    team.members.push(username);
                     io.to(user.teamId).emit('team_leader_update', { leader: team.leader });
                 }
             }
-            
             broadcastActiveTeams();
-
-        } catch (err) {
-            console.error("Socket 加入房間錯誤:", err);
-        }
+        } catch (err) { console.error("Socket 加入房間錯誤:", err); }
     });
 
-    // 修改 server.js 的 update_status 邏輯
     socket.on('update_status', (data) => {
-        const { name, isFlipped, isStandalone } = data; // 接收 isStandalone
-        
-        // 紀錄到全域變數中，這樣換頁面後狀態還會在
+        const { name, isFlipped, isStandalone } = data;
         if (name) {
             if (!globalUserStatus[name]) globalUserStatus[name] = {};
             if (isFlipped !== undefined) globalUserStatus[name].isFlipped = isFlipped;
@@ -525,35 +549,21 @@ io.on('connection', (socket) => {
         const user = onlineUsers.find(u => u.name === name || u.id === socket.id);
         if (user) {
             const oldStatus = user.status;
-            
-            if (isStandalone !== undefined) user.isStandalone = isStandalone; // 更新單機狀態
-
+            if (isStandalone !== undefined) user.isStandalone = isStandalone;
             if (isFlipped !== undefined) {
                 const prevFlipped = user.isFlipped;
                 user.isFlipped = isFlipped;
-                if (!prevFlipped && user.isFlipped) {
-                    addTeacherLog(`📱 ${user.name} 已翻轉手機進入深度專注`);
-                }
+                if (!prevFlipped && user.isFlipped) addTeacherLog(`📱 ${user.name} 已翻轉手機進入深度專注`);
             }
-
             if (data.status) {
-                if (data.status === 'DISTRACTED' && user.isFlipped) {
-                    user.status = 'FOCUSED';
-                } else {
-                    user.status = data.status;
-                }
+                if (data.status === 'DISTRACTED' && user.isFlipped) user.status = 'FOCUSED';
+                else user.status = data.status;
             }
-
             if (oldStatus !== user.status) {
-                if (user.status === 'BREAK') {
-                    addTeacherLog(`🚽 ${user.name} 申請生理需求 (${data.reason || '未註明'})`);
-                } else if (user.status === 'DISTRACTED') {
-                    addTeacherLog(`🚨 ${user.name} 偵測到違規行為`);
-                }
+                if (user.status === 'BREAK') addTeacherLog(`🚽 ${user.name} 申請生理需求 (${data.reason || '未註明'})`);
+                else if (user.status === 'DISTRACTED') addTeacherLog(`🚨 ${user.name} 偵測到違規行為`);
             }
         }
-        
-        // 廣播給所有人 (包含剛跳轉完的新教室)
         io.emit('update_status', data);
         broadcastUpdateRank();
     });
@@ -637,25 +647,29 @@ io.on('connection', (socket) => {
         io.emit('community_event', data);
     });
 
-    // 接收翻轉失敗事件，並轉發給大廳的所有人
     socket.on('flip_failed', (data) => {
         io.emit('flip_failed', data);
     });
 
+    // 斷線處理：升級加入特約教室裝置清除邏輯
     socket.on('disconnect', () => {
         const user = onlineUsers.find(u => u.id === socket.id);
+        
+        // 特約教室裝置清理邏輯
+        if (socket.username && tutorRoomSchedules.has(socket.username)) {
+            const userDevices = tutorRoomSchedules.get(socket.username);
+            if (socket.id === userDevices.pc) userDevices.pc = null;
+            if (socket.id === userDevices.mobile) userDevices.mobile = null;
+            updateTutorStatus(socket.username, socket.roomId);
+        }
+
         if (user) {
             const username = user.name;
             const userTeamId = user.teamId;
-
             disconnectTimeouts[username] = setTimeout(() => {
                 addTeacherLog(`👋 ${username} 離開了教室`);
                 onlineUsers = onlineUsers.filter(u => u.name !== username);
-                
-                if (userTeamId) {
-                    removeUserFromTeam(username, userTeamId);
-                }
-
+                if (userTeamId) removeUserFromTeam(username, userTeamId);
                 broadcastUpdateRank();
                 broadcastActiveTeams();
                 delete disconnectTimeouts[username];
@@ -702,9 +716,7 @@ async function broadcastWeeklyRank() {
             });
             io.emit('update_weekly_rank', rankData);
         }
-    } catch (err) {
-        console.error("更新排行榜失敗:", err);
-    }
+    } catch (err) { console.error("更新排行榜失敗:", err); }
 }
 setInterval(broadcastWeeklyRank, 30000);
 
@@ -712,6 +724,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`\n🚀 StudyVerse 核心伺服器啟動！`);
     console.log(`👨‍🏫 管理後端已準備就緒，偵聽端口: ${PORT}`);
-    
     setTimeout(broadcastWeeklyRank, 2000);
 });

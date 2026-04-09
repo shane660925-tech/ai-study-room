@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyVerse | VIP 導師控制台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+    
+   <link rel="stylesheet" href="/css/global.css">
+   <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="bg-[#05070a] text-gray-200 h-screen flex overflow-hidden font-sans">
+
+    <aside class="w-80 border-r border-amber-500/20 flex flex-col bg-[#0a0e17] flex-shrink-0">
+        <div class="p-6 border-b border-amber-500/20">
+            <h1 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-600 tracking-tighter italic uppercase">StudyVerse VIP</h1>
+            <div id="systemClock" class="text-xs text-amber-500/50 mt-1 font-mono">2026.03.14 --:--:--</div>
+        </div>
+
+        <div class="p-6 space-y-6 flex-1 overflow-y-auto scroll-hide">
+            <div>
+                <label class="block text-xs font-bold text-amber-500/70 mb-2 uppercase tracking-widest">黑板公告更新</label>
+                <textarea id="announcementInput" class="w-full bg-black/50 border border-amber-500/30 rounded-lg p-3 text-sm focus:outline-none focus:border-amber-500 text-amber-50" rows="3" placeholder="輸入今日作業或小考內容..."></textarea>
+                <button onclick="updateBlackboard()" class="w-full mt-2 bg-amber-600 hover:bg-amber-500 py-2.5 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] active:scale-95 uppercase text-white">同步至學生端</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="exportCSV()" class="bg-black/40 hover:bg-black/80 py-3 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 border border-amber-500/20 text-amber-100">
+                    <i class="fas fa-file-csv text-green-400 text-lg"></i>匯出報表
+                </button>
+                <button onclick="playChime()" class="bg-black/40 hover:bg-black/80 py-3 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 border border-amber-500/20 text-amber-100">
+                    <i class="fas fa-bell text-yellow-400 text-lg"></i>播放下課鐘
+                </button>
+                <button onclick="rollCall()" class="bg-black/40 hover:bg-black/80 py-3 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 border border-amber-500/20 text-amber-100">
+                    <i class="fas fa-clipboard-list text-amber-400 text-lg"></i>班級點名
+                </button>
+                <button onclick="patrolRoom()" class="bg-black/40 hover:bg-black/80 py-3 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 transition-all active:scale-95 border border-amber-500/20 text-amber-100">
+                    <i class="fas fa-video text-amber-400 text-lg"></i>線上巡堂
+                </button>
+            </div>
+
+            <div class="pt-4 border-t border-amber-500/20">
+                <label class="block text-xs font-bold text-amber-500/70 mb-2 uppercase tracking-widest">個別指派與警告</label>
+                <input type="text" id="targetStudentInput" class="w-full bg-black/50 border border-amber-500/30 rounded-lg p-2 text-xs focus:outline-none focus:border-amber-500 text-amber-50 mb-2" placeholder="輸入目標學生姓名或ID...">
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="assignTask()" class="bg-blue-900/30 hover:bg-blue-800/60 py-2 rounded-lg text-[10px] font-bold transition-all border border-blue-500/30 text-blue-400 flex justify-center items-center gap-1">
+                        <i class="fas fa-tasks"></i>指派任務
+                    </button>
+                    <button onclick="sendWarning()" class="bg-red-900/30 hover:bg-red-800/60 py-2 rounded-lg text-[10px] font-bold transition-all border border-red-500/30 text-red-400 flex justify-center items-center gap-1">
+                        <i class="fas fa-exclamation-triangle"></i>發送警告
+                    </button>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-amber-500/20">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-xs font-bold text-amber-500/70 uppercase tracking-widest">AI 主動事件日誌</label>
+                    <button onclick="document.getElementById('logContainer').innerHTML=''" class="text-[10px] text-gray-500 hover:text-amber-400 transition-colors">清除</button>
+                </div>
+                <div id="logContainer" class="bg-black/50 rounded-lg p-3 h-64 overflow-y-auto font-mono text-[10px] space-y-2 text-gray-400 border border-amber-500/20 custom-scroll">
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col bg-[#05070a] min-w-0 relative">
+        <header class="h-16 border-b border-amber-500/20 flex items-center justify-between px-8 bg-[#0a0e17]/80 backdrop-blur-md z-10">
+            <div class="flex items-center gap-6">
+                <span class="flex items-center gap-2 bg-amber-500/10 text-amber-400 px-4 py-1.5 rounded-full text-xs font-bold border border-amber-500/20">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    在線人數：<span id="onlineCount">0</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></div>
+                    <span class="text-gray-400 font-medium">AI 監控保護中</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="px-8 py-4 border-b border-amber-500/20 flex gap-3 bg-[#05070a]">
+            <span class="text-xs font-bold text-amber-500/70 self-center mr-2 uppercase tracking-widest">教室視角切換:</span>
+            <button onclick="setRoomFilter('ALL')" id="filter-ALL" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-amber-600 text-white shadow shadow-amber-500/20 transition-all">全部教室</button>
+            <button onclick="setRoomFilter('2')" id="filter-2" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">沉浸式自習室</button>
+            <button onclick="setRoomFilter('simulated')" id="filter-simulated" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">模擬線上教室</button>
+            <button onclick="setRoomFilter('1')" id="filter-1" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#0a0e17] text-gray-400 hover:bg-amber-900/40 hover:text-amber-100 transition-all border border-amber-500/30">線上課程專區</button>
+        </div>
+
+        <section id="studentGrid" class="flex-1 p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8 overflow-y-auto custom-scroll content-start">
+        </section>
+    </main>
+
+    <aside class="w-80 border-l border-amber-500/20 bg-[#0a0e17] flex flex-col flex-shrink-0">
+        <div class="flex border-b border-amber-500/20 bg-black/40">
+            <button onclick="switchTab('violations')" id="btn-violations" class="flex-1 py-4 text-[10px] font-black tracking-widest border-b-2 border-amber-500 text-amber-500 transition-all uppercase">證據分類流</button>
+            <button onclick="switchTab('summary')" id="btn-summary" class="flex-1 py-4 text-[10px] font-black tracking-widest text-gray-500 border-b-2 border-transparent hover:text-amber-400 transition-all uppercase">數據總結</button>
+        </div>
+
+        <div id="tab-violations" class="flex-1 p-4 overflow-y-auto custom-scroll bg-black/20">
+        </div>
+
+        <div id="tab-summary" class="hidden flex-1 p-6 overflow-y-auto custom-scroll">
+            <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-chart-pie mr-2 text-amber-400"></i>今日學習概況</h3>
+            <div id="summaryStats" class="space-y-4 mb-8"></div>
+            
+            <h3 class="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-4 border-b border-amber-500/20 pb-2">學生結算報告</h3>
+            <div id="summaryReportsList" class="space-y-3 text-[10px]">
+                <p class="text-gray-500 italic text-center py-4">尚無學生結束自習</p>
+            </div>
+        </div>
+    </aside>
+
+    <div id="imageModal" class="fixed inset-0 z-[100] hidden bg-black/95 flex flex-col items-center justify-center p-8 backdrop-blur-md" onclick="closeImageModal()">
+        <img id="modalImg" src="" class="max-w-full max-h-[75vh] rounded-lg shadow-[0_0_30px_rgba(245,158,11,0.15)] border border-amber-500/20">
+        <div class="mt-6 text-center">
+            <h2 id="modalName" class="text-xl font-bold text-white"></h2>
+            <p id="modalReason" class="text-red-400 text-sm mt-1"></p>
+            <p class="text-amber-500/50 text-[10px] mt-6 opacity-50 uppercase tracking-widest">點擊任意位置返回</p>
+        </div>
+    </div>
+
+    <script src="/js/tutor-dashboard.js"></script>
+</body>
+</html>

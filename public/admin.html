@@ -10,6 +10,16 @@
     
    <link rel="stylesheet" href="/css/global.css">
    <link rel="stylesheet" href="/css/admin.css">
+   <style>
+       /* 點名面板專用微動效 */
+       #tutor-roll-panel {
+           animation: slideDown 0.3s ease-out;
+       }
+       @keyframes slideDown {
+           from { opacity: 0; transform: translateY(-10px); }
+           to { opacity: 1; transform: translateY(0); }
+       }
+   </style>
 </head>
 <body class="bg-[#0f172a] text-slate-200 h-screen flex overflow-hidden font-sans">
 
@@ -78,6 +88,48 @@
     </main>
 
     <aside class="w-80 border-l border-slate-800 bg-[#1e293b] flex flex-col flex-shrink-0">
+        <div id="tutor-roll-panel" class="m-4 bg-slate-900/50 border border-blue-500/30 rounded-2xl overflow-hidden shadow-2xl">
+            <div class="bg-gradient-to-r from-blue-600/20 to-indigo-600/20 p-4 border-b border-white/5">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-[11px] font-black text-white flex items-center gap-2 uppercase tracking-tighter">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                        點名戰情室
+                    </h3>
+                    <span class="text-[9px] font-mono text-slate-500 uppercase">Status: Live</span>
+                </div>
+            </div>
+            
+            <div class="p-4 space-y-4">
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-white/5 p-3 rounded-xl border border-white/5 text-center">
+                        <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">已簽到</p>
+                        <p id="roll-success-num" class="text-xl font-black text-green-400">0</p>
+                    </div>
+                    <div class="bg-white/5 p-3 rounded-xl border border-white/5 text-center">
+                        <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">未回應</p>
+                        <p id="roll-pending-num" class="text-xl font-black text-yellow-400">0</p>
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[9px] text-slate-500 font-bold">
+                        <span class="uppercase">簽到進度</span>
+                        <span id="roll-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden border border-white/5">
+                        <div id="roll-progress-bar" class="bg-gradient-to-r from-blue-500 to-green-400 h-full w-0 transition-all duration-700"></div>
+                    </div>
+                </div>
+
+                <button id="start-roll-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black py-3 rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest">
+                    <i class="fas fa-bullhorn text-xs"></i> 發起突擊點名
+                </button>
+            </div>
+        </div>
+
         <div class="flex border-b border-slate-800 bg-slate-900/50">
             <button onclick="switchTab('violations')" id="btn-violations" class="flex-1 py-4 text-[10px] font-black tracking-widest border-b-2 border-blue-500 text-blue-500 transition-all uppercase">證據分類流</button>
             <button onclick="switchTab('summary')" id="btn-summary" class="flex-1 py-4 text-[10px] font-black tracking-widest text-slate-500 border-b-2 border-transparent transition-all uppercase">數據總結</button>
@@ -107,5 +159,18 @@
     </div>
 
     <script src="/js/admin.js"></script>
+    
+    <script>
+        document.getElementById('start-roll-btn').onclick = () => {
+            if(confirm('確定要向全體學生發起點名嗎？')) {
+                // 假設 socket 已在 /js/admin.js 或全域中初始化
+                if (typeof socket !== 'undefined') {
+                    socket.emit('admin_roll_call', { duration: 60 });
+                } else {
+                    console.error("Socket 未初始化，無法發送點名指令");
+                }
+            }
+        };
+    </script>
 </body>
 </html>

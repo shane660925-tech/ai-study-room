@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP 特約指導教室 | STUDY VERSE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/room.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* 📱 Level 1: 單機模式專屬視覺 (修正版：寫死寬度、縮小並靠左) */
+        .is-mobile-flip {
+            aspect-ratio: 9/16 !important;
+            width: 160px !important; 
+            max-width: 160px !important; 
+            max-height: 285px !important; 
+            flex-shrink: 0 !important; 
+            border-radius: 20px !important;
+            border: 3px solid #d97706 !important; /* 特約教室改為金色邊框 */
+            background-color: #0f172a !important;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.4) !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+        .mobile-badge {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(245, 158, 11, 0.6);
+            color: #fbbf24;
+            padding: 6px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+            letter-spacing: 0.1em;
+        }
+
+        /* 🚨 螢幕閃爍紅光效果 (您新增的需求) */
+        .violation-flash {
+            animation: border-red-flash 0.5s infinite;
+        }
+        @keyframes border-red-flash {
+            0% { box-shadow: inset 0 0 30px red, 0 0 30px rgba(220,38,38,0.5); }
+            50% { box-shadow: inset 0 0 80px red, 0 0 80px rgba(220,38,38,0.8); }
+            100% { box-shadow: inset 0 0 30px red, 0 0 30px rgba(220,38,38,0.5); }
+        }
+
+        /* 狀態列動態樣式切換輔助 */
+        .status-red #status-text { color: #f87171; text-shadow: 0 0 8px rgba(248,113,113,0.6); }
+        .status-red { border-color: rgba(220,38,38,0.4); background: rgba(127,29,29,0.2); }
+    </style>
+</head>
+<body class="h-screen flex flex-col md:flex-row bg-[#05070a] text-white overflow-hidden">
+    
+    <div id="violation-overlay" class="fixed inset-0 z-[10005] bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6" style="display:none;">
+        <div class="alert-content bg-[#0a0505] border-2 border-red-600 rounded-3xl p-10 max-w-lg w-full text-center violation-flash">
+            <div class="w-24 h-24 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/50">
+                <i class="fas fa-siren-on text-5xl text-red-500 animate-pulse"></i>
+            </div>
+            <h1 class="text-4xl font-black text-red-500 mb-4 tracking-tighter">🚨 重大違規警告 🚨</h1>
+            <p id="violation-reason" class="text-xl text-red-200 mb-8 font-bold leading-relaxed bg-red-900/40 p-5 rounded-2xl border border-red-500/30"></p>
+            <button onclick="closeViolation()" class="w-full bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all active:scale-95 border border-red-400/50">
+                我知錯了，立即改正
+            </button>
+        </div>
+    </div>
+
+    <div id="violation-modal" class="fixed inset-0 z-[10001] animate-flash-red flex-col items-center justify-center p-6 text-white text-center hidden">
+        <div class="max-w-md scale-110">
+            <i class="fas fa-exclamation-triangle text-8xl mb-6 text-yellow-400"></i>
+            <h2 class="text-5xl font-black mb-4 tracking-tighter">違規行為</h2>
+            <div id="violation-msg" class="text-2xl font-bold mb-10 leading-relaxed bg-black/40 p-6 rounded-2xl border border-white/20">
+                偵測到違規！請專注學習！
+            </div>
+            <button onclick="dismissAlert()" class="bg-white text-red-600 px-12 py-5 rounded-full font-black text-2xl shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:scale-110 active:scale-95 transition-all">
+                我明白了，立即改正
+            </button>
+        </div>
+    </div>
+
+    <div id="summary-modal" class="fixed inset-0 z-[10002] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 hidden">
+        <div class="bg-[#111827] border border-amber-500/30 p-8 rounded-3xl max-w-md w-full text-center shadow-[0_0_50px_rgba(245,158,11,0.15)]">
+            <div class="w-20 h-20 bg-amber-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-gem text-3xl text-amber-500 animate-bounce"></i>
+            </div>
+            <h2 class="text-3xl font-black text-white mb-2">本次專注總結</h2>
+            <p class="text-gray-400 text-xs uppercase tracking-widest mb-6 italic">VIP Mission Accomplished</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">專注時長</p>
+                    <p id="summary-time" class="text-2xl font-mono font-bold text-amber-400">0 min</p>
+                </div>
+                <div class="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">最終誠信分</p>
+                    <p id="summary-integrity" class="text-2xl font-mono font-bold text-green-400">--</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-600/5 border border-amber-500/20 p-5 rounded-2xl mb-8">
+                <p class="text-[10px] text-amber-400 font-black uppercase mb-2">專屬導師評語</p>
+                <p id="summary-ai-comment" class="text-sm text-gray-200 leading-relaxed font-handwriting italic">
+                    正在分析您的表現...
+                </p>
+            </div>
+
+            <button onclick="window.location.href='index.html'" class="w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-xl font-bold text-white transition-all shadow-lg shadow-amber-900/40 active:scale-95">
+                返回大廳
+            </button>
+        </div>
+    </div>
+
+    <div id="startOverlay" class="fixed inset-0 bg-[#05070a]/95 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-[#111827] p-8 rounded-3xl border border-amber-500/20 shadow-2xl w-full max-w-md text-center shadow-amber-500/10 relative overflow-hidden">
+            <div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600"></div>
+            <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-600 mb-2 tracking-tighter">VIP 特約教室</h1>
+            <p id="welcomeMsg" class="text-gray-400 text-sm mb-8 uppercase tracking-widest font-bold">尊榮入座，<span id="welcomeUserName">學員</span></p>
+            
+            <div class="space-y-6 mb-8 text-left">
+                <input id="inputName" type="hidden">
+                <input id="inputMode" type="hidden" value="simulated">
+
+                <div class="group">
+                    <label class="text-[10px] text-gray-500 font-bold ml-1 uppercase group-focus-within:text-amber-500 transition-colors">Step 1: Focus Mission / 讀書目標</label>
+                    <input id="inputGoal" class="w-full mt-1 bg-black p-4 rounded-xl border border-gray-700 text-white outline-none text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all" placeholder="例：刷 50 題數學、完成專案報告">
+                </div>
+                
+                <div class="group">
+                    <label class="text-[10px] text-gray-500 font-bold ml-1 uppercase group-focus-within:text-amber-500 transition-colors">Step 2: Session Time / 預計時間</label>
+                    <div class="mt-1 flex items-center bg-black p-4 rounded-xl border border-gray-700 focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 transition-all">
+                        <input id="inputTime" type="number" min="1" max="180" class="w-full bg-transparent text-white text-lg outline-none font-mono" value="25">
+                        <span class="text-gray-400 text-sm ml-2">min</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="startBtn" onclick="initApp()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 py-5 rounded-2xl font-black text-white shadow-lg shadow-amber-900/30 transition active:scale-95 text-lg uppercase tracking-widest border border-amber-400/50">
+                開始專屬連線
+            </button>
+            <p class="text-[10px] text-gray-500 mt-4 uppercase">頂級 AI 視覺偵測與專屬指導系統已就緒</p>
+        </div>
+    </div>
+
+    <aside class="w-full md:w-80 bg-[#0a0c14] border-r border-amber-500/10 flex flex-col z-20 h-full shadow-[5px_0_30px_rgba(0,0,0,0.5)]">
+        <div class="p-6 bg-gradient-to-b from-amber-900/10 to-transparent">
+            <div id="clockDate" class="text-amber-500 text-[10px] font-bold mb-1 tracking-widest uppercase">LOADING...</div>
+            <div id="clockTime" class="text-4xl font-mono font-bold text-white tracking-tighter">00:00:00</div>
+        </div>
+
+        <div class="px-6 py-4">
+            <div class="flex justify-between items-end mb-2">
+                <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Session Timer</span>
+                <span id="myTimerDisplay" class="text-2xl font-mono font-bold text-white">00:00</span>
+                <button id="breakBtn" disabled class="ml-3 px-4 py-2 bg-gray-800 text-gray-500 rounded-xl font-bold text-sm shadow-lg transition-all cursor-not-allowed border border-gray-700">
+                    <i class="fas fa-coffee mr-2"></i>休息
+                </button>
+            </div>
+            <div class="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden">
+                <div id="timerProgress" class="h-full bg-gradient-to-r from-yellow-500 to-amber-500 w-0 transition-all duration-1000"></div>
+            </div>
+        </div>
+
+        <div class="flex border-b border-white/5 px-2">
+            <button onclick="switchTab('rank')" id="btn-rank" class="tab-btn tab-active font-bold text-amber-500 border-b-2 border-amber-500">💎 菁英榜</button>
+            <button onclick="switchTab('achieve')" id="btn-achieve" class="tab-btn font-bold text-gray-400 hover:text-white">🏆 專屬數據</button>
+        </div>
+
+        <div class="flex-1 relative overflow-hidden bg-black/30">
+            <div id="tab-rank" class="absolute inset-0 p-4 space-y-2 overflow-y-auto scroll-hide"></div>
+            <div id="tab-achieve" class="absolute inset-0 p-4 space-y-2 hidden overflow-y-auto"></div>
+        </div>
+
+        <div class="p-4 bg-[#0d1117] border-t border-amber-500/20 flex items-center gap-3 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+            <img id="mySidebarAvatar" src="https://api.dicebear.com/7.x/big-smile/svg?seed=Study" class="w-12 h-12 rounded-full border-2 border-amber-500 bg-gray-800 p-0.5">
+            <div class="flex-1 min-w-0">
+                <p id="mySidebarName" class="text-sm font-bold text-white truncate">--</p>
+                <p id="mySidebarGoal" class="text-[10px] text-amber-400 truncate uppercase tracking-tighter italic">尊榮就緒</p>
+            </div>
+            <div class="text-right">
+                <p class="text-[8px] text-gray-500 uppercase">VIP Streak</p>
+                <p id="myStreakNum" class="text-xl font-bold text-amber-500 leading-none">--</p>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col relative bg-[#05070a] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-900/5 via-[#05070a] to-[#05070a]">
+        <header class="h-20 flex justify-between items-center px-6 border-b border-amber-500/10 bg-[#05070a]/70 backdrop-blur-xl z-10 shadow-sm shadow-amber-900/5">
+            <div class="flex items-center gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-crown text-amber-500"></i>
+                        <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-600 tracking-tight">特約指導教室</h2>
+                    </div>
+                    <span id="modeLabel" class="text-[9px] bg-amber-900/30 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase mt-1 inline-block">VIP 連線中</span>
+                </div>
+
+                <div id="status-bar" class="status-red ml-2 flex items-center gap-3 px-4 py-2 rounded-full border shadow-inner transition-all">
+                    <span class="text-[11px] font-bold text-gray-400 tracking-wider">
+                        狀態：<span id="status-text" class="font-black tracking-normal">判定中...</span>
+                    </span>
+                    <div class="w-[1px] h-3 bg-gray-600/50"></div>
+                    <div id="device-icons" class="flex gap-2 text-gray-500 text-sm">
+                        <i id="icon-pc" class="fas fa-desktop"></i>
+                        <i id="icon-mobile" class="fas fa-mobile-alt"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div id="breakButtons" class="flex gap-2">
+                    <button onclick="requestBreak('toilet')" class="bg-gray-800 hover:bg-amber-600/20 text-gray-300 hover:text-amber-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-amber-500/50 transition-all font-bold shadow-sm">🚽 洗手間</button>
+                    <button onclick="requestBreak('water')" class="bg-gray-800 hover:bg-cyan-600/20 text-gray-300 hover:text-cyan-400 text-xs px-4 py-2 rounded-xl border border-gray-700 hover:border-cyan-500/50 transition-all font-bold shadow-sm">💧 喝水</button>
+                </div>
+
+                <button onclick="endSession()" class="bg-red-950/40 hover:bg-red-600 text-red-500 hover:text-white text-xs px-5 py-2 rounded-xl font-bold transition-all border border-red-900/50 hover:shadow-[0_0_15px_rgba(220,38,38,0.4)]">結束自習</button>
+            </div>
+        </header>
+
+        <div class="flex-1 p-6 overflow-y-auto">
+            <div id="blackboard" class="mb-8 bg-[#0a0e17] border border-amber-500/30 p-5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] max-w-4xl mx-auto relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
+                <h3 class="text-[10px] font-black text-amber-500/70 mb-3 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fas fa-bullhorn"></i> Tutor's Announcement / 導師專屬公告
+                </h3>
+                <p id="blackboardContent" class="text-lg text-amber-100/90 font-handwriting leading-relaxed pl-2 border-l border-amber-500/20">
+                    歡迎進入 VIP 教室。本次學習由專屬導師全程觀測，請保持最高專注。
+                </p>
+            </div>
+
+            <div class="cam-grid" id="mainGrid">
+                <div class="flex flex-col group">
+                    <div id="myCaptainBadge" class="absolute -top-3 -right-3 z-[60] hidden">
+                        <div class="relative group cursor-help">
+                            <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.6)] border-2 border-[#111827] transform transition-transform hover:scale-110">
+                                <i class="fas fa-crown text-[#111827] text-lg mt-[-2px]"></i>
+                            </div>
+                            <div class="absolute inset-0 bg-yellow-500 rounded-full animate-ping opacity-30"></div>
+                            
+                            <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-max bg-black/90 text-yellow-400 text-[10px] py-1 px-2 rounded border border-yellow-500/30">
+                                VIP LEARNER (特約學員)
+                            </div>
+                        </div>
+                    </div>
+                    <div id="myDeskFrame" class="relative aspect-video bg-gray-900 rounded-3xl overflow-hidden border-2 border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)] transition-all duration-500">
+                        <span class="status-badge bg-amber-500 text-black font-black border-none">YOU (VIP)</span>
+                        <video id="webcam" class="w-full h-full object-cover scale-x-[-1]" autoplay playsinline muted></video>
+                        
+                        <div id="distractionOverlay" class="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center opacity-0 transition-opacity duration-300 z-30 backdrop-blur-sm">
+                            <div class="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-4 animate-pulse shadow-[0_0_30px_rgba(220,38,38,0.6)]">
+                                <i id="overlayIcon" class="fas fa-eye-slash text-white text-4xl"></i>
+                            </div>
+                            <span id="overlayText" class="text-white font-black text-xl text-center uppercase tracking-widest">偵測到分心！</span>
+                            <p class="text-red-400 text-xs mt-2">請維持專注，導師系統觀測中</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 bg-[#0a0e17] p-4 rounded-2xl flex items-center gap-3 border border-amber-500/20 shadow-lg">
+                        <div id="myStatusBubble" class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]"></div>
+                        <p id="dashboardGoal" class="text-xs font-bold text-amber-100 truncate">等待專屬任務分配...</p>
+                    </div>
+                </div>
+
+                <div id="othersContainer" class="contents"></div>
+            </div>
+        </div>
+
+        <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
+    </main>
+
+    <script src="/js/tutor-client.js"></script>
+    <script type="module" src="./js/ai-core.js"></script>
+    <script src="/js/room-ui.js"></script>
+    <script src="/js/flip.js"></script>
+    <script src="./js/study-timer.js"></script>
+    <script src="./js/break-manager.js"></script>
+</body>
+</html>

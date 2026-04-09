@@ -223,7 +223,31 @@
     <audio id="success-sound" src="https://www.myinstants.com/media/sounds/mario-coin.mp3" preload="auto"></audio>
 
     <shared-footer></shared-footer>
-    
+
+    <div id="rollcall-overlay" class="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center hidden p-6">
+        <div class="bg-[#1e293b] w-full max-w-sm border border-blue-500/30 rounded-3xl shadow-[0_0_50px_rgba(59,130,246,0.2)] overflow-hidden text-center p-8 relative">
+            <div class="absolute top-0 left-0 w-full h-1 bg-slate-800">
+                <div id="rollcall-timer-bar" class="h-full bg-blue-500 w-full"></div>
+            </div>
+
+            <div class="mb-6">
+                <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+                    <i class="fas fa-user-check text-3xl text-blue-400 animate-bounce"></i>
+                </div>
+                <h2 class="text-xl font-black text-white uppercase tracking-wider">突擊點名！</h2>
+                <p class="text-slate-400 text-sm mt-2">老師正在確認你的專注狀態...</p>
+            </div>
+
+            <div class="space-y-4">
+                <button id="check-in-btn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-900/40 transition-all active:scale-95 text-lg uppercase tracking-widest">
+                    點擊簽到
+                </button>
+                <p class="text-[10px] text-slate-500 font-mono tracking-tighter">
+                    剩餘時間: <span id="rollcall-timer-text" class="text-blue-400 font-bold">60</span>s
+                </p>
+            </div>
+        </div>
+    </div>
     <script src="/js/lobby-core.js"></script>
     <script src="/js/lobby-main.js"></script>
 
