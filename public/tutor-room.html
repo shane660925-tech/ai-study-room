@@ -74,19 +74,24 @@
 <body class="h-screen flex flex-col md:flex-row bg-[#05070a] text-white overflow-hidden">
     
     <div id="speaker-overlay" class="fixed inset-0 z-[10010] bg-black/80 backdrop-blur-md flex items-center justify-center hidden">
-        <div class="bg-gradient-to-b from-blue-900/40 to-black border-2 border-blue-500/50 p-8 rounded-3xl max-w-lg w-full text-center shadow-[0_0_50px_rgba(59,130,246,0.3)] speaker-bounce">
-            <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-blue-400 shadow-lg">
-                <i class="fas fa-bullhorn text-5xl text-white animate-pulse"></i>
-            </div>
-            <h3 class="text-2xl font-black text-blue-400 mb-2 uppercase tracking-tighter">Teacher's Broadcast / 教師廣播</h3>
-            <div id="speaker-content" class="text-xl text-white font-bold bg-blue-950/50 p-6 rounded-2xl border border-blue-500/30 mb-6 min-h-[100px] flex items-center justify-center">
-                正在接收訊息...
-            </div>
-            <button onclick="closeSpeaker()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-                我收到了
-            </button>
+    <div class="bg-gradient-to-b from-blue-900/40 to-black border-2 border-blue-500/50 p-8 rounded-3xl max-w-lg w-full text-center shadow-[0_0_50px_rgba(59,130,246,0.3)] speaker-bounce">
+        
+        <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-blue-400 shadow-lg">
+            <i class="fas fa-bullhorn text-5xl text-white animate-pulse"></i>
         </div>
+        
+        <h3 class="text-2xl font-black text-blue-400 uppercase tracking-tighter">Teacher's Broadcast / 教師廣播</h3>
+        
+        <div class="bg-blue-950/50 border border-blue-500/30 rounded-xl my-6 py-6 px-4 shadow-inner">
+            <p id="speaker-text" class="text-2xl text-white font-black text-center break-words leading-relaxed"></p>
+        </div>
+        
+        <button onclick="closeSpeaker()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+            我收到了
+        </button>
+        
     </div>
+</div>
     <audio id="voice-player" class="hidden"></audio>
 
     <div id="violation-overlay" class="fixed inset-0 z-[10005] bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6" style="display:none;">
@@ -184,19 +189,31 @@
             <div id="clockTime" class="text-4xl font-mono font-bold text-white tracking-tighter">00:00:00</div>
         </div>
 
-        <div class="px-6 py-4">
-            <div class="flex justify-between items-end mb-2">
-                <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Session Timer</span>
-                <span id="myTimerDisplay" class="text-2xl font-mono font-bold text-white">00:00</span>
-                <button id="breakBtn" disabled class="ml-3 px-4 py-2 bg-gray-800 text-gray-500 rounded-xl font-bold text-sm shadow-lg transition-all cursor-not-allowed border border-gray-700">
-                    <i class="fas fa-coffee mr-2"></i>休息
-                </button>
-            </div>
-            <div class="w-full bg-gray-800/50 h-1.5 rounded-full overflow-hidden">
-                <div id="timerProgress" class="h-full bg-gradient-to-r from-yellow-500 to-amber-500 w-0 transition-all duration-1000"></div>
+        <div class="px-4">
+            <div class="bg-blue-950/40 border border-blue-500/30 rounded-2xl p-5 mb-6 shadow-[0_0_15px_rgba(59,130,246,0.1)] backdrop-blur-sm flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-400 text-xl border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] flex-shrink-0">
+                    <i class="fas fa-hourglass-half animate-pulse"></i>
+                </div>
+                
+                <div class="flex-1">
+                    <div class="flex justify-between items-center mb-2">
+                        <span id="studentStatusBadge" class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold tracking-widest uppercase">等待開始</span>
+                        <span id="studentPeriodLabel" class="text-[10px] text-gray-400 font-medium">第 - 節</span>
+                    </div>
+                    
+                    <div class="flex items-baseline gap-1 mb-1">
+                        <span id="studentTimerDisplay" class="text-3xl font-black text-white tabular-nums tracking-tighter">00:00</span>
+                        <span class="text-[10px] text-gray-500 font-bold uppercase">Remaining</span>
+                    </div>
+
+                    <div class="w-full bg-white/5 h-1 rounded-full overflow-hidden mb-2">
+                        <div id="studentProgressBar" class="h-full bg-gradient-to-r from-amber-400 to-yellow-600 transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+
+                    <p id="studentScheduleDisplay" class="text-[10px] text-gray-500 italic leading-relaxed">等待老師發佈課表...</p>
+                </div>
             </div>
         </div>
-
         <div class="flex border-b border-white/5 px-2">
             <button onclick="switchTab('rank')" id="btn-rank" class="tab-btn tab-active font-bold text-amber-500 border-b-2 border-amber-500">💎 菁英榜</button>
             <button onclick="switchTab('achieve')" id="btn-achieve" class="tab-btn font-bold text-gray-400 hover:text-white">🏆 專屬數據</button>
@@ -273,6 +290,16 @@
                 </div>
             </div>
 
+            <div id="studentScheduleContainer" class="bg-blue-950/40 border border-blue-500/30 rounded-2xl p-4 mb-4 flex items-center gap-4 shadow-[0_0_15px_rgba(59,130,246,0.1)] transition-all duration-500 hidden">
+                <div class="w-10 h-10 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-400 text-lg border border-blue-500/30 flex-shrink-0">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div>
+                    <h3 class="text-blue-400 font-bold text-[10px] uppercase tracking-widest mb-1">今日專屬課表</h3>
+                    <p id="studentScheduleText" class="text-blue-100 text-sm font-bold tracking-wide">等待導師同步排程中...</p>
+                </div>
+            </div>
+
             <div id="blackboardContainer" class="bg-[#0a0e17] border-2 border-amber-500/40 rounded-xl p-5 mb-6 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-start gap-4 transition-all duration-300">
                 <div class="text-4xl text-amber-500/80 mt-1">
                     <i class="fas fa-chalkboard"></i>
@@ -327,19 +354,11 @@
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
     </main>
 
-    <script>
-        function closeSpeaker() {
-            document.getElementById('speaker-overlay').classList.add('hidden');
-            const player = document.getElementById('voice-player');
-            player.pause();
-        }
-    </script>
-
+    <script src="/js/study-timer.js"></script>
     <script src="/js/tutor-client.js"></script>
-    <script type="module" src="./js/ai-core.js"></script>
+      <script src="/js/flip.js"></script>
+    <script type="module" src="/js/ai-core.js"></script>
     <script src="/js/room-ui.js"></script>
-    <script src="/js/flip.js"></script>
-    <script src="./js/study-timer.js"></script>
-    <script src="./js/break-manager.js"></script>
+    <script src="/js/break-manager.js"></script>
 </body>
 </html>

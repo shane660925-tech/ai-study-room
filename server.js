@@ -12,6 +12,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
     maxHttpBufferSize: 1e7 // 增加緩衝區大小以支援截圖傳輸
 });
+// 儲存各個特約教室的專屬課表
+const tutorSchedules = {};
 
 // 提高 JSON 限制以接收 Base64 截圖
 app.use(express.json({ limit: '20mb' }));
@@ -143,7 +145,43 @@ const globalUserStatus = {};
 
 // --- 特約教室 (Tutor Room) 專屬記憶體狀態 ---
 const tutorRoomSchedules = new Map();
+// 儲存特約教室的課表設定
+const tutorRoomSettings = new Map(); 
 
+// 計算特約教室全域時間的核心函數 (修正：補齊所有狀態的 period)
+function getTutorRoomTimeState(roomId) {
+    const schedule = tutorRoomSettings.get(roomId);
+    if (!schedule) return null;
+
+    const now = new Date();
+    const start = new Date();
+    const [h, m] = schedule.startTime.split(':');
+    start.setHours(parseInt(h), parseInt(m), 0, 0);
+
+    const elapsedSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+    const classSecs = schedule.classMinutes * 60;
+    const restSecs = schedule.restMinutes * 60;
+    const periodSecs = classSecs + restSecs;
+    const totalSecs = schedule.periods * periodSecs;
+
+    // 還沒開始上課
+    if (elapsedSeconds < 0) {
+        return { phase: 'WAITING', remainingSeconds: Math.abs(elapsedSeconds), totalSeconds: classSecs, period: 1 };
+    }
+    // 課程已全部結束
+    if (elapsedSeconds >= totalSecs) {
+        return { phase: 'ENDED', remainingSeconds: 0, totalSeconds: classSecs, period: schedule.periods };
+    }
+
+    const currentPeriodElapsed = elapsedSeconds % periodSecs;
+    const currentPeriodIndex = Math.floor(elapsedSeconds / periodSecs) + 1;
+
+    if (currentPeriodElapsed < classSecs) {
+        return { phase: 'CLASS', remainingSeconds: classSecs - currentPeriodElapsed, totalSeconds: classSecs, period: currentPeriodIndex };
+    } else {
+        return { phase: 'REST', remainingSeconds: periodSecs - currentPeriodElapsed, totalSeconds: restSecs, period: currentPeriodIndex };
+    }
+}
 // ==========================================
 // 隊伍狀態與隊長機制管理
 // ==========================================
@@ -262,6 +300,37 @@ io.on('connection', (socket) => {
     // 特約教室 (Tutor Room) 核心邏輯
     // ==========================================
     
+    // 新增轉發轉發邏輯
+    socket.on('sync_tutor_schedule', (data) => {
+        io.emit('receive_tutor_schedule', data); // 廣播給所有學生
+    });
+
+    // 接收大廳老師建立的課表並存起來
+    socket.on('create_tutor_room_schedule', (data) => {
+        tutorSchedules[data.roomId] = data;
+        
+        // 同時寫入 tutorRoomSettings 供計時器每秒計算使用
+        const { roomId, startTime, classMinutes, restMinutes, periods } = data;
+        tutorRoomSettings.set(roomId, { startTime, classMinutes, restMinutes, periods });
+        
+        console.log(`[系統] 已儲存特約教室 ${roomId} 的課表設定，首節 ${startTime}, ${classMinutes}分/節`);
+    });
+
+    // 當特約學生進入教室時，發送該教室的課表給他
+    socket.on('request_tutor_schedule', (roomId) => {
+        if (tutorSchedules[roomId]) {
+            socket.emit('sync_tutor_schedule', tutorSchedules[roomId]);
+        }
+    });
+
+    // 學生請求當下課表時間
+    socket.on('request_tutor_timer_sync', (roomId) => {
+        const timeState = getTutorRoomTimeState(roomId);
+        if (timeState) {
+            socket.emit('tutor_timer_sync', timeState);
+        }
+    });
+
     // 1. 學生進入特約教室 (雙機分開加入)
     socket.on('join_tutor_room', (data) => {
         const { username, roomId, deviceType } = data; // deviceType: 'pc' 或 'mobile'
@@ -271,7 +340,6 @@ io.on('connection', (socket) => {
         socket.roomId = roomId;
         socket.deviceType = deviceType;
 
-        // 初始化或更新雙機映射
         if (!tutorRoomSchedules.has(username)) {
             tutorRoomSchedules.set(username, { pc: null, mobile: null, status: 'RED' });
         }
@@ -281,8 +349,11 @@ io.on('connection', (socket) => {
 
         console.log(`[特約教室] ${username} 使用 ${deviceType} 進入了 ${roomId}`);
         
-        // 立即檢查一次狀態
         updateTutorStatus(username, roomId);
+
+        // 只要有人加入，順便推送一次最新的全域時間給他
+        const timeState = getTutorRoomTimeState(roomId);
+        if (timeState) socket.emit('tutor_timer_sync', timeState);
     });
 
     // 2. 監聽手機翻轉狀態 (特約教室專用，取消豁免權)
@@ -294,34 +365,62 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 1. 接收大喇叭廣播
+    /// 1. 全班大喇叭廣播
     socket.on('send_tutor_announcement', (data) => {
-        console.log('收到大喇叭廣播:', data);
-        // 轉發給學生端專屬的廣播事件
-        io.emit('receive_broadcast_alert', data); 
+    console.log('📢 收到老師廣播:', data.message); // 可以讓你在終端機看到有沒有成功接收
+    // 轉發給所有學生 (廣播頻道名稱為 receive_tutor_announcement)
+    io.emit('receive_tutor_announcement', data); 
+    })
+
+    // 2. 黑板公告
+    socket.on('update_blackboard', (data) => {
+        io.emit('update_blackboard', data);
     });
 
-    // 2. 接收黑板公告更新
-    socket.on('tutor_announcement', (data) => {
-        console.log('收到黑板更新:', data);
-        // 轉發給學生的黑板更新事件 (原有的命名)
-        io.emit('receive_tutor_announcement', data); 
+    // 3. 導師個別警告
+    socket.on('send_warning', (data) => {
+        io.emit('receive_warning', data);
     });
 
-    // 3. 接收個別警告
-    socket.on('tutor_warn_student', (data) => {
-        console.log('收到教師警告:', data);
-        // 為了確保萬無一失，同時觸發「舊版違規畫面」與「新版紅光特效」
-        io.emit('receive_tutor_warning', data); 
-        io.emit('receive_warning', data);       
-    });
-
-    // 4. 接收指派任務
-    socket.on('tutor_assign_task', (data) => {
-        console.log('收到指派任務:', data);
+    // 4. 個別指派任務
+    socket.on('assign_task', (data) => {
         io.emit('receive_task', data);
     });
 
+    // 5. 讓老師把指令傳給學生的轉發通道 (計時器控制、強制同步等)
+    socket.on('send_tutor_command', (data) => {
+        console.log(`[指令轉發] 老師發送一般指令至教室: ${data.roomId || '全域'}`);
+        if (data.roomId) {
+            io.to(data.roomId).emit('receive_tutor_command', data);
+        } else {
+            io.emit('receive_tutor_command', data);
+        }
+    });
+
+    socket.on('tutor_timer_command', (data) => {
+        console.log(`[計時器控制] 老師發送計時器指令: ${data.command} 至教室: ${data.roomId || '全域'}`);
+        if (data.roomId) {
+            io.to(data.roomId).emit('tutor_timer_command', data);
+        } else {
+            io.emit('tutor_timer_command', data);
+        }
+    });
+
+    // ==========================================
+    // 新增：特約教室/一般教室的違規轉發橋樑
+    // ==========================================
+    socket.on('violation', (data) => {
+        console.log(`[伺服器轉發] 收到學生違規: ${data.name} - ${data.type}`);
+        
+        // 將違規資料廣播給所有連線的客戶端（或是特定的教師房間）
+        // 這樣 tutor-dashboard.js 和 admin.js 就能順利收到了！
+        io.emit('violation', data); 
+    });
+
+    // 新增：切換分頁的專屬轉發
+    socket.on('tab_switched', (data) => {
+        io.emit('tab_switched', data);
+    });
     // ==========================================
     // 原有功能與連動邏輯
     // ==========================================
@@ -552,6 +651,13 @@ io.on('connection', (socket) => {
                 socket.join(user.roomMode);
                 addTeacherLog(`🔄 ${username} 重新連線成功`);
             }
+
+            // 如果加入的是 VIP 教室，且該教室有課表，就把課表發給該學生
+            const roomName = data.room || data.roomId || user.roomMode;
+            if (roomName && String(roomName).startsWith('VIP-') && tutorSchedules[roomName]) {
+                socket.emit('sync_tutor_schedule', tutorSchedules[roomName]);
+            }
+
             broadcastUpdateRank();
             if (user.teamId) {
                 socket.join(user.teamId);
@@ -723,6 +829,20 @@ setInterval(() => {
         });
         broadcastUpdateRank();
     }
+
+    // ==========================================
+    // [新增] 每秒向所有特約教室推播最新的計時器狀態
+    // ==========================================
+    if (tutorRoomSettings.size > 0) {
+        tutorRoomSettings.forEach((schedule, roomId) => {
+            const timeState = getTutorRoomTimeState(roomId);
+            if (timeState) {
+                // 每秒廣播給該教室內的所有學生
+                io.to(roomId).emit('tutor_timer_sync', timeState);
+            }
+        });
+    }
+
 }, 1000);
 
 async function broadcastWeeklyRank() {

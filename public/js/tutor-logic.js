@@ -21,10 +21,16 @@ function safeDOM(id, callback) {
 
 // --- 2. 初始化 Socket 連線 ---
 // 這裡預留對接原本的 Socket.io 邏輯
-const socket = io(); 
+if (typeof window.socket === 'undefined') {
+    window.socket = typeof io !== 'undefined' ? io() : null;
+}
+const socket = window.socket;
 
 // ==========================================
 // 新增：1. 監聽導師公告 (更新黑板 + 播放大喇叭音效)
+// ==========================================
+// ==========================================
+// 新增：1. 監聽導師公告 (僅更新黑板，移除提示音)
 // ==========================================
 socket.on('receive_tutor_announcement', (data) => {
     const blackboardContent = document.getElementById('blackboardContent');
@@ -37,21 +43,13 @@ socket.on('receive_tutor_announcement', (data) => {
         const now = new Date();
         blackboardTime.innerText = `最新發布：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
         
-        // 加上視覺閃爍特效吸引注意力 ( Tailwind classes )
+        // 加上視覺閃爍特效吸引注意力
         blackboardContainer.classList.add('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.4)]');
         setTimeout(() => {
             blackboardContainer.classList.remove('border-red-500', 'shadow-[0_0_30px_rgba(239,68,68,0.4)]');
         }, 3000);
     }
-
-    // 觸發「大喇叭」音效
-    try {
-        // 請確保您的專案目錄下有這個音檔，或者換成您現有的音檔路徑
-        const alertSound = new Audio('/sounds/alert.mp3'); 
-        alertSound.play().catch(e => console.log("瀏覽器自動播放限制，需使用者互動後才能播放音效", e));
-    } catch(e) {
-        console.log('無法播放大喇叭音效', e);
-    }
+    // 備註：導師端的提示音已移除
 });
 
 // ==========================================

@@ -66,12 +66,67 @@ class BreakManagerClass {
 
     cancelMenu() {
         const overlay = document.getElementById('breakManagerOverlay');
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+            overlay.style.display = ''; // 確保清除行內樣式
+        }
     }
 
     /**
-     * 2. 開始休息 (包含原有的洗手間/喝水，以及新的 5/10/15 分鐘)
+     * 新增：開始喝水或上廁所的短暫休息
+     * @param {number} minutes - 休息分鐘數 (喝水3, 上廁所5)
+     * @param {string} label - 標籤文字
+     * @param {string} icon - Emoji 圖示
+     */
+    startShortBreak(minutes, label = '短暫休息', icon = '⏳') {
+        this.breakSecondsRemaining = minutes * 60;
+        this.isBreaking = true;
+        this.soundPlayed = false;
+
+        // 1. 隱藏選擇休息的選單
+        this.cancelMenu();
+
+        // 2. 暫停主專注計時器 (不列入專注時間，包含大小寫防呆保護)
+        if (window.studyTimer) {
+            window.studyTimer.isPaused = true; 
+        }
+        if (window.StudyTimer) {
+            if (typeof window.StudyTimer.pause === 'function') window.StudyTimer.pause();
+            else window.StudyTimer.isPaused = true;
+        }
+        window.isAIPaused = true; // 暫停 AI 抓違規
+
+        // 3. 顯示倒數畫面並啟動計時
+        const overlay = document.getElementById('breakManagerOverlay');
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+        
+        this.renderCountdownUI(label, icon);
+        this.updateCountdownUI();
+        
+        if (this.breakInterval) clearInterval(this.breakInterval);
+        
+        this.breakInterval = setInterval(() => {
+            if (this.breakSecondsRemaining > 0) {
+                this.breakSecondsRemaining--;
+                this.updateCountdownUI();
+
+                // 剩餘 30 秒時播放提示音
+                if (this.breakSecondsRemaining === 30 && !this.soundPlayed) {
+                    this.alertAudio.play().catch(e => console.log('音效播放被阻擋', e));
+                    this.soundPlayed = true;
+                }
+            } else {
+                this.endBreak(); // 時間到自動結束休息
+            }
+        }, 1000);
+    }
+
+    /**
+     * 2. 開始休息 (包含原有的 5/10/15 分鐘)
      */
     startBreak(minutes, label, icon) {
         this.breakSecondsRemaining = minutes * 60;
@@ -79,8 +134,12 @@ class BreakManagerClass {
         this.soundPlayed = false;
 
         // [核心連動]：呼叫 StudyTimer 暫停主計時器！
+        if (window.studyTimer) {
+            window.studyTimer.isPaused = true; 
+        }
         if (window.StudyTimer) {
-            window.StudyTimer.pause();
+            if (typeof window.StudyTimer.pause === 'function') window.StudyTimer.pause();
+            else window.StudyTimer.isPaused = true;
         }
 
         // [核心連動]：告訴未來的 ai-core 暫停抓違規！
@@ -122,13 +181,20 @@ class BreakManagerClass {
         this.isBreaking = false;
         if (this.breakInterval) clearInterval(this.breakInterval);
 
-        // 隱藏休息畫面
+        // 1. 隱藏休息畫面
         this.cancelMenu();
 
-        // [核心連動]：呼叫 StudyTimer 恢復主計時器，並重置 40 分鐘的冷卻計算！
+        // 2. 恢復主專注計時器與 AI 監測 (包含大小寫防呆保護)
+        if (window.studyTimer) {
+            window.studyTimer.isPaused = false; 
+        }
         if (window.StudyTimer) {
-            window.StudyTimer.resume();
-            window.StudyTimer.resetContinuousFocus(); // 重新上鎖休息按鈕
+            if (typeof window.StudyTimer.resume === 'function') window.StudyTimer.resume();
+            else window.StudyTimer.isPaused = false;
+            
+            if (typeof window.StudyTimer.resetContinuousFocus === 'function') {
+                window.StudyTimer.resetContinuousFocus(); // 重新上鎖休息按鈕
+            }
         }
 
         // [核心連動]：告訴未來的 ai-core 恢復抓違規！
@@ -196,8 +262,8 @@ window.BreakManager = new BreakManagerClass();
 // 攔截原本的 requestBreak 與 endBreak
 // ==========================================
 window.requestBreak = function(type) {
-    if (type === 'toilet') window.BreakManager.startBreak(5, '洗手間', '🚽');
-    if (type === 'water') window.BreakManager.startBreak(5, '喝水休息', '💧');
+    if (type === 'toilet') window.BreakManager.startShortBreak(5, '洗手間', '🚽');
+    if (type === 'water') window.BreakManager.startShortBreak(1, '喝水休息', '💧');
 };
 
 window.endBreak = function() {

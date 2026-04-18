@@ -24,7 +24,10 @@ function initClock() {
 // --- 2. Socket 事件監聽 ---
 
 socket.on('update_rank', (data) => {
-    data.forEach(s => {
+    // 🚀 核心隔離：正確使用 roomMode 判斷，過濾掉特約教室 ('tutor') 的學生
+    const normalStudents = data.filter(s => s.roomMode !== 'tutor');
+    
+    normalStudents.forEach(s => {
         const oldStudent = students.find(os => os.name === s.name);
         
         if (!oldStudent) {
@@ -36,18 +39,21 @@ socket.on('update_rank', (data) => {
             checkMilestones(s);
         }
     });
-    students = data;
-    renderStudentGrid(); // 重新渲染卡片
-    renderSummary();
-    
-    const onlineCountEl = document.getElementById('onlineCount');
-    if (onlineCountEl) onlineCountEl.innerText = data.length;
+    // 僅儲存非特約教室的學生
+    students = normalStudents;
+
+    // 🚀 修復問題1：呼叫正確的渲染函數，讓教師一進畫面就立刻看到學生！
+    renderStudentGrid(); 
+    if (typeof renderSummary === 'function') renderSummary();
 });
 
 socket.on('teacher_update', (data) => {
     if (data.logs) renderLogs(data.logs);
     if (data.snaps) {
         data.snaps.forEach(snap => {
+            // 🚀 核心隔離：如果違規學生的名字「不在」普通學生名單內 (代表他是特約學生)，直接無視！
+            if (!students.some(s => s.name === snap.name)) return;
+
             if (!violationStorage[snap.name]) violationStorage[snap.name] = [];
             const exists = violationStorage[snap.name].some(v => v.time === snap.time && v.reason === snap.reason);
             if (!exists) violationStorage[snap.name].unshift(snap);
@@ -57,6 +63,9 @@ socket.on('teacher_update', (data) => {
 });
 
 socket.on('teacher_receive_report', (report) => {
+    // 🚀 核心隔離：如果提交報告的不是普通學生，直接無視！
+    if (!students.some(s => s.name === report.name)) return;
+
     console.log("收到結算報告:", report);
     const exists = sessionSummaries.some(s => s.name === report.name && s.timestamp === report.timestamp);
     if (!exists) {

@@ -104,6 +104,54 @@ function closeAllEntryModals() {
     document.getElementById('sync-prompt-modal').classList.remove('flex');
 }
 
+// ================= 新增：導師密碼驗證邏輯 =================
+
+// 顯示密碼驗證彈窗
+window.showTeacherPasswordModal = function() {
+    const pwdInput = document.getElementById('teacher-password-input');
+    if (pwdInput) pwdInput.value = ''; // 每次開啟清空輸入框
+    
+    document.getElementById('teacher-password-modal').classList.remove('hidden');
+    document.getElementById('teacher-password-modal').classList.add('flex');
+};
+
+// 關閉密碼驗證彈窗
+window.closeTeacherPasswordModal = function() {
+    document.getElementById('teacher-password-modal').classList.add('hidden');
+    document.getElementById('teacher-password-modal').classList.remove('flex');
+};
+
+// 驗證輸入的密碼
+window.verifyTeacherPassword = function() {
+    const pwdInput = document.getElementById('teacher-password-input');
+    const password = pwdInput ? pwdInput.value : '';
+    
+    // 判斷密碼是否正確
+    if (password === 'tutor-professor101') {
+        // 密碼正確：關閉密碼彈窗，並呼叫原本的設定教室排程彈窗
+        closeTeacherPasswordModal();
+        if (typeof openTeacherSetupModal === 'function') {
+            openTeacherSetupModal(); 
+        }
+    } else {
+        // 密碼錯誤
+        alert('密碼錯誤！您不具備導師權限，無法建立特約教室。');
+    }
+};
+
+// 支援按下 Enter 鍵也能觸發驗證
+document.addEventListener('DOMContentLoaded', () => {
+    const pwdInput = document.getElementById('teacher-password-input');
+    if (pwdInput) {
+        pwdInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verifyTeacherPassword();
+            }
+        });
+    }
+});
+// =========================================================
+
 document.addEventListener('DOMContentLoaded', () => {
     // 監聽點名事件
     if (typeof socket !== 'undefined') {
@@ -580,3 +628,328 @@ function closeRollCall() {
     const overlay = document.getElementById('rollcall-overlay');
     if (overlay) overlay.classList.add('hidden');
 }
+
+// =========================================================================
+// (4) 新增：VIP 特約教室雙重認證入口邏輯
+// =========================================================================
+
+// 記錄當前是否正在進行特約教室驗證流程
+let isProcessingTutorEntry = false;
+
+/**
+ * 打開特約教室驗證彈窗
+ */
+function openTutorRoomSetup() {
+    isProcessingTutorEntry = true;
+    
+    // 1. 顯示彈窗
+    const modal = document.getElementById('tutor-setup-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    // 2. 初始化 UI 狀態 (重置所有步驟)
+    resetTutorModalUI();
+
+    // 3. 生成針對導師教室連動的 QR Code
+    initTutorSpecificQRCode();
+}
+
+/**
+ * 關閉特約教室驗證彈窗
+ */
+function closeTutorSetupModal() {
+    isProcessingTutorEntry = false;
+    const modal = document.getElementById('tutor-setup-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+/**
+ * 重置彈窗 UI 到初始狀態
+ */
+function resetTutorModalUI() {
+    // 步驟 1 重置
+    document.getElementById('tutor-step-1').classList.remove('border-green-500', 'bg-green-950/30');
+    document.getElementById('tutor-step-1-icon').classList.remove('bg-green-600', 'text-white');
+    document.getElementById('tutor-step-1-status').innerText = '等待掃描...';
+    document.getElementById('tutor-step-1-status').classList.remove('text-green-400');
+    document.getElementById('tutor-step-1-check').classList.add('hidden');
+
+    // 步驟 2 重置
+    document.getElementById('tutor-step-2').classList.add('opacity-50');
+    document.getElementById('tutor-step-2').classList.remove('border-green-500', 'bg-green-950/30', 'border-yellow-500/50');
+    document.getElementById('tutor-step-2-icon').classList.remove('bg-green-600', 'bg-yellow-600', 'text-white');
+    document.getElementById('tutor-step-2-status').innerText = '等待步驟一完成...';
+    document.getElementById('tutor-step-2-status').classList.remove('text-green-400', 'text-yellow-400');
+    document.getElementById('tutor-step-2-check').classList.add('hidden');
+
+    // 區塊重置
+    document.getElementById('tutor-qrcode-container').classList.remove('hidden');
+    document.getElementById('tutor-redirect-notice').classList.add('hidden');
+}
+
+/**
+ * 生成特約教室專用的 QR Code
+ * 這裡可以選擇是否要在網址中加入特定參數告訴 mobile.html 這是去 VIP 教室
+ */
+function initTutorSpecificQRCode() {
+    const qrcodeContainer = document.getElementById("tutor-qrcode");
+    if(!qrcodeContainer) return;
+    
+    qrcodeContainer.innerHTML = ""; // 清空舊的
+
+    const syncToken = typeof socket !== 'undefined' ? socket.id : ''; 
+    const userName = localStorage.getItem('studyVerseUser') || '學員';
+    
+    const baseUrl = window.location.origin; 
+    // 網址指向 mobile.html，加入 target=tutor 參數 (選擇性，供 mobile.html UI 切換用)
+    const mobileUrl = `${baseUrl}/mobile.html?sync=${syncToken}&name=${encodeURIComponent(userName)}&target=tutor`;
+    
+    // 生成 QR Code (樣式與大廳 sidebar 保持一致)
+    new QRCode(qrcodeContainer, {
+        text: mobileUrl,
+        width: 140,
+        height: 140,
+        colorDark : "#0f172a",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+}
+
+/**
+ * 核心邏輯整合：修改原本的套接字監聽器
+ * 找到您原本 lobby-main.js 中的 socket.on('deviceLinked', ...) 和 socket.on('mobile_sync_update', ...)
+ * 並用下方的代碼「覆蓋」或「整合」進去。
+ */
+
+// A. 整合進 deviceLinked (手機掃描成功)
+const originalSocketOnDeviceLinked = socket.listeners('deviceLinked')[0]; 
+// 註：如果 originalSocketOnDeviceLinked 的獲取方式不適用您的環境，請直接在您原本的 socket.on('deviceLinked', ...) 函式體內最前面加入以下判斷邏輯。
+
+socket.on('deviceLinked', (data) => {
+    // 執行原本的邏輯 (sidebar 更新等)
+    if (originalSocketOnDeviceLinked) originalSocketOnDeviceLinked(data);
+
+    // --- 新增VIP入口邏輯 ---
+    if (isProcessingTutorEntry) {
+        // 更新彈窗 UI 到步驟 2
+        
+        // 1. 標記步驟 1 完成
+        document.getElementById('tutor-step-1').classList.add('border-green-500', 'bg-green-950/30');
+        document.getElementById('tutor-step-1-icon').classList.add('bg-green-600', 'text-white');
+        document.getElementById('tutor-step-1-status').innerText = '連動成功！';
+        document.getElementById('tutor-step-1-status').classList.add('text-green-400');
+        document.getElementById('tutor-step-1-check').classList.remove('hidden');
+
+        // 2. 啟用步驟 2 提示翻轉
+        document.getElementById('tutor-step-2').classList.remove('opacity-50');
+        document.getElementById('tutor-step-2').classList.add('border-yellow-500/50'); // 黃色邊框提示
+        document.getElementById('tutor-step-2-icon').classList.add('bg-yellow-600', 'text-white');
+        document.getElementById('tutor-step-2-status').innerText = '請將手機螢幕朝下放置在桌上';
+        document.getElementById('tutor-step-2-status').classList.add('text-yellow-400');
+    }
+});
+
+
+// B. 整合進 mobile_sync_update (狀態更新，含翻轉完成)
+// 請找到檔案中原本的此段落，將 VIP 入口邏輯加入到 data.type === 'FLIP_COMPLETED' 判斷中
+
+socket.on('mobile_sync_update', (data) => {
+    if (data.type === 'FLIP_COMPLETED') {
+        
+        // --- 新增 VIP 入口跳轉邏輯 ---
+        if (isProcessingTutorEntry) {
+            // 1. 更新步驟 2 UI 為完成
+            document.getElementById('tutor-step-2').classList.remove('border-yellow-500/50');
+            document.getElementById('tutor-step-2').classList.add('border-green-500', 'bg-green-950/30');
+            document.getElementById('tutor-step-2-icon').classList.remove('bg-yellow-600');
+            document.getElementById('tutor-step-2-icon').classList.add('bg-green-600');
+            document.getElementById('tutor-step-2-status').innerText = '翻轉檢測完成！即將進入教室';
+            document.getElementById('tutor-step-2-status').classList.remove('text-yellow-400');
+            document.getElementById('tutor-step-2-status').classList.add('text-green-400');
+            document.getElementById('tutor-step-2-check').classList.remove('hidden');
+
+            // 2. 隱藏 QR Code，顯示跳轉中
+            document.getElementById('tutor-qrcode-container').classList.add('hidden');
+            document.getElementById('tutor-redirect-notice').classList.remove('hidden');
+
+            // 3. 延遲一小段時間讓使用者看到成功狀態，然後跳轉
+            setTimeout(() => {
+                isProcessingTutorEntry = false; 
+                // 👇 改為使用 targetRoomUrl，這樣才會帶上 ?room=XXXX 參數
+                window.location.href = targetRoomUrl || '/tutor-room.html'; 
+            }, 1500);
+
+            return; // 攔截原本的邏輯，不執行下方的大廳彈窗或自動進入 targetRoomUrl
+        }
+        // --- VIP 邏輯結束 ---
+
+
+        // ... 以下是您檔案中原本就有的 FLIP_COMPLETED 邏輯 (alert, syncModule 更新, 隊伍彈窗點擊等) ...
+        alert("✅ 連動成功！手機已確認朝下置放。"); 
+        // ... (省略原本的代碼) ...
+    }
+});
+
+// 開啟教師排課彈窗 (後續可加上權限驗證 API)
+window.openTeacherSetupModal = function() {
+    const modal = document.getElementById('teacher-setup-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+
+// 教師生成房間並跳轉
+window.generateTeacherRoom = function() {
+    const size = document.getElementById('teacherRoomSize').value;
+    const periods = document.getElementById('teacherPeriods').value;
+    const periodTime = document.getElementById('teacherPeriodTime').value;
+    const restTime = document.getElementById('teacherRestTime').value;
+    const startTime = document.getElementById('teacherStartTime').value;
+
+    if (!periods || !periodTime || !restTime || !startTime) {
+        alert("請將排課設定填寫完整！");
+        return;
+    }
+
+    // 隨機生成一組 6 碼的教室代碼
+    const roomCode = 'VIP-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // 【修正點】：將排程資料存入 localStorage，Key 使用動態 roomCode 以供同步
+    const scheduleData = {
+        roomCode,
+        size,
+        periods: parseInt(periods),
+        periodTime: parseInt(periodTime),
+        restTime: parseInt(restTime),
+        startTime
+    };
+    
+    // 使用具備房間代碼的 Key 進行存儲，解決 Dashboard 讀取問題
+    localStorage.setItem(`tutor_schedule_${roomCode}`, JSON.stringify(scheduleData));
+
+    // 發送給 Socket 建立獨立房間
+    if (typeof socket !== 'undefined') {
+        socket.emit('create_tutor_room', scheduleData);
+    }
+
+    try {
+        navigator.clipboard.writeText(roomCode);
+        alert(`建立成功！您的教室代碼為：${roomCode}\n(代碼已自動為您複製)\n請將此代碼分享給學生。`);
+    } catch(e) {
+        alert(`建立成功！您的教室代碼為：${roomCode}\n請將此代碼分享給學生。`);
+    }
+    
+    // 跳轉至教師控制台，並帶上代碼參數
+    window.location.href = `/tutor-dashboard.html?room=${roomCode}`;
+};
+
+// ================= 新增：VIP 特約教室代碼驗證與專屬跳轉 =================
+window.verifyAndEnterTutorRoom = function() {
+    const codeInput = document.getElementById('tutorRoomCode');
+    const roomCode = codeInput ? codeInput.value.trim() : '';
+
+    if (!roomCode) {
+        alert("請先輸入教師提供的教室代碼！");
+        return;
+    }
+
+    // 驗證成功後，將代碼存入 sessionStorage
+    sessionStorage.setItem('currentTutorRoomCode', roomCode);
+    targetRoomUrl = `/tutor-room.html?room=${roomCode}`; 
+    
+    // 手機防呆檢查
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        alert("⚠️ 特約教室需要使用「電腦」進入，並將手機作為翻轉輔助鏡頭。請改用電腦開啟此網頁！");
+        return;
+    }
+
+    // 1. 關閉普通教室彈窗 (避免重疊)
+    const normalModal = document.getElementById('device-modal');
+    if (normalModal) {
+        normalModal.classList.add('hidden');
+        normalModal.classList.remove('flex');
+    }
+
+    // 2. 開啟特約專屬彈窗
+    const qrContainer = document.getElementById('tutor-qrcode-container');
+    const tutorModal = document.getElementById('tutor-auth-modal') || 
+                       document.getElementById('tutorModal') || 
+                       (qrContainer ? qrContainer.closest('.fixed') : null);
+
+    if (tutorModal) {
+        tutorModal.classList.remove('hidden');
+        tutorModal.classList.add('flex', 'z-[100]');
+        
+        // ====== 關鍵修復：手動生成通往 mobile.html 的 QR Code ======
+        if (qrContainer) {
+            qrContainer.innerHTML = ''; // 清空原本的預設圖示
+            
+            // 取得使用者名稱與 Socket ID 以產生專屬網址
+            const username = localStorage.getItem('studyVerseUser') || '學員';
+            const syncToken = typeof socket !== 'undefined' ? socket.id : '';
+            
+            // 組合正確的 mobile.html 網址
+            const mobileUrl = `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}`;
+            
+            // 繪製 QR Code (使用黑底白字符合您的 UI 風格，若掃描不易可對調顏色)
+            new QRCode(qrContainer, {
+                text: mobileUrl,
+                width: 160,
+                height: 160,
+                colorDark: "#ffffff", 
+                colorLight: "#000000" 
+            });
+        } else {
+            console.error("找不到用來放 QR Code 的容器 (tutor-qrcode-container)！");
+        }
+        
+        // 觸發連動監聽
+        if (typeof initMobileSync === 'function') initMobileSync();
+    } else {
+        alert("找不到特約專屬彈窗！請檢查 HTML 結構。");
+    }
+};
+
+// 若手機連動成功並翻轉，將會跳轉至 targetRoomUrl (已夾帶 roomCode)，成功避開一般教室的彈窗！
+// ================= 新增：自動計算下課時間 =================
+function calculateTeacherEndTime() {
+    const periods = parseInt(document.getElementById('teacherPeriods').value) || 0;
+    const periodTime = parseInt(document.getElementById('teacherPeriodTime').value) || 0;
+    const restTime = parseInt(document.getElementById('teacherRestTime').value) || 0;
+    const startTimeVal = document.getElementById('teacherStartTime').value;
+
+    const container = document.getElementById('endTimeDisplayContainer');
+    const timeDisplay = document.getElementById('calculatedEndTime');
+
+    if (periods > 0 && periodTime > 0 && startTimeVal) {
+        // 計算總分鐘數: (節數 * 每節時間) + ((節數 - 1) * 休息時間)
+        const totalMinutes = (periods * periodTime) + ((periods > 1) ? (periods - 1) * restTime : 0);
+        
+        const [hours, minutes] = startTimeVal.split(':').map(Number);
+        let date = new Date();
+        date.setHours(hours, minutes, 0, 0);
+        date.setMinutes(date.getMinutes() + totalMinutes);
+
+        const endHours = String(date.getHours()).padStart(2, '0');
+        const endMins = String(date.getMinutes()).padStart(2, '0');
+        
+        timeDisplay.innerText = `${endHours}:${endMins}`;
+        container.classList.remove('hidden');
+        container.classList.add('flex');
+    } else {
+        container.classList.add('hidden');
+        container.classList.remove('flex');
+    }
+}
+
+// 監聽輸入框變化以即時計算
+document.addEventListener('DOMContentLoaded', () => {
+    const inputs = ['teacherPeriods', 'teacherPeriodTime', 'teacherRestTime', 'teacherStartTime'];
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', calculateTeacherEndTime);
+    });
+});

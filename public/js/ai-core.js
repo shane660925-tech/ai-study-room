@@ -19,6 +19,9 @@ let isFlipWarningActive = false;
 // [新增] 接收來自 break-manager.js 的開關，合法休息時暫停抓違規
 window.isAIPaused = false; 
 
+// 🚀 新增：用來記錄上次發送鏡頭違規的時間 (避免 1 秒內連發數十張截圖塞爆伺服器)
+window.lastCameraViolationTime = 0;
+
 let lastViolationTime = 0;    
 let remoteUsers = [];
 let isAuditMode = false; 
@@ -32,6 +35,7 @@ let violationDetails = {
 };
 
 // --- 介面更新邏輯 ---
+// --- 介面更新邏輯 ---
 function updateUIMode(mode) {
     const modeLabel = document.getElementById("modeLabel");
     const blackboard = document.getElementById("blackboard");
@@ -43,7 +47,7 @@ function updateUIMode(mode) {
         modeLabel.innerText = "🛡️ 隊長審核模式 (AI 豁免)";
         modeLabel.className = "text-[9px] bg-yellow-600/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
         if(blackboard) blackboard.classList.remove('hidden');
-        if(breakButtons) breakButtons.classList.remove('hidden');
+        if(breakButtons) breakButtons.classList.add('hidden'); // 把隊長模式的休息鍵也藏起來
         return;
     }
 
@@ -58,7 +62,13 @@ function updateUIMode(mode) {
             modeLabel.innerText = "MODE: 模擬線上教室 (連動中)";
             modeLabel.className = "text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
             if(blackboard) blackboard.classList.remove('hidden');
-            if(breakButtons) breakButtons.classList.remove('hidden');
+            if(breakButtons) breakButtons.classList.remove('hidden'); // 模擬教室保留休息鍵
+            break;
+        case 'tutor': 
+            modeLabel.innerText = "MODE: VIP 特約指導教室";
+            modeLabel.className = "text-[9px] bg-amber-600/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
+            if(blackboard) blackboard.classList.remove('hidden');
+            if(breakButtons) breakButtons.classList.add('hidden'); // 特約教室隱藏休息鍵
             break;
         case '1': 
             modeLabel.innerText = "MODE: 線上課程 (寬鬆)";
@@ -331,35 +341,37 @@ async function captureViolation(reason) {
     else if (reason.includes("離座")) violationDetails["🪑 偵測離座"]++;
     else if (reason.includes("趴睡")) violationDetails["💤 偵測趴睡"]++;
     else if (reason.includes("中斷")) violationDetails["📱 手機翻轉中斷"]++;
+    else if (reason.includes("分頁")) violationDetails["🚫 切換分頁"]++; // 新增分類
 
     const now = Date.now();
-    if (now - lastViolationTime < 15000 && !reason.includes("中斷")) return; 
+    // 切換分頁與翻轉中斷不受 15 秒防洗版限制
+    if (now - lastViolationTime < 15000 && !reason.includes("中斷") && !reason.includes("分頁")) return; 
     lastViolationTime = now;
     
     let imageData = null;
-    if (videoElement) {
-        const canvas = document.createElement('canvas');
-        canvas.width = videoElement.videoWidth;
-        canvas.height = videoElement.videoHeight;
-        canvas.getContext('2d').drawImage(videoElement, 0, 0);
-        imageData = canvas.toDataURL('image/jpeg', 0.4); 
+    
+    // 🚀 核心修改：精準判定是否需要截圖
+    // 只有 趴睡、離座、分心，或是 使用手機(且不是翻轉中斷) 才需要截圖
+    const needsScreenshot = reason.includes("趴睡") || reason.includes("離座") || reason.includes("分心") || (reason.includes("手機") && !reason.includes("中斷"));
+
+    if (needsScreenshot && videoElement) {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            canvas.getContext('2d').drawImage(videoElement, 0, 0);
+            imageData = canvas.toDataURL('image/jpeg', 0.4); 
+        } catch (err) {
+            console.warn("截圖失敗:", err);
+        }
     }
     
-    socket.emit("report_violation", {
-        name: myUsername, reason: reason, image: imageData, time: new Date().toLocaleTimeString()
-    });
-}
-
-// [修改] 考慮 window.isAIPaused 避免在合法休息時計算切換分頁違規
-document.addEventListener("visibilitychange", () => {
-    if (document.hidden && currentRoomMode === 'simulated' && !window.isAIPaused && !isAuditMode) {
-        totalViolationCount++;
-        violationDetails["🚫 切換分頁"]++;
+    if (socket) {
         socket.emit("report_violation", {
-            name: myUsername, reason: "🚫 切換分頁/離開視窗", image: null, time: new Date().toLocaleTimeString()
+            name: myUsername, reason: reason, image: imageData, time: new Date().toLocaleTimeString()
         });
     }
-});
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const currentPath = window.location.pathname;
@@ -368,6 +380,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentRoomMode = '2'; 
     } else if (currentPath.includes('managed-room.html')) {
         currentRoomMode = 'simulated'; 
+    } else if (currentPath.includes('tutor-room.html')) {
+        // 🚀 獨立特約模式：建立與模擬教室隔絕的專屬空間
+        currentRoomMode = 'tutor'; 
     } else if (currentPath.includes('course-room.html')) {
         currentRoomMode = '1'; 
     } else {
@@ -467,6 +482,7 @@ async function initAI() {
 
 async function predictLoop() {
     const now = performance.now();
+    const realNow = Date.now(); // 🚀 取得真實時間，用來與開始時間做比較
     const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
 
     // ==========================================
@@ -491,6 +507,15 @@ async function predictLoop() {
         return; 
     }
 
+    // ==========================================
+    // 🚀 新增：8 秒鐘的「入座寬限期」
+    // 讓學生剛進教室時有時間坐好、調整鏡頭，這段期間 AI 先不抓違規，避免一進場就閃紅框
+    // ==========================================
+    if (sessionStartTime && (realNow - sessionStartTime < 8000)) {
+        requestAnimationFrame(predictLoop);
+        return;
+    }
+    
     if (videoElement && videoElement.readyState >= 2 && videoElement.currentTime !== lastVideoTime) {
         lastVideoTime = videoElement.currentTime;
         let didCheckRun = false; 
@@ -520,11 +545,22 @@ async function predictLoop() {
 
         if (didCheckRun) {
             let currentIssue = null;
-            if (isPhoneDetected && !isPhoneFlipped) {
+            
+            // 🚀 修改：特約教室 (simulated) 拔除手機豁免權，只要鏡頭看到手機就是違規。
+            // 普通教室則保有翻轉豁免權 (isPhoneFlipped 為 true 時不抓)。
+            let shouldWarnPhone = false;
+            if (typeof currentRoomMode !== 'undefined' && currentRoomMode === 'tutor') {
+                shouldWarnPhone = isPhoneDetected; // 👑 VIP 特約：專屬模式，拔除豁免權
+            } else {
+                shouldWarnPhone = (isPhoneDetected && !isPhoneFlipped); // 🏠 普通模式：有連動翻轉則豁免
+            }
+
+            if (shouldWarnPhone) {
                 currentIssue = "📱 使用手機";
             } else {
                 currentIssue = aiFaceIssue;
             }
+            
             handleDistractionBuffer(currentIssue, now);
         }
     }
@@ -566,8 +602,29 @@ function handleDistractionBuffer(issue, now) {
             } else {
                 myStatus = (issue.includes("趴睡")) ? "SLEEPING" : "DISTRACTED";
                 if (window.RoomUI) window.RoomUI.showWarning(type);
-                if (currentRoomMode === 'simulated' && myStatus !== prevStatus) captureViolation(issue);
+                
+                // 🚀 核心修改：解除 simulated 限制，讓所有教室(沉浸、線上、模擬)只要違規就通報！
+                if (myStatus !== prevStatus) {
+                    captureViolation(issue);
+                }
             }
+
+            // ==========================================
+            // 🚀 修改：拋出「攝影機違規事件」，交給外部 (tutor-client.js) 負責截圖與通報
+            // ==========================================
+            const currentNow = Date.now();
+            if (currentNow - window.lastCameraViolationTime > 5000) { 
+                window.lastCameraViolationTime = currentNow;
+                
+                const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
+                const violationReason = issue || "🚫 鏡頭違規：離座/趴睡/手機"; 
+                
+                // 創建並拋出一個自訂事件，把資料包在 detail 裡面
+                document.dispatchEvent(new CustomEvent('CameraViolation', {
+                    detail: { name: myName, reason: violationReason }
+                }));
+            }
+            // ==========================================
         }
     } else {
         distractionCounter = 0; 
@@ -736,3 +793,30 @@ window.sendReaction = (emoji) => {
     showFloatingEmoji(emoji);
     if(socket) socket.emit("send_reaction", { emoji, username: myUsername });
 };
+
+// 🚀 修改：切換分頁嚴格偵測機制 (支援所有普通教室與特約教室)
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden && !window.isAIPaused && !isAuditMode) {
+        const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '學員';
+        console.log("偵測到切換分頁，準備處理違規...");
+        
+        if (typeof window.RoomUI !== 'undefined' && window.RoomUI.showWarning) {
+            window.RoomUI.showWarning("DISTRACTED");
+        }
+
+        // 1. 紀錄並通報給普通教師端 (內部已設定不會截圖)
+        if (currentRoomMode !== 'tutor') {
+            captureViolation("🚫 切換分頁 (離開視窗)");
+        }
+
+        // 2. 拋出事件讓特約保鑣 (tutor-client.js) 處理
+        document.dispatchEvent(new CustomEvent('TabSwitchedViolation', {
+            detail: { name: myName }
+        }));
+    } else {
+        // ✅ 學生切回視窗時，自動收起紅色警告
+        if (typeof window.RoomUI !== 'undefined' && window.RoomUI.hideWarning) {
+            window.RoomUI.hideWarning();
+        }
+    }
+});
