@@ -463,7 +463,7 @@ function updateStudentTimerLogic() {
     updateStudentTimerUI(timeString, periodName, isBreak ? "休息中" : "進行中", progress);
 }
 
-// 4. 更新學生端專屬 VIP 琥珀金 UI (已縮減 padding 以避免撐開高度)
+// 4. 更新學生端專屬 VIP 琥珀金 UI (配合新的 html ID 樣式)
 function updateStudentTimerUI(time, label, status, progress) {
     const timerDisplay = document.getElementById('studentTimerDisplay');
     const periodLabel = document.getElementById('studentPeriodLabel');
@@ -488,13 +488,12 @@ function updateStudentTimerUI(time, label, status, progress) {
     
     if (statusBadge) {
         statusBadge.innerText = status;
-        // 將 px-2.5 py-1 改回 px-2 py-0.5，避免 badge 把行高撐大
         if (status === "休息中") {
-            statusBadge.className = "text-[10px] bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-bold uppercase tracking-widest shadow-sm";
+            statusBadge.className = "text-[10px] bg-emerald-900/30 text-emerald-400 px-2.5 py-1 rounded-md border border-emerald-500/30 font-bold uppercase tracking-widest shadow-sm";
         } else if (status === "進行中") {
-            statusBadge.className = "text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded-md border border-red-500/30 font-bold uppercase tracking-widest shadow-sm";
+            statusBadge.className = "text-[10px] bg-red-900/30 text-red-400 px-2.5 py-1 rounded-md border border-red-500/30 font-bold uppercase tracking-widest shadow-sm";
         } else {
-            statusBadge.className = "text-[10px] bg-gray-800/80 text-gray-400 px-2 py-0.5 rounded-md border border-gray-700 font-bold uppercase tracking-widest shadow-sm";
+            statusBadge.className = "text-[10px] bg-gray-800/80 text-gray-400 px-2.5 py-1 rounded-md border border-gray-700 font-bold uppercase tracking-widest shadow-sm";
         }
     }
     
