@@ -92,6 +92,9 @@
     let studentName = "";
     let flipWarningTimer = null;
     let flipWarningCount = 5;
+    
+    // 🚀 新增：紀錄目前是否為 AI 休息時間
+    let isAIPaused = false; 
 
     socket.on('mobile_sync_update', (data) => {
         if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
@@ -103,10 +106,40 @@
             document.getElementById('setupView').classList.remove('hidden');
             alert("✅ 電腦端自習已結束！手機連動已斷開。");
         }
+        // 🚀 新增：接收來自電腦端的休息狀態同步
+        else if (data.type === 'PAUSE_STATE_CHANGED' && data.studentName === studentName) {
+            isAIPaused = data.isPaused;
+            if (isAIPaused) {
+                // ☕ 進入休息時間：清除倒數、隱藏紅屏、顯示綠屏並更改文字
+                if (flipWarningTimer) {
+                    clearInterval(flipWarningTimer);
+                    flipWarningTimer = null;
+                }
+                
+                // 強制設為安全狀態，確保上課一恢復若手機朝上能立刻觸發違規
+                hasFlipped = true; 
+                
+                document.getElementById('warningOverlay').classList.add('hidden');
+                document.getElementById('flippedOverlay').classList.remove('hidden');
+                
+                document.querySelector('#flippedOverlay h1').innerText = "☕ 休息時間";
+                document.querySelector('#flippedOverlay p.text-green-300').innerText = "可自由使用手機，AI 豁免中";
+                document.querySelector('#flippedOverlay p.text-xs').innerText = "上課鐘響後，請務必將手機蓋回桌面";
+            } else {
+                // 📚 恢復上課：把綠屏文字改回預設嚴格狀態
+                document.querySelector('#flippedOverlay h1').innerText = "防護罩已啟動";
+                document.querySelector('#flippedOverlay p.text-green-300').innerText = "AI 豁免生效中";
+                document.querySelector('#flippedOverlay p.text-xs').innerText = "請保持手機朝下 ‧ 專注看電腦螢幕";
+            }
+        }
     });
 
     function handleOrientation(event) {
         if (event.beta === null) return;
+        
+        // 🚀 新增：休息時間豁免，直接略過所有的翻轉偵測與倒數計時！
+        if (isAIPaused) return; 
+
         const isFaceDown = Math.abs(event.beta) > 130;
 
         if (isFaceDown) {
@@ -121,7 +154,6 @@
                 
                 socket.emit('update_status', { name: studentName, isFlipped: true });
                 
-                // 【修復跳轉】確保把 syncToken 帶上，讓電腦端能正確接收訊號
                 const urlParams = new URLSearchParams(window.location.search);
                 const syncToken = urlParams.get('sync');
                 socket.emit('mobile_sync_update', { 
@@ -130,7 +162,6 @@
                     syncToken: syncToken 
                 });
 
-                // 【修復跳轉】單機模式：補上翻轉後手機端的跳轉邏輯
                 const isStandalone = urlParams.get('standalone') === 'true';
                 const targetRoom = urlParams.get('targetRoom');
                 if (isStandalone && targetRoom) {
@@ -177,7 +208,6 @@
         const syncToken = urlParams.get('sync'); 
         const urlName = urlParams.get('name'); 
 
-        // 【精準修正】只針對「學員暱稱」的 ID 進行鎖定，絕對不影響其他輸入框
         if (urlName) {
             const nameInput = document.getElementById('syncName');
             if (nameInput) {

@@ -16,17 +16,17 @@ let lastHeartbeat = 0;
 let isPhoneFlipped = sessionStorage.getItem('mobileLinked') === 'true';
 let isFlipWarningActive = false; 
 
-// [新增] 接收來自 break-manager.js 的開關，合法休息時暫停抓違規
+// 接收來自 break-manager.js 的開關，合法休息時暫停抓違規
 window.isAIPaused = false; 
-
-// 🚀 新增：用來記錄上次發送鏡頭違規的時間 (避免 1 秒內連發數十張截圖塞爆伺服器)
 window.lastCameraViolationTime = 0;
 
 let lastViolationTime = 0;    
 let remoteUsers = [];
 let isAuditMode = false; 
-let totalViolationCount = 0; 
-let violationDetails = {
+
+// 核心計數器：將計數器強制綁定在 window 全域物件上，打破模組限制
+window.totalViolationCount = 0; 
+window.violationDetails = {
     "📱 使用手機": 0,
     "🪑 偵測離座": 0,
     "💤 偵測趴睡": 0,
@@ -34,7 +34,113 @@ let violationDetails = {
     "📱 手機翻轉中斷": 0 
 };
 
-// --- 介面更新邏輯 ---
+// ==========================================
+// 手機翻轉全螢幕倒數彈窗變數與函數
+// ==========================================
+let flipCountdownInterval = null;
+
+// 🚀 新增：用來追蹤手機「真實物理狀態」的變數與本地倒數計時器
+window.isPhoneCurrentlyUnflipped = false;
+window.localFlipKickTimer = null;
+
+function showFlipCountdownModal() {
+    let modal = document.getElementById('flipCountdownModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'flipCountdownModal';
+        modal.className = 'fixed inset-0 z-[99999] bg-red-900/95 flex flex-col items-center justify-center backdrop-blur-lg transition-opacity duration-300';
+        modal.innerHTML = `
+            <div class="text-center animate-pulse">
+                <i class="fas fa-mobile-alt text-8xl text-red-400 mb-6 drop-shadow-[0_0_30px_rgba(248,113,113,0.8)]"></i>
+                <h1 class="text-4xl sm:text-6xl font-black text-white mb-6 tracking-widest text-red-500">警告：偵測到手機翻開！</h1>
+                <p class="text-gray-200 text-xl sm:text-3xl mb-10 leading-relaxed">請在 <span id="flipCountdownText" class="text-yellow-400 font-mono font-black text-6xl sm:text-8xl mx-3 drop-shadow-md">5</span> 秒內將手機螢幕蓋回桌面<br>否則將強制退出教室並通報導師！</p>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    let secondsLeft = 5;
+    const textEl = document.getElementById('flipCountdownText');
+    if(textEl) textEl.innerText = secondsLeft;
+
+    if (flipCountdownInterval) clearInterval(flipCountdownInterval);
+    flipCountdownInterval = setInterval(() => {
+        secondsLeft--;
+        if(textEl) textEl.innerText = secondsLeft;
+        if (secondsLeft <= 0) {
+            clearInterval(flipCountdownInterval); 
+        }
+    }, 1000);
+}
+
+function hideFlipCountdownModal() {
+    let modal = document.getElementById('flipCountdownModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (flipCountdownInterval) clearInterval(flipCountdownInterval);
+}
+
+// 🚀 新增：當上課開始時，主動檢查手機是否還處於斷聯/翻開狀態
+window.triggerPendingMobileWarning = function() {
+    setTimeout(() => {
+        if (window.isPhoneCurrentlyUnflipped && !window.isAIPaused) {
+            console.log("🚨 上課了但手機還沒蓋回！啟動本地 5 秒倒數補刀！");
+            
+            isFlipWarningActive = true;
+            myStatus = "DISTRACTED";
+            if(socket) socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
+            
+            if (!window.alertAudio) {
+                window.alertAudio = new Audio('https://www.myinstants.com/media/sounds/iphone-emergency-alert.mp3');
+                window.alertAudio.loop = true;
+            }
+            window.alertAudio.play().catch(e => console.log("音效播放受阻", e));
+            
+            if (window.RoomUI) window.RoomUI.showWarning('PHONE_FLIP', 5);
+            showFlipCountdownModal();
+
+            // 啟動本地的 5 秒踢出程序 (代替已經放棄的伺服器)
+            if (window.localFlipKickTimer) clearTimeout(window.localFlipKickTimer);
+            window.localFlipKickTimer = setTimeout(async () => {
+                if (window.isPhoneCurrentlyUnflipped && !window.isAIPaused) {
+                    if (window.isKickingOut) return; 
+                    window.isKickingOut = true; 
+                    isPhoneFlipped = false; 
+                    
+                    if (window.alertAudio) {
+                        window.alertAudio.pause();
+                        window.alertAudio.currentTime = 0;
+                    }
+                    if (window.RoomUI) window.RoomUI.hideWarning();
+                    hideFlipCountdownModal();
+                    
+                    // 扣分並手動發送違規紀錄給老師
+                    window.totalViolationCount++;
+                    window.violationDetails["📱 手機翻轉中斷"] = (window.violationDetails["📱 手機翻轉中斷"] || 0) + 1;
+                    
+                    if (socket) {
+                        socket.emit('violation', { 
+                            name: myUsername, 
+                            type: '🚨 翻轉中斷 (強制踢出教室)', 
+                            image: null 
+                        });
+                    }
+                    
+                    setTimeout(async () => {
+                        alert("🚨 您已違反翻轉專注規則，系統即將為您結算專注數據並通報導師！");
+                        await endSession();
+                    }, 100);
+                }
+            }, 5000);
+        }
+    }, 500); // 延遲半秒確保 UI 切換完成
+};
+// ==========================================
+
 // --- 介面更新邏輯 ---
 function updateUIMode(mode) {
     const modeLabel = document.getElementById("modeLabel");
@@ -47,7 +153,7 @@ function updateUIMode(mode) {
         modeLabel.innerText = "🛡️ 隊長審核模式 (AI 豁免)";
         modeLabel.className = "text-[9px] bg-yellow-600/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
         if(blackboard) blackboard.classList.remove('hidden');
-        if(breakButtons) breakButtons.classList.add('hidden'); // 把隊長模式的休息鍵也藏起來
+        if(breakButtons) breakButtons.classList.add('hidden'); 
         return;
     }
 
@@ -62,13 +168,13 @@ function updateUIMode(mode) {
             modeLabel.innerText = "MODE: 模擬線上教室 (連動中)";
             modeLabel.className = "text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
             if(blackboard) blackboard.classList.remove('hidden');
-            if(breakButtons) breakButtons.classList.remove('hidden'); // 模擬教室保留休息鍵
+            if(breakButtons) breakButtons.classList.remove('hidden'); 
             break;
         case 'tutor': 
             modeLabel.innerText = "MODE: VIP 特約指導教室";
             modeLabel.className = "text-[9px] bg-amber-600/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase";
             if(blackboard) blackboard.classList.remove('hidden');
-            if(breakButtons) breakButtons.classList.add('hidden'); // 特約教室隱藏休息鍵
+            if(breakButtons) breakButtons.classList.add('hidden'); 
             break;
         case '1': 
             modeLabel.innerText = "MODE: 線上課程 (寬鬆)";
@@ -86,9 +192,6 @@ if (typeof io !== 'undefined') {
     socket = io();
     window.appSocket = socket;
     
-    // ==========================================
-    // [修復] 身分登錄：一連線就告訴伺服器我在這，否則排行榜會沒人
-    // ==========================================
     socket.on('connect', () => {
         console.log("✅ Socket 已連線，正在登錄身分...");
         socket.emit("update_status", { 
@@ -102,32 +205,30 @@ if (typeof io !== 'undefined') {
     socket.on('mobile_sync_update', (data) => {
         if (data.studentName === myUsername) {
             
-            // ==========================================
-            // [新增] 取得目前的休息狀態 (相容新舊版)
-            // ==========================================
-            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
+            // 🚀 紀錄真實物理狀態
+            if (data.type === 'FLIP_WARNING') {
+                window.isPhoneCurrentlyUnflipped = true;
+            } else if (data.type === 'FLIP_COMPLETED') {
+                window.isPhoneCurrentlyUnflipped = false;
+                if (window.localFlipKickTimer) clearTimeout(window.localFlipKickTimer); // 解除本地追殺倒數
+            }
+
+            if (window.isAIPaused) return; // 休息時間：只紀錄狀態，不跳出警告
 
             if (data.type === 'FLIP_WARNING') {
-                
-                // 🛑 【關鍵防呆】如果是休息時間，直接 return 略過，不觸發5秒警告！
-                if (isCurrentlyBreaking) {
-                    console.log("☕ 休息時間，允許翻開手機！(忽略警告)");
-                    return; 
-                }
-
                 isFlipWarningActive = true;
                 myStatus = "DISTRACTED";
                 socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
                 
-                // 播放國家級警報音效
                 if (!window.alertAudio) {
                     window.alertAudio = new Audio('https://www.myinstants.com/media/sounds/iphone-emergency-alert.mp3');
                     window.alertAudio.loop = true;
                 }
                 window.alertAudio.play().catch(e => console.log("音效播放受阻", e));
                 
-                // [瘦身改寫] 交給 RoomUI 處理畫面，不再寫死 HTML
                 if (window.RoomUI) window.RoomUI.showWarning('PHONE_FLIP', 5);
+
+                showFlipCountdownModal();
 
             } else if (data.type === 'FLIP_COMPLETED') {
                 if (window.alertAudio) {
@@ -135,57 +236,75 @@ if (typeof io !== 'undefined') {
                     window.alertAudio.currentTime = 0;
                 }
 
+                if (isFlipWarningActive) {
+                    if (socket) {
+                        socket.emit('violation', {
+                            name: myUsername,
+                            type: '📱 翻開手機 (已於5秒內及時蓋回)',
+                            image: null 
+                        });
+                    }
+                    window.totalViolationCount++;
+                    window.violationDetails["📱 使用手機"] = (window.violationDetails["📱 使用手機"] || 0) + 1;
+                }
+
                 isFlipWarningActive = false;
                 myStatus = "FOCUSED";
                 
-                // [瘦身改寫] 關閉畫面警告
                 if (window.RoomUI) window.RoomUI.hideWarning();
-                
+                hideFlipCountdownModal();
+
                 socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: true });
             }
         }
     });
 
-    socket.on('flip_failed', (data) => {
+    socket.on('flip_failed', async (data) => {
         const targetName = data.name || data.username || "某位同學";
 
         if (targetName === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
             
-            // ==========================================
-            // [新增] 取得目前的休息狀態，防止5秒後被強制退出
-            // ==========================================
-            const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
+            if (window.isKickingOut) return; 
+            window.isKickingOut = true; 
 
-            // 🛑 【關鍵防呆】如果是休息時間，直接 return 略過，不判定違規！
-            if (isCurrentlyBreaking) {
-                console.log("☕ 休息時間，允許翻開手機！(忽略最終違規)");
+            if (window.isAIPaused) {
+                window.isKickingOut = false; // 休息時間被赦免
                 return; 
             }
 
-            console.log("🚨 接收到手機最終違規，強制退出！");
             isPhoneFlipped = false; 
-            
             if (window.alertAudio) {
                 window.alertAudio.pause();
                 window.alertAudio.currentTime = 0;
             }
             if (window.RoomUI) window.RoomUI.hideWarning();
+            hideFlipCountdownModal();
             
-            captureViolation("🚨 嚴重違規：手機翻轉中斷");
+            window.totalViolationCount++;
+            window.violationDetails["📱 手機翻轉中斷"] = (window.violationDetails["📱 手機翻轉中斷"] || 0) + 1;
             
-            sessionStorage.removeItem('mobileLinked');
-            localStorage.removeItem('mobileLinked');
+            setTimeout(async () => {
+                alert("🚨 您已違反翻轉專注規則，系統即將為您結算專注數據並通報導師！");
+                await endSession();
+            }, 100);
             
-            alert("🚨 您已違反翻轉專注規則，系統已通報全班並強制將您退出教室！");
-            window.location.href = 'index.html'; 
         } else if (targetName !== myUsername) {
             showPublicShamingToast(targetName);
-            
             const bbContent = document.getElementById('blackboardContent'); 
             if (bbContent) {
-                bbContent.innerText = `🚨 系統廣播：${targetName} 手機翻轉中斷！`;
+                bbContent.innerText = `🚨 系統廣播：${targetName} 因翻開手機被強制踢出教室！`;
                 bbContent.classList.add('text-red-400');
                 setTimeout(() => bbContent.classList.remove('text-red-400'), 4000);
+            }
+        }
+    });
+    
+    socket.on('tutor_command', async (data) => {
+        if (data.command === 'course_ended') {
+            if (!window.hasAutoEnded) {
+                window.hasAutoEnded = true; 
+                alert("🎉 本次特約教室的所有課程已結束！即將為您產生專注結算報告...");
+                await endSession();
             }
         }
     });
@@ -207,13 +326,9 @@ if (typeof io !== 'undefined') {
         if (window.addJoinRequest) window.addJoinRequest(data);
     });
 
-    // ==========================================
-    // [修復] 排行榜渲染與左下角專注時間更新
-    // ==========================================
     socket.on("update_rank", (users) => {
         remoteUsers = users; 
         
-        // 更新左下角個人頭像旁的專注分鐘 (myFocusTime)
         const me = users.find(u => u.name === myUsername);
         if (me) {
             const myFocusTimeEl = document.getElementById('myFocusTime');
@@ -336,23 +451,21 @@ window.addEventListener('deviceorientation', (event) => {
 });
 
 async function captureViolation(reason) {
-    totalViolationCount++;
-    if (reason.includes("手機")) violationDetails["📱 使用手機"]++;
-    else if (reason.includes("離座")) violationDetails["🪑 偵測離座"]++;
-    else if (reason.includes("趴睡")) violationDetails["💤 偵測趴睡"]++;
-    else if (reason.includes("中斷")) violationDetails["📱 手機翻轉中斷"]++;
-    else if (reason.includes("分頁")) violationDetails["🚫 切換分頁"]++; // 新增分類
+    if (currentRoomMode !== 'tutor' || reason.includes("中斷") || reason.includes("踢出")) {
+        window.totalViolationCount++;
+        if (reason.includes("手機") && !reason.includes("中斷") && !reason.includes("踢出")) window.violationDetails["📱 使用手機"]++;
+        else if (reason.includes("離座")) window.violationDetails["🪑 偵測離座"]++;
+        else if (reason.includes("趴睡")) window.violationDetails["💤 偵測趴睡"]++;
+        else if (reason.includes("中斷") || reason.includes("踢出")) window.violationDetails["📱 手機翻轉中斷"]++;
+        else if (reason.includes("分頁")) window.violationDetails["🚫 切換分頁"]++; 
+    }
 
     const now = Date.now();
-    // 切換分頁與翻轉中斷不受 15 秒防洗版限制
-    if (now - lastViolationTime < 15000 && !reason.includes("中斷") && !reason.includes("分頁")) return; 
+    if (now - lastViolationTime < 15000 && !reason.includes("中斷") && !reason.includes("踢出") && !reason.includes("分頁")) return; 
     lastViolationTime = now;
     
     let imageData = null;
-    
-    // 🚀 核心修改：精準判定是否需要截圖
-    // 只有 趴睡、離座、分心，或是 使用手機(且不是翻轉中斷) 才需要截圖
-    const needsScreenshot = reason.includes("趴睡") || reason.includes("離座") || reason.includes("分心") || (reason.includes("手機") && !reason.includes("中斷"));
+    const needsScreenshot = reason.includes("趴睡") || reason.includes("離座") || reason.includes("分心") || (reason.includes("手機") && !reason.includes("中斷") && !reason.includes("踢出"));
 
     if (needsScreenshot && videoElement) {
         try {
@@ -381,7 +494,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (currentPath.includes('managed-room.html')) {
         currentRoomMode = 'simulated'; 
     } else if (currentPath.includes('tutor-room.html')) {
-        // 🚀 獨立特約模式：建立與模擬教室隔絕的專屬空間
         currentRoomMode = 'tutor'; 
     } else if (currentPath.includes('course-room.html')) {
         currentRoomMode = '1'; 
@@ -414,21 +526,14 @@ async function initApp() {
     const goal = document.getElementById('inputGoal')?.value || "專注學習";
     const minInput = document.getElementById('inputTime');
     
-    // ==========================================
-    // [新增] 嚴格的時間防呆驗證邏輯
-    // ==========================================
     let min = minInput && minInput.value ? parseInt(minInput.value) : 25;
-    
-    if (isNaN(min) || min <= 0) {
-        min = 25; // 預設值
-    }
+    if (isNaN(min) || min <= 0) min = 25; 
     
     if (min > 180) {
         alert("⚠️ 為了你的健康，專注時間最多只能設定 180 分鐘喔！");
-        if (minInput) minInput.value = 180; // 自動幫他改回 180
-        return; // ⛔ 直接終止函數，不讓他進入教室！
+        if (minInput) minInput.value = 180; 
+        return; 
     }
-    // ==========================================
 
     myUsername = name; 
     sessionStartTime = Date.now(); 
@@ -443,7 +548,6 @@ async function initApp() {
     document.getElementById("mySidebarAvatar").src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${name}`;
     updateUIMode(currentRoomMode);
 
-    // 呼叫 StudyTimer 來處理主計時器！
     if (window.StudyTimer) {
         window.StudyTimer.start(min);
     } else {
@@ -482,12 +586,9 @@ async function initAI() {
 
 async function predictLoop() {
     const now = performance.now();
-    const realNow = Date.now(); // 🚀 取得真實時間，用來與開始時間做比較
-    const isCurrentlyBreaking = (window.BreakManager && window.BreakManager.isBreaking) || window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
+    const realNow = Date.now(); 
+    const isCurrentlyBreaking = window.isAIPaused || (typeof isPauseMode !== 'undefined' && isPauseMode);
 
-    // ==========================================
-    // [修復] 狀態維護：每 10 秒主動告訴伺服器我還在專注，維持排行榜與教師端數據
-    // ==========================================
     if (socket && (now - lastHeartbeat > 10000)) {
         lastHeartbeat = now;
         socket.emit("update_status", { 
@@ -507,10 +608,6 @@ async function predictLoop() {
         return; 
     }
 
-    // ==========================================
-    // 🚀 新增：8 秒鐘的「入座寬限期」
-    // 讓學生剛進教室時有時間坐好、調整鏡頭，這段期間 AI 先不抓違規，避免一進場就閃紅框
-    // ==========================================
     if (sessionStartTime && (realNow - sessionStartTime < 8000)) {
         requestAnimationFrame(predictLoop);
         return;
@@ -546,13 +643,11 @@ async function predictLoop() {
         if (didCheckRun) {
             let currentIssue = null;
             
-            // 🚀 修改：特約教室 (simulated) 拔除手機豁免權，只要鏡頭看到手機就是違規。
-            // 普通教室則保有翻轉豁免權 (isPhoneFlipped 為 true 時不抓)。
             let shouldWarnPhone = false;
             if (typeof currentRoomMode !== 'undefined' && currentRoomMode === 'tutor') {
-                shouldWarnPhone = isPhoneDetected; // 👑 VIP 特約：專屬模式，拔除豁免權
+                shouldWarnPhone = isPhoneDetected; 
             } else {
-                shouldWarnPhone = (isPhoneDetected && !isPhoneFlipped); // 🏠 普通模式：有連動翻轉則豁免
+                shouldWarnPhone = (isPhoneDetected && !isPhoneFlipped); 
             }
 
             if (shouldWarnPhone) {
@@ -570,7 +665,6 @@ async function predictLoop() {
 function handleDistractionBuffer(issue, now) {
     let prevStatus = myStatus;
     
-    // 1. 如果處於合法休息時間，無條件清空警告
     if (window.isAIPaused) {
         distractionCounter = 0; 
         distractionStartTime = 0; 
@@ -590,7 +684,6 @@ function handleDistractionBuffer(issue, now) {
             const elapsed = (now - distractionStartTime) / 1000;
             let limit = (currentRoomMode === "2" || currentRoomMode === "simulated") ? 5 : 10;
             
-            // [瘦身改寫] 分類違規型態，供 RoomUI 顯示對應圖示
             let type = "DISTRACTED";
             if (issue.includes("手機")) type = "PHONE";
             else if (issue.includes("趴睡")) type = "SLEEP";
@@ -603,15 +696,11 @@ function handleDistractionBuffer(issue, now) {
                 myStatus = (issue.includes("趴睡")) ? "SLEEPING" : "DISTRACTED";
                 if (window.RoomUI) window.RoomUI.showWarning(type);
                 
-                // 🚀 核心修改：解除 simulated 限制，讓所有教室(沉浸、線上、模擬)只要違規就通報！
                 if (myStatus !== prevStatus) {
                     captureViolation(issue);
                 }
             }
 
-            // ==========================================
-            // 🚀 修改：拋出「攝影機違規事件」，交給外部 (tutor-client.js) 負責截圖與通報
-            // ==========================================
             const currentNow = Date.now();
             if (currentNow - window.lastCameraViolationTime > 5000) { 
                 window.lastCameraViolationTime = currentNow;
@@ -619,12 +708,10 @@ function handleDistractionBuffer(issue, now) {
                 const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
                 const violationReason = issue || "🚫 鏡頭違規：離座/趴睡/手機"; 
                 
-                // 創建並拋出一個自訂事件，把資料包在 detail 裡面
                 document.dispatchEvent(new CustomEvent('CameraViolation', {
                     detail: { name: myName, reason: violationReason }
                 }));
             }
-            // ==========================================
         }
     } else {
         distractionCounter = 0; 
@@ -641,17 +728,17 @@ function handleDistractionBuffer(issue, now) {
 
 function generateFinalReport(seconds) {
     const mins = Math.floor(seconds / 60);
-    let score = 80 + mins - (totalViolationCount * 5);
+    let score = 80 + mins - (window.totalViolationCount * 5);
     score = Math.max(0, Math.min(100, score));
 
-    let details = Object.entries(violationDetails)
+    let details = Object.entries(window.violationDetails)
         .filter(([_, count]) => count > 0)
         .map(([key, val]) => `   ${key} x${val}`)
         .join("\n");
     if (!details) details = "   無違規紀錄，表現優異！✨";
 
     let comment = "";
-    if (score >= 90) comment = "太不可思議了！你的專注力簡集就像是黑洞，把所有的知識都吸進去了！AI 老師為你感到驕傲，繼續保持這種王者風範！👑";
+    if (score >= 90) comment = "太不可思議了！你的專注力簡直就像是黑洞，把所有的知識都吸進去了！AI 老師為你感到驕傲，繼續保持這種王者風範！👑";
     else if (score >= 70) comment = "做得好！這段時間你展現了強大的意志力。雖然中間有一點點小分神，但你調整的速度非常快。你是個天生的學習者！💪";
     else if (score >= 50) comment = "今天辛苦了！學習的路途難免有分心的時候，但重要的是你完成了這段旅程。喝杯水休息一下，下次我們一起挑戰更高分！🌿";
     else comment = "感覺你今天的心情有點浮躁呢？沒關係，每個人都有狀態起伏的時候。AI 老師建議你先去散個步，找回平靜的自己。加油，明天會更好！💖";
@@ -660,7 +747,6 @@ function generateFinalReport(seconds) {
 }
 
 async function endSession() {
-    // [修改] 取得扣除「暫停/休息」時間後的真實專注時長
     let elapsedSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
     if (window.StudyTimer && window.StudyTimer.totalSeconds > 0) {
         elapsedSeconds = window.StudyTimer.totalSeconds - window.StudyTimer.remainingSeconds;
@@ -683,15 +769,21 @@ async function endSession() {
           `🤖 AI 老師真心話：\n${report.comment}`);
 
     if (socket) {
-        socket.emit("submit_final_report", {
+        const reportData = {
             name: myUsername,
             score: report.score,
             duration: elapsedSeconds,
-            violationCount: totalViolationCount,
-            details: violationDetails,
+            violationCount: window.totalViolationCount,
+            details: window.violationDetails,
             aiComment: report.comment,
             timestamp: new Date().toLocaleTimeString()
-        });
+        };
+
+        socket.emit("submit_final_report", reportData);
+
+        if (currentRoomMode === 'tutor') {
+            socket.emit("tutor_receive_report", reportData);
+        }
 
         socket.emit('report_session_done', {
             name: myUsername,
@@ -707,7 +799,7 @@ async function endSession() {
     const isDeepFocus = focusMinutes >= 120; 
 
     let gains = (pomodoros * 2) + (isDeepFocus ? 5 : 0);
-    let penalties = totalViolationCount * 5; 
+    let penalties = window.totalViolationCount * 5; 
     
     let creditDelta = gains - penalties;
     if (creditDelta > 15) creditDelta = 15;
@@ -727,7 +819,7 @@ async function endSession() {
                 username: myUsername,
                 score: report.score,
                 focusSeconds: elapsedSeconds,
-                violationDetails: violationDetails,
+                violationDetails: window.violationDetails,
                 comment: report.comment,
                 creditDelta: creditDelta 
             })
@@ -794,9 +886,8 @@ window.sendReaction = (emoji) => {
     if(socket) socket.emit("send_reaction", { emoji, username: myUsername });
 };
 
-// 🚀 修改：切換分頁嚴格偵測機制 (支援所有普通教室與特約教室)
 document.addEventListener("visibilitychange", () => {
-    if (document.hidden && !window.isAIPaused && !isAuditMode) {
+    if (document.hidden && !window.isAIPaused && !isAuditMode && !window.isKickingOut) {
         const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '學員';
         console.log("偵測到切換分頁，準備處理違規...");
         
@@ -804,17 +895,14 @@ document.addEventListener("visibilitychange", () => {
             window.RoomUI.showWarning("DISTRACTED");
         }
 
-        // 1. 紀錄並通報給普通教師端 (內部已設定不會截圖)
         if (currentRoomMode !== 'tutor') {
             captureViolation("🚫 切換分頁 (離開視窗)");
         }
 
-        // 2. 拋出事件讓特約保鑣 (tutor-client.js) 處理
         document.dispatchEvent(new CustomEvent('TabSwitchedViolation', {
             detail: { name: myName }
         }));
     } else {
-        // ✅ 學生切回視窗時，自動收起紅色警告
         if (typeof window.RoomUI !== 'undefined' && window.RoomUI.hideWarning) {
             window.RoomUI.hideWarning();
         }

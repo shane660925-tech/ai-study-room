@@ -73,6 +73,13 @@
 </head>
 <body class="h-screen flex flex-col md:flex-row bg-[#05070a] text-white overflow-hidden">
     
+    <div id="flipWarningOverlay" class="fixed inset-0 z-[9999] bg-red-600 flex flex-col items-center justify-center hidden">
+        <i class="fas fa-exclamation-triangle text-white text-9xl animate-ping mb-8"></i>
+        <h1 class="text-white text-6xl font-black tracking-widest text-center">警告！設備已翻轉</h1>
+        <p class="text-white text-2xl mt-4">請立即將手機立起，恢復專注狀態！</p>
+        <audio id="alertSound" src="/audio/alert.mp3" preload="auto" loop></audio>
+    </div>
+
     <div id="speaker-overlay" class="fixed inset-0 z-[10010] bg-black/80 backdrop-blur-md flex items-center justify-center hidden">
         <div class="bg-gradient-to-b from-blue-900/40 to-black border-2 border-blue-500/50 p-8 rounded-3xl max-w-lg w-full text-center shadow-[0_0_50px_rgba(59,130,246,0.3)] speaker-bounce">
             <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-blue-400 shadow-lg">
@@ -359,5 +366,6 @@
     <script type="module" src="/js/ai-core.js"></script>
     <script src="/js/room-ui.js"></script>
     <script src="/js/break-manager.js"></script>
+
 </body>
 </html>
