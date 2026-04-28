@@ -254,7 +254,8 @@ function renderViolations() {
                 ${records.map((snap, idx) => {
                     const uniqueID = `${name.replace(/\s+/g, '')}-${idx}`;
                     const isFlipError = snap.reason === '擅自翻開手機';
-                    const isCritical = isFlipError || ['離位', '趴睡', '使用手機'].some(k => snap.reason.includes(k));
+                    // 🚀 修正標籤字眼，將「分心」與其他需要截圖的重大違規一同標記為紅色警告
+                    const isCritical = isFlipError || ['離位', '離座', '趴睡', '手機', '分心'].some(k => snap.reason.includes(k));
                     const badgeColor = isCritical ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/20';
                     
                     return `

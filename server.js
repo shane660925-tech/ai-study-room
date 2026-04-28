@@ -6,6 +6,7 @@ const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('@supabase/supabase-js');
+const ScoringService = require('./ScoringService');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,58 +39,90 @@ console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 
 app.get('/api/user-stats', async (req, res) => {
     const username = req.query.username;
-    if (!username) return res.status(400).json({ error: '缺少使用者名稱' });
+    if (!username) return res.status(400).json({ error: 'Missing username' });
 
     try {
-        const { data: user } = await supabase
-            .from('users')
-            .select('*')
-            .eq('username', username)
-            .maybeSingle();
+        // 1. 獲取基本用戶資料
+        const { data: user } = await supabase.from('users').select('*').eq('username', username).single();
 
-        const { data: records } = await supabase
+        // 2. 獲取該用戶的所有紀錄 (用於計算總和與平均)
+        const { data: allRecords } = await supabase
+            .from('focus_records')
+            .select('focus_seconds, integrity_score')
+            .eq('username', username);
+
+        let totalSecondsSum = 0;
+        let averageIntegrity = 100;
+
+        if (allRecords && allRecords.length > 0) {
+            // 加總所有專注秒數
+            totalSecondsSum = allRecords.reduce((sum, r) => sum + (r.focus_seconds || 0), 0);
+            
+            // 計算誠信分平均 (過濾掉可能的 null 值)
+            const validScores = allRecords.map(r => r.integrity_score).filter(s => s !== null);
+            if (validScores.length > 0) {
+                averageIntegrity = Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length);
+            }
+        }
+
+        // 3. 獲取最近 10 筆紀錄 (僅用於表格顯示)
+        const { data: displayRecords } = await supabase
             .from('focus_records')
             .select('*')
             .eq('username', username)
             .order('created_at', { ascending: false })
             .limit(10);
 
-        res.json({
-            user: user || { total_seconds: 0, streak: 1, role: 'student', integrity_score: 100 },
-            records: records || []
+        res.json({ 
+            user, 
+            records: displayRecords, 
+            calculatedTotalSeconds: totalSecondsSum, 
+            calculatedAvgIntegrity: averageIntegrity 
         });
     } catch (err) {
-        console.error("API 錯誤:", err);
-        res.status(500).json({ error: '資料庫讀取錯誤' });
+        res.status(500).json({ error: err.message });
     }
 });
 
+// ==========================================
+// 核心修正：修改 save-focus API (結算點)
+// ==========================================
 app.post('/api/save-focus', async (req, res) => {
-    const { username, roomType, focusSeconds, comment, score, creditDelta } = req.body;
+    const { username, roomType, focusSeconds, deviceMode, teamSize, flippedCount, comment, creditDelta, violationDetails, integrityScore } = req.body;
+    
     if (!username || !roomType || focusSeconds === undefined) {
         return res.status(400).json({ error: '缺少參數' });
     }
 
+    // 從 onlineUsers 獲取該使用者的臨時懲罰紀錄
+    const userSession = onlineUsers.find(u => u.name === username) || {};
     const today = new Date().toISOString().split('T')[0];
 
     try {
-        // Level 1: 手機翻轉模式積分減半機制
-        let finalScore = focusSeconds; 
-        
-        if (roomType === 'flip-mode') {
-            finalScore = Math.floor(focusSeconds * 0.5); 
-            console.log(`[系統] ${username} 使用手機翻轉模式，原始秒數 ${focusSeconds}，折算積分 ${finalScore}`);
-        }
+        // 使用核心大公式計算最終經驗值 (finalExp)
+        const { totalExp, breakdown } = ScoringService.calculateFinalExp({
+            durationMin: Math.floor(focusSeconds / 60),
+            deviceMode: deviceMode, // 'ULTIMATE', 'VISUAL', etc.
+            roomMode: roomType,
+            teamSize: teamSize || 1,
+            flippedCount: flippedCount || 0,
+            penaltyExp: userSession.accumulatedPenaltyExp || 0,
+            violationDetails: violationDetails || {}
+        });
 
+        // 1. 寫入專注紀錄 (focus_records) - 已加入 integrity_score
         await supabase.from('focus_records').insert([
             {
                 username: username,
                 room_type: roomType,
-                focus_seconds: finalScore, 
-                ai_comment: comment || ""
+                focus_seconds: focusSeconds, // 存原始秒數作為紀錄
+                earned_exp: totalExp,         // 存公式計算後的積分/經驗值
+                ai_comment: comment || "",
+                integrity_score: integrityScore // 【修正：新增此行】
             }
         ]);
 
+        // 2. 更新使用者總數據 (users)
         const { data: user } = await supabase
             .from('users')
             .select('*')
@@ -109,22 +142,35 @@ app.post('/api/save-focus', async (req, res) => {
 
             await supabase.from('users')
                 .update({
-                    total_seconds: (user.total_seconds || 0) + finalScore,
+                    total_seconds: (user.total_seconds || 0) + totalExp, // 將計算後的積分累加至總分
                     streak: newStreak,
                     last_login: today,
                     integrity_score: newIntegrity
                 })
                 .eq('username', username);
                 
-            console.log(`[系統結算] ${username} 誠信分變動: ${sessionDelta}，目前總分: ${newIntegrity}`);
+            console.log(`[系統結算] ${username} 最終獲得 EXP: ${totalExp}，誠信分變動: ${sessionDelta}`);
+
+            // 結算成功後，重置該 Session 的懲罰分數
+            if (userSession.name) {
+                userSession.accumulatedPenaltyExp = 0;
+            }
         } else {
+            // 新使用者邏輯
             let initialIntegrity = Math.max(0, Math.min(100, 100 + (creditDelta !== undefined ? Number(creditDelta) : 0)));
             await supabase.from('users').insert([
-                { username: username, total_seconds: finalScore, streak: 1, last_login: today, role: 'student', integrity_score: initialIntegrity }
+                { 
+                    username: username, 
+                    total_seconds: totalExp, 
+                    streak: 1, 
+                    last_login: today, 
+                    role: 'student', 
+                    integrity_score: initialIntegrity 
+                }
             ]);
         }
 
-        res.json({ message: '儲存成功！', earned: finalScore });
+        res.json({ message: '儲存成功！', earned: totalExp, breakdown: breakdown });
         
     } catch (err) {
         console.error("儲存失敗:", err);
@@ -770,33 +816,80 @@ io.on('connection', (socket) => {
         io.emit('mobile_sync_update', data);
     });
 
+    // ==========================================
+    // 修改後的 report_violation (動態扣分機制)
+    // ==========================================
     socket.on('report_violation', async (data) => {
         const user = onlineUsers.find(u => u.name === data.name);
-        if (!user || user.isFlipped) return;
+        
+        if (!user) return;
 
-        let penalty = 2;
-        if (data.reason.includes("手機")) penalty = 10;
-        if (data.reason.includes("睡")) penalty = 5;
-        if (data.reason.includes("分頁")) penalty = 3;
+        const reasonStr = data.reason || data.type || "";
+        const isPhoneInVideo = (reasonStr.includes("手機") || data.type === 'PHONE_IN_VIDEO') && !reasonStr.includes("中斷") && !reasonStr.includes("踢出") && !reasonStr.includes("擅自翻開");
+        
+        if (user.isFlipped && isPhoneInVideo) {
+            return; // 僅針對手機入鏡給予豁免
+        }
 
-        user.integrity_score = Math.max(0, user.integrity_score - penalty);
+        let integrityPenalty = 0;
+        let expPenalty = 0;
 
+        // 動態判定違規扣除額度
+        if (data.type === 'PHONE_IN_VIDEO' || reasonStr.includes("手機")) {
+            integrityPenalty = 10; expPenalty = 500;
+        } else if (data.type === 'SLEEPING' || reasonStr.includes("睡")) {
+            integrityPenalty = 5; expPenalty = 300;
+        } else if (data.type === 'LEFT_SEAT' || reasonStr.includes("離座") || reasonStr.includes("離位")) {
+            integrityPenalty = 3; expPenalty = 200;
+        } else if (data.type === 'TAB_SWITCH' || reasonStr.includes("分頁")) {
+            integrityPenalty = 3; expPenalty = 100;
+        } else if (data.type === 'FLIP_FAILED') {
+            integrityPenalty = 2; expPenalty = 100;
+            user.needsKick = true; 
+        } else {
+            integrityPenalty = 2; expPenalty = 0; 
+        }
+
+        // 更新誠信分與經驗值扣除
+        user.integrity_score = Math.max(0, user.integrity_score - integrityPenalty);
+        user.accumulatedPenaltyExp = (user.accumulatedPenaltyExp || 0) + expPenalty;
+
+        // 寫入資料庫與系統日誌 (這部分不論哪種教室都要執行)
+        try {
+            await supabase.from('users').update({ integrity_score: user.integrity_score }).eq('username', user.name);
+            await supabase.from('violation_history').insert([{ 
+                username: user.name, 
+                reason: reasonStr, 
+                penalty_points: integrityPenalty 
+            }]);
+            addTeacherLog(`❌ 懲罰: ${user.name} 因 [${reasonStr}] 扣除誠信分 ${integrityPenalty} 點, EXP 扣除 ${expPenalty} 點`);
+        } catch (err) { 
+            console.error("資料庫同步失敗:", err); 
+        }
+
+        // 🚀 核心隔離修正：避免特約教室重複顯示
+        // 如果是特約學生，且違規屬於「AI 鏡頭偵測 (離座、趴睡、分心、手機)」
+        const isTutor = user.roomMode === 'tutor';
+        const isAIViolation = ['PHONE_IN_VIDEO', 'SLEEPING', 'LEFT_SEAT', 'DISTRACTED'].includes(data.type) || 
+                              ['手機', '睡', '離座', '離位', '分心'].some(k => reasonStr.includes(k));
+
+        if (isTutor && isAIViolation) {
+            broadcastUpdateRank();
+            return; // 直接返回，結束處理
+        }
+
+        // 以下為一般教室、或特約教室的「純文字違規 (切換分頁)」才會執行的證據流推播
         const newSnap = {
             id: Date.now(),
             name: data.name,
-            reason: data.reason,
+            reason: reasonStr, 
             image: data.image,
             time: new Date().toLocaleTimeString(),
             current_integrity: user.integrity_score
         };
+        
         violationSnaps.unshift(newSnap);
         if (violationSnaps.length > 30) violationSnaps.pop();
-
-        try {
-            await supabase.from('users').update({ integrity_score: user.integrity_score }).eq('username', user.name);
-            await supabase.from('violation_history').insert([{ username: user.name, reason: data.reason, penalty_points: penalty }]);
-            addTeacherLog(`❌ 懲罰: ${user.name} 因 [${data.reason}] 扣除 ${penalty} 分 (剩餘: ${user.integrity_score})`);
-        } catch (err) { console.error("資料庫同步失敗:", err); }
 
         io.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
         broadcastUpdateRank();

@@ -18,6 +18,87 @@ window.previousClassStatus = null;
 if (typeof window.isAIPaused === 'undefined') window.isAIPaused = false;
 
 // ==========================================
+// 🚀 新增：電腦端主動倒數全域變數與邏輯
+// ==========================================
+// 紀錄手機最後一次回報的狀態（預設為 true 代表蓋上）
+window.currentPhoneFlipped = true; 
+window.desktopWarningTimer = null;
+window.desktopWarningCount = 5;
+
+// === 電腦端主動倒數邏輯 ===
+window.startDesktopCountdown = function() {
+    // 如果已經在倒數中，就不重複觸發
+    if (window.desktopWarningTimer) return; 
+    
+    window.desktopWarningCount = 5;
+    
+    console.log("⚠️ 電腦端啟動強制倒數！");
+    const overlay = document.getElementById('flipWarningOverlay');
+    const alertSound = document.getElementById('alertSound');
+    if (overlay) overlay.classList.remove('hidden');
+    if (alertSound) {
+        alertSound.currentTime = 0;
+        alertSound.play().catch(e => console.log('音效播放被阻擋', e));
+    }
+
+    window.desktopWarningTimer = setInterval(() => {
+        window.desktopWarningCount--;
+        
+        console.log(`倒數: ${window.desktopWarningCount}`);
+        const warningNum = document.getElementById('warningNum');
+        if (warningNum) warningNum.innerText = window.desktopWarningCount;
+        
+        if (window.desktopWarningCount <= 0) {
+            window.stopDesktopCountdown();
+            
+            // 🚨 倒數結束，電腦端主動判定違規！
+            const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
+            
+            // 同步寫入結算扣分
+            if (typeof window.totalViolationCount !== 'undefined') window.totalViolationCount++;
+            if (typeof window.violationDetails !== 'undefined') {
+                window.violationDetails["📱 手機翻轉中斷"] = (window.violationDetails["📱 手機翻轉中斷"] || 0) + 1;
+            }
+
+            if (typeof socket !== 'undefined' && socket.connected) {
+                // 發送踢出指令給伺服器，並通知大廳
+                socket.emit('flip_failed', { name: myName });
+                socket.emit('violation', { 
+                    name: myName, 
+                    type: '🚨 翻轉中斷 (強制踢出教室)', 
+                    image: null 
+                });
+            }
+            
+            setTimeout(async () => {
+                alert("🚨 嚴重違規！您已被強制登出教室！");
+                if (typeof window.endSession === 'function') {
+                    await window.endSession();
+                } else {
+                    window.location.href = 'index.html';
+                }
+            }, 100);
+        }
+    }, 1000);
+};
+
+window.stopDesktopCountdown = function() {
+    if (window.desktopWarningTimer) {
+        clearInterval(window.desktopWarningTimer);
+        window.desktopWarningTimer = null;
+        
+        console.log("✅ 手機已蓋回，取消電腦端倒數");
+        const overlay = document.getElementById('flipWarningOverlay');
+        const alertSound = document.getElementById('alertSound');
+        if (overlay) overlay.classList.add('hidden');
+        if (alertSound) {
+            alertSound.pause();
+            alertSound.currentTime = 0;
+        }
+    }
+};
+
+// ==========================================
 // 1. VIP 專屬 UI 控制邏輯
 // ==========================================
 if (typeof window.socket === 'undefined') {
@@ -102,7 +183,7 @@ window.triggerViolation = function(reason) {
     if (typeof socket !== 'undefined') {
         socket.emit('violation', {
             name: myName,
-            type: reason || 'AI 偵ীকরণ異常',
+            type: reason || 'AI 偵測異常',
             image: snapImg
         });
     }
@@ -156,6 +237,23 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.warn("⚠️ 找不到房間代碼，無法加入專屬房間！這會導致收不到專屬廣播。");
         }
+
+        // 🚀 新增：攔截手機的即時狀態
+        socket.on('update_status', (data) => {
+            const myName = document.getElementById('inputName')?.value || localStorage.getItem('studyVerseUser');
+            if (data.name === myName && data.isFlipped !== undefined) {
+                // 更新電腦端認知的「手機狀態」
+                window.currentPhoneFlipped = data.isFlipped;
+                
+                if (!window.isAIPaused && !window.currentPhoneFlipped) {
+                    // 情境 A：正在上課中，學生卻把手機翻開 -> 立刻啟動電腦端倒數
+                    if (typeof window.startDesktopCountdown === 'function') window.startDesktopCountdown();
+                } else if (window.currentPhoneFlipped) {
+                    // 情境 B：學生乖乖把手機蓋回去了 -> 停止電腦端倒數
+                    if (typeof window.stopDesktopCountdown === 'function') window.stopDesktopCountdown();
+                }
+            }
+        });
     }
 
     updateTutorStatus('normal', '連線穩定，AI 觀測中');
@@ -752,8 +850,18 @@ function updateStudentTimerLogic() {
 
     let currentStatus = isBreak ? "休息中" : "進行中";
 
-   // 🌟🌟🌟 核心豁免權開關：只有「進行中」才嚴格取締！
+    // 取得前一秒的休息狀態
+    const previousPauseState = window.isAIPaused;
+    // 🌟🌟🌟 核心豁免權開關：只有「進行中」才嚴格取締！
     window.isAIPaused = (currentStatus === "休息中");
+
+    // 🚀 新增突擊檢查：如果從「休息」切換成「上課」的瞬間，手機還是朝上的！
+    if (previousPauseState === true && window.isAIPaused === false) {
+        if (!window.currentPhoneFlipped) {
+            // 無視手機端有沒有切回網頁，電腦端直接強制開始倒數！
+            if (typeof window.startDesktopCountdown === 'function') window.startDesktopCountdown();
+        }
+    }
 
     // 🚀 新增：每秒同步 AI 暫停狀態給手機端，確保手機知道現在是不是休息時間
     if (typeof socket !== 'undefined' && socket.connected) {
@@ -764,6 +872,7 @@ function updateStudentTimerLogic() {
             isPaused: window.isAIPaused 
         });
     }
+
     // 貼心機制：如果上課時被「離座彈窗」擋住，打鐘下課時自動幫學生解除彈窗
     if (window.isAIPaused && window.isLeaveSeatActive && typeof window.handleReturnSeat === 'function') {
         window.handleReturnSeat();
@@ -788,7 +897,7 @@ function updateStudentTimerLogic() {
         if (currentStatus === "進行中") {
             window.hasPlayedStartAudio = false;
             
-            // 🚀 剛開始上課，主動檢查手機是否還沒蓋回去，並執行本地追殺倒數！
+            // 剛開始上課，主動檢查手機是否還沒蓋回去，並執行本地追殺倒數 (備用保險)
             if (typeof window.triggerPendingMobileWarning === 'function') {
                 window.triggerPendingMobileWarning();
             }

@@ -264,19 +264,41 @@ async function fetchUserStats() {
         if (!response.ok) throw new Error('伺服器回應錯誤');
         const data = await response.json();
         
-        const totalMinutes = data.user ? Math.floor(data.user.total_seconds / 60) : 0;
+        // 修改數據讀取來源
+        // 累積專注時間：改用後端算好的 calculatedTotalSeconds
+        const totalMinutes = data.calculatedTotalSeconds ? Math.floor(data.calculatedTotalSeconds / 60) : 0;
+        
+        // 誠信信用分：改用後端算好的 calculatedAvgIntegrity
+        const integrity = data.calculatedAvgIntegrity || 100;
+        
         const streak = data.user ? data.user.streak : 0;
-        const integrity = data.user ? (data.user.integrity_score || 100) : 100;
 
-        document.getElementById('totalTimeDisplay').innerHTML = `${totalMinutes}<span class="text-lg text-gray-500 ml-1">min</span>`;
-        document.getElementById('streakDisplay').innerHTML = `${streak}<span class="text-lg text-gray-500 ml-1">days</span>`;
-        document.getElementById('integrityDisplay').innerHTML = `${integrity}<span class="text-lg text-gray-500 ml-1">pt</span>`;
+        // 更新介面 (根據需求更新 ID)
+        if (document.getElementById('totalFocusTime')) {
+            document.getElementById('totalFocusTime').innerText = totalMinutes;
+        }
+        if (document.getElementById('integrityScore')) {
+            document.getElementById('integrityScore').innerText = integrity;
+        }
+
+        // 保留原有的介面更新 (相容舊有 HTML 結構)
+        if (document.getElementById('totalTimeDisplay')) {
+            document.getElementById('totalTimeDisplay').innerHTML = `${totalMinutes}<span class="text-lg text-gray-500 ml-1">min</span>`;
+        }
+        if (document.getElementById('streakDisplay')) {
+            document.getElementById('streakDisplay').innerHTML = `${streak}<span class="text-lg text-gray-500 ml-1">days</span>`;
+        }
+        if (document.getElementById('integrityDisplay')) {
+            document.getElementById('integrityDisplay').innerHTML = `${integrity}<span class="text-lg text-gray-500 ml-1">pt</span>`;
+        }
         
         let deskName = "🪵 初心木桌";
         if (streak >= 30) deskName = "🚀 虛擬座艙";
         else if (streak >= 7) deskName = "👑 黃金書桌";
         else if (streak >= 3) deskName = "⚙️ 合金工作台";
-        document.getElementById('rankDisplay').innerText = deskName;
+        if (document.getElementById('rankDisplay')) {
+            document.getElementById('rankDisplay').innerText = deskName;
+        }
 
         // 動態成就系統 (Achievement Badges)
         const badgesContainer = document.getElementById('myBadges');
@@ -308,29 +330,31 @@ async function fetchUserStats() {
         }
 
         const tbody = document.getElementById('recordsTableBody');
-        if (!data.records || data.records.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-gray-500 uppercase tracking-widest">No Logs Found / 尚無數據</td></tr>`;
-            return;
+        if (tbody) {
+            if (!data.records || data.records.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-gray-500 uppercase tracking-widest">No Logs Found / 尚無數據</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.records.map(record => {
+                const date = new Date(record.created_at);
+                const dateStr = date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) + ' ' + 
+                              date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const m = Math.floor(record.focus_seconds / 60);
+                
+                let icon = record.room_type === 'flip-room' ? 'fa-mobile-alt text-green-500' : 'fa-desktop text-blue-500';
+                let typeLabel = record.room_type === 'flip-room' ? '手機翻轉模式' : 'AI 監控教室';
+
+                return `
+                    <tr class="hover:bg-white/5 transition-colors group">
+                        <td class="p-4 pl-8"><span class="text-gray-500 font-mono tracking-tighter">${dateStr}</span></td>
+                        <td class="p-4"><span class="flex items-center gap-2 text-white font-bold"><i class="fas ${icon}"></i>${typeLabel}</span></td>
+                        <td class="p-4 text-right pr-8">
+                            <span class="font-mono text-blue-400 font-bold tracking-widest">+ ${m} MIN</span>
+                        </td>
+                    </tr>`;
+            }).join('');
         }
-
-        tbody.innerHTML = data.records.map(record => {
-            const date = new Date(record.created_at);
-            const dateStr = date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) + ' ' + 
-                          date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const m = Math.floor(record.focus_seconds / 60);
-            
-            let icon = record.room_type === 'flip-room' ? 'fa-mobile-alt text-green-500' : 'fa-desktop text-blue-500';
-            let typeLabel = record.room_type === 'flip-room' ? '手機翻轉模式' : 'AI 監控教室';
-
-            return `
-                <tr class="hover:bg-white/5 transition-colors group">
-                    <td class="p-4 pl-8"><span class="text-gray-500 font-mono tracking-tighter">${dateStr}</span></td>
-                    <td class="p-4"><span class="flex items-center gap-2 text-white font-bold"><i class="fas ${icon}"></i>${typeLabel}</span></td>
-                    <td class="p-4 text-right pr-8">
-                        <span class="font-mono text-blue-400 font-bold tracking-widest">+ ${m} MIN</span>
-                    </td>
-                </tr>`;
-        }).join('');
     } catch (error) {
         console.error("數據同步失敗:", error);
         if (document.getElementById('recordsTableBody')) {
