@@ -264,22 +264,47 @@ async function fetchUserStats() {
         if (!response.ok) throw new Error('伺服器回應錯誤');
         const data = await response.json();
         
-        // 修改數據讀取來源
-        // 累積專注時間：改用後端算好的 calculatedTotalSeconds
+        // 累積專注時間
         const totalMinutes = data.calculatedTotalSeconds ? Math.floor(data.calculatedTotalSeconds / 60) : 0;
         
-        // 誠信信用分：改用後端算好的 calculatedAvgIntegrity
+        // 誠信信用分
         const integrity = data.calculatedAvgIntegrity || 100;
         
         const streak = data.user ? data.user.streak : 0;
 
-        // 更新介面 (根據需求更新 ID)
+        // 更新介面
         if (document.getElementById('totalFocusTime')) {
             document.getElementById('totalFocusTime').innerText = totalMinutes;
         }
         if (document.getElementById('integrityScore')) {
             document.getElementById('integrityScore').innerText = integrity;
         }
+
+        // ==========================================
+        // 【修正後的精準等級與經驗值計算邏輯】
+        // ==========================================
+        // 1. 抓取後端資料庫中累計的總經驗值 (對應 server.js 存入的 totalExp)
+        const totalExp = data.user ? data.user.total_seconds : (data.total_seconds || 0); 
+        
+        // 2. 設定「升一級需要多少經驗值」(你可以隨時改這個數字，例如改為 1000)
+        const expPerLevel = 1000; 
+
+        // 3. 計算等級與當下經驗值 (完美符合要求：升級後扣除所需的經驗值)
+        const level = Math.floor(totalExp / expPerLevel) + 1; // 總經驗除以升級門檻，+1 是因為初始是 LV.1
+        const currentExp = totalExp % expPerLevel;            // % 取餘數：升級後剩下的經驗值，絕對不會超過 expPerLevel
+        const nextLevelExp = expPerLevel;                     // 下一級所需的經驗值
+        
+        const expProgress = (currentExp / nextLevelExp) * 100; // 計算進度條百分比
+
+        // 更新右上角經驗值 UI
+        const levelEl = document.getElementById('userLevel');
+        const expTextEl = document.getElementById('userExpText');
+        const expBarEl = document.getElementById('userExpBar');
+
+        if (levelEl) levelEl.innerText = `LV.${level}`;
+        if (expTextEl) expTextEl.innerText = `${currentExp} / ${nextLevelExp}`;
+        if (expBarEl) expBarEl.style.width = `${expProgress}%`;
+        // ==========================================
 
         // 保留原有的介面更新 (相容舊有 HTML 結構)
         if (document.getElementById('totalTimeDisplay')) {

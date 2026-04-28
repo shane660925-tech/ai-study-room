@@ -21,21 +21,34 @@
     <team-modals></team-modals>
 
     <header class="h-16 flex justify-between items-center px-8 glass-panel sticky top-0 z-50">
-        <div>
-            <h1 class="text-xl font-black text-orange-500 tracking-wider neon-text">STUDY VERSE <span class="text-xs text-gray-400 font-normal">組隊大廳</span></h1>
-        </div>
         <div class="flex items-center gap-4">
-            <a href="index.html" class="text-xs font-bold text-blue-400 border border-blue-500/50 px-3 py-1.5 rounded-full hover:bg-blue-500/20 transition-all flex items-center gap-1">
-                <i class="fas fa-arrow-left"></i> 返回專業大廳
+            <h1 class="text-xl font-black text-orange-500 tracking-wider neon-text">STUDY VERSE <span class="text-xs text-gray-400 font-normal">組隊大廳</span></h1>
+            <a href="index.html" class="px-4 py-2 bg-orange-600/10 border border-orange-500/30 rounded-xl text-xs font-bold text-orange-500 hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2">
+                <i class="fas fa-desktop"></i> 切換至專業大廳
             </a>
-            <div class="text-right hidden sm:block">
-                <p id="navName" class="text-sm font-bold text-white leading-none">--</p>
-                <p class="text-[10px] text-gray-500 uppercase tracking-tighter">Verified Commander</p>
+        </div>
+
+        <div class="flex items-center gap-6">
+            <div class="flex flex-col items-end">
+                <div class="flex items-baseline gap-2">
+                    <span id="userLevel" class="text-orange-400 font-black text-sm">LV.1</span>
+                    <span id="userExpText" class="text-[10px] text-gray-500 font-mono tracking-tighter">0 / 60</span>
+                </div>
+                <div class="w-24 h-1 bg-white/5 rounded-full mt-1 overflow-hidden border border-white/5">
+                    <div id="userExpBar" class="h-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)] transition-all duration-1000" style="width: 0%"></div>
+                </div>
             </div>
-            <img id="navAvatar" src="" class="w-10 h-10 rounded-full border-2 border-gray-700 bg-gray-800 object-cover" alt="User Avatar">
-            <button onclick="logout()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-gray-500" title="登出">
-                <i class="fas fa-sign-out-alt text-sm"></i>
-            </button>
+
+            <div class="flex items-center gap-3 border-l border-white/10 pl-6">
+                <div class="text-right hidden sm:block">
+                    <p id="navName" class="text-sm font-black text-white tracking-tighter">指揮官</p>
+                    <p class="text-[10px] text-orange-500 font-bold uppercase tracking-widest opacity-80">In Team</p>
+                </div>
+                <img id="navAvatar" src="" class="w-10 h-10 rounded-xl border-2 border-gray-700 bg-gray-800 object-cover" alt="User Avatar">
+                <button onclick="logout()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-gray-500" title="登出">
+                    <i class="fas fa-sign-out-alt text-sm"></i>
+                </button>
+            </div>
         </div>
     </header>
 
