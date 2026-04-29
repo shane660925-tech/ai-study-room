@@ -2,6 +2,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const axios = require('axios'); // [新增] 用來發送 LINE API 請求
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -191,71 +192,88 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 });
 
-// --- [新增] Google 登入入口 API ---
-// 前端只要把畫面導向這個網址，就會自動跳轉到 Google 的登入畫面
-app.get('/api/auth/google', (req, res) => {
-    const url = googleClient.generateAuthUrl({
-        access_type: 'offline',
-        scope: ['email', 'profile'] // 要求讀取信箱與基本資料
-    });
-    res.redirect(url);
+// ==========================================
+// [新增] LINE OAuth 登入路由
+// ==========================================
+// --- 1. 產生 LINE 登入連結並導向 ---
+app.get('/api/auth/line', (req, res) => {
+    const state = 'random_state_string'; 
+    // 👇 注意看這行最後面，加上了 &bot_prompt=aggressive
+    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${process.env.LINE_CHANNEL_ID}&redirect_uri=${encodeURIComponent(process.env.LINE_CALLBACK_URL)}&state=${state}&scope=profile%20openid&bot_prompt=aggressive`;
+    
+    res.redirect(lineAuthUrl);
 });
 
-// --- [新增] Google 登入成功後的回傳 API (Callback) ---
-app.get('/api/auth/google/callback', async (req, res) => {
-    const code = req.query.code; // Google 登入成功後會帶一串授權碼回來
-    if (!code) return res.status(400).send('❌ 錯誤：缺少 Google 授權碼');
+// --- 2. 接收 LINE 登入成功後的回傳資料 (Callback) ---
+app.get('/api/auth/line/callback', async (req, res) => {
+    const code = req.query.code;
+
+    if (!code) {
+        return res.status(400).send('沒有收到授權碼');
+    }
 
     try {
-        // 1. 用 code 換取 token，並解析出使用者的 Google 資料
-        const { tokens } = await googleClient.getToken(code);
-        googleClient.setCredentials(tokens);
-        const ticket = await googleClient.verifyIdToken({
-            idToken: tokens.id_token,
-            audience: process.env.GOOGLE_CLIENT_ID,
+        // 步驟 A: 拿 Code 向 LINE 換取 Access Token
+        const tokenResponse = await axios.post('https://api.line.me/oauth2/v2.1/token', new URLSearchParams({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: process.env.LINE_CALLBACK_URL,
+            client_id: process.env.LINE_CHANNEL_ID,
+            client_secret: process.env.LINE_CHANNEL_SECRET
+        }).toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
-        const payload = ticket.getPayload();
-        const { email, name, sub: googleId } = payload; // 取出信箱、名字、Google唯一ID
 
-        // 2. 去 Supabase 檢查這個信箱是不是已經註冊過了
+        const accessToken = tokenResponse.data.access_token;
+
+        // 步驟 B: 拿 Access Token 向 LINE 換取使用者的個人資料
+        const profileResponse = await axios.get('https://api.line.me/v2/profile', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        const { userId: lineId, displayName, pictureUrl } = profileResponse.data;
+
+        // 步驟 C: 檢查 Supabase 是否已有此帳號 (使用現有已連線的 supabase client)
         let { data: existingUser } = await supabase
             .from('users')
             .select('*')
-            .eq('account', email) // 這裡我們把 Google 信箱當作 account
+            .eq('account', lineId) // 將 LINE ID 當作使用者的唯一帳號
             .maybeSingle();
 
-        // 3. 如果是全新使用者，自動幫他建立帳號！
+        // 步驟 D: 如果是全新使用者，自動幫他建立帳號
         if (!existingUser) {
-            let finalUsername = name || 'Google學員';
+            let finalUsername = displayName || 'LINE學員';
             
-            // 簡單防呆：避免暱稱重複
+            // 防呆：避免暱稱重複
             const { data: nameCheck } = await supabase.from('users').select('username').eq('username', finalUsername).maybeSingle();
-            if (nameCheck) finalUsername = finalUsername + Math.floor(Math.random() * 1000); // 如果重複加個隨機數字
+            if (nameCheck) finalUsername = finalUsername + Math.floor(Math.random() * 1000);
 
             const today = new Date().toISOString().split('T')[0];
             const { data: newUser, error } = await supabase.from('users').insert([{
                 username: String(finalUsername),
-                account: String(email),
-                password: String(googleId), // Google 登入不用密碼，直接把 Google ID 當作密碼欄位佔位
+                account: String(lineId),
+                password: String(lineId), // 用 LINE ID 當作密碼欄位佔位
                 total_seconds: 0,
                 streak: 1,
                 last_login: today,
                 role: 'student',
                 integrity_score: 100
+                // avatar_url: pictureUrl  // 如果你的 users 表未來想加頭像欄位，可以取消註解這行
             }]).select().single();
 
             if (error) throw error;
             existingUser = newUser;
         }
 
-        // 4. 登入成功！把網頁導向回前端首頁，並在網址帶上使用者的名字
+        // 步驟 E: 登入成功！把網頁導向回前端首頁，並帶上參數
         res.redirect(`/?username=${encodeURIComponent(existingUser.username)}&login_success=true`);
 
     } catch (error) {
-        console.error('Google 登入失敗:', error);
-        res.status(500).send('系統發生錯誤，Google 登入失敗。');
+        console.error('LINE 登入過程發生錯誤:', error.response?.data || error.message);
+        res.status(500).send('系統發生錯誤，LINE 登入失敗。');
     }
 });
+
 
 app.get('/api/user-stats', async (req, res) => {
     const username = req.query.username;

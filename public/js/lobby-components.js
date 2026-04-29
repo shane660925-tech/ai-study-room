@@ -29,10 +29,10 @@ class SharedModals extends HTMLElement {
                     <hr class="flex-grow border-gray-700">
                 </div>
                 <div class="flex gap-4 justify-center">
-                    <button onclick="location.href='/api/auth/google'" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <button onclick="window.location.href='/api/auth/google'" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
                         <i class="fab fa-google text-red-500"></i> Gmail
                     </button>
-                    <button onclick="alert('LINE 登入 API 準備中')" class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <button onclick="window.location.href='/api/auth/line'" class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
                         <i class="fab fa-line text-xl"></i> LINE
                     </button>
                 </div>
