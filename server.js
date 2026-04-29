@@ -37,6 +37,84 @@ console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 // 2. API 路由設定
 // ==========================================
 
+// --- [新增] 註冊 API ---
+app.post('/api/register', async (req, res) => {
+    const { username, account, password } = req.body;
+    
+    if (!username || !account || !password) {
+        return res.status(400).json({ error: '缺少註冊參數' });
+    }
+
+    try {
+        // 1. 檢查帳號是否已被註冊
+        const { data: existingAccount } = await supabase
+            .from('users')
+            .select('account')
+            .eq('account', account)
+            .maybeSingle();
+
+        if (existingAccount) return res.status(400).json({ error: '此帳號已被註冊！' });
+
+        // 2. 檢查暱稱是否重複 (保留原本以暱稱為主鍵的防呆)
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('username')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (existingUser) return res.status(400).json({ error: '此暱稱已有人使用，請換一個！' });
+
+        const today = new Date().toISOString().split('T')[0];
+
+        // 3. 寫入新使用者資料 (注意: 實際上線建議將密碼透過 bcrypt 加密)
+        const { error } = await supabase.from('users').insert([{ 
+            username: username, 
+            account: account,
+            password: password,
+            total_seconds: 0, 
+            streak: 1, 
+            last_login: today, 
+            role: 'student', 
+            integrity_score: 100 
+        }]);
+
+        if (error) throw error;
+        
+        res.json({ message: '註冊成功！', username: username });
+    } catch (err) {
+        console.error("註冊失敗:", err);
+        res.status(500).json({ error: '系統註冊失敗，請稍後再試。' });
+    }
+});
+
+// --- [新增] 登入 API ---
+app.post('/api/login', async (req, res) => {
+    const { account, password } = req.body;
+    
+    if (!account || !password) {
+        return res.status(400).json({ error: '請輸入帳號密碼' });
+    }
+
+    try {
+        // 透過帳號與密碼比對登入
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('account', account)
+            .eq('password', password)
+            .maybeSingle();
+
+        if (error || !user) {
+            return res.status(401).json({ error: '帳號或密碼錯誤！' });
+        }
+
+        res.json({ message: '登入成功！', username: user.username });
+    } catch (err) {
+        console.error("登入失敗:", err);
+        res.status(500).json({ error: '系統登入失敗，請稍後再試。' });
+    }
+});
+
 app.get('/api/user-stats', async (req, res) => {
     const username = req.query.username;
     if (!username) return res.status(400).json({ error: 'Missing username' });

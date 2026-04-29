@@ -35,10 +35,71 @@ class SharedModals extends HTMLElement {
 }
 customElements.define('shared-modals', SharedModals);
 
+// --- 以下為新增的註冊/登入前端邏輯 (附加到全域 window 上供點擊使用) ---
+window.showRegisterModal = function() {
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('registerOverlay').classList.remove('hidden');
+};
+
+window.hideRegisterModal = function() {
+    document.getElementById('registerOverlay').classList.add('hidden');
+    document.getElementById('loginOverlay').classList.remove('hidden');
+};
+
+window.handleRealLogin = async function() {
+    const acc = document.getElementById('loginAccount').value.trim();
+    const pass = document.getElementById('loginPassword').value;
+    if (!acc || !pass) return alert("請輸入帳號與密碼！");
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account: acc, password: pass })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            // 登入成功，儲存暱稱至 localStorage (維持原有大廳讀取邏輯)
+            localStorage.setItem('studyVerseUser', data.username);
+            location.reload(); // 重整頁面讓大廳邏輯自動載入
+        } else {
+            alert("登入失敗：" + data.error);
+        }
+    } catch(e) {
+        alert("網路連線錯誤，請稍後再試！");
+    }
+};
+
+window.handleRealRegister = async function() {
+    const name = document.getElementById('regUsername').value.trim();
+    const acc = document.getElementById('regAccount').value.trim();
+    const pass = document.getElementById('regPassword').value;
+    
+    if (!name || !acc || !pass) return alert("請填寫完整的註冊資訊！");
+
+    try {
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: name, account: acc, password: pass })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert("註冊成功！系統將自動為您登入。");
+            localStorage.setItem('studyVerseUser', data.username);
+            location.reload(); 
+        } else {
+            alert("註冊失敗：" + data.error);
+        }
+    } catch(e) {
+        alert("網路連線錯誤，請稍後再試！");
+    }
+};
+
 // 2. 共用數據面板 (4張卡片)
 class SharedStatsCards extends HTMLElement {
     connectedCallback() {
-        this.style.display = 'contents'; // 確保不會破壞 CSS Grid 佈局
+        this.style.display = 'contents'; 
         this.innerHTML = `
         <div class="glass-panel p-6 rounded-2xl border-t-2 border-blue-500 relative overflow-hidden group">
             <div class="text-gray-400 text-xs font-bold mb-2 uppercase tracking-widest flex justify-between">
