@@ -14,9 +14,45 @@ class SharedModals extends HTMLElement {
                     <i class="fas fa-user-shield text-blue-500 text-3xl"></i>
                 </div>
                 <h1 class="text-3xl font-black text-blue-500 mb-2">身分登錄</h1>
-                <p class="text-gray-500 text-xs mb-6">建立你的專屬指揮官代號</p>
-                <input id="setupName" onkeypress="if(event.key === 'Enter') saveName()" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all" placeholder="輸入您的專屬暱稱...">
-                <button onclick="saveName()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-900/20 transition-all active:scale-95">確認綁定，載入存檔</button>
+                <p class="text-gray-500 text-xs mb-6">請輸入您的帳號密碼</p>
+                
+                <input id="loginAccount" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all" placeholder="帳號 (Email)">
+                <input id="loginPassword" type="password" onkeypress="if(event.key === 'Enter') handleRealLogin()" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all" placeholder="密碼">
+                
+                <button onclick="handleRealLogin()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-900/20 transition-all active:scale-95 mb-4">登入系統</button>
+                
+                <p class="text-sm text-gray-400 mb-4 hover:text-white cursor-pointer transition-colors" onclick="showRegisterModal()">尚未有帳號? 立即註冊!</p>
+                
+                <div class="flex items-center my-4">
+                    <hr class="flex-grow border-gray-700">
+                    <span class="px-3 text-xs text-gray-500">或使用以下方式登入</span>
+                    <hr class="flex-grow border-gray-700">
+                </div>
+                <div class="flex gap-4 justify-center">
+                    <button onclick="alert('Gmail 登入 API 準備中')" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
+                        <i class="fab fa-google text-red-500"></i> Gmail
+                    </button>
+                    <button onclick="alert('LINE 登入 API 準備中')" class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
+                        <i class="fab fa-line text-xl"></i> LINE
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="registerOverlay" class="fixed inset-0 bg-[#05070a]/95 z-[10000] flex items-center justify-center hidden">
+            <div class="bg-[#111827] p-8 rounded-3xl border border-blue-500/50 shadow-2xl shadow-blue-900/20 max-w-sm w-full text-center">
+                <div class="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-user-plus text-green-500 text-2xl"></i>
+                </div>
+                <h1 class="text-3xl font-black text-white mb-2">建立新帳號</h1>
+                <p class="text-gray-500 text-xs mb-6">註冊您的專屬學習指揮官代號</p>
+
+                <input id="regUsername" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all" placeholder="顯示暱稱 (平台內的名字)">
+                <input id="regAccount" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all" placeholder="登入帳號 (Email)">
+                <input id="regPassword" type="password" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 text-center focus:border-blue-500 outline-none transition-all" placeholder="設定密碼">
+
+                <button onclick="handleRealRegister()" class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-green-900/20 transition-all active:scale-95 mb-4">確認註冊</button>
+                <button onclick="hideRegisterModal()" class="w-full bg-transparent border border-gray-700 text-gray-400 py-3 rounded-2xl hover:text-white transition-all">返回登入</button>
             </div>
         </div>
 
