@@ -42,21 +42,42 @@ socket.on('mobile_sync_update', (data) => {
 });
 
 
-// 初始化檢查登入狀態
+// ==========================================
+// [核心修改] 初始化檢查登入狀態：確保 UI 與姓名同步
+// ==========================================
 function checkLogin() {
+    // 【關鍵】：重新從 localStorage 抓取，確保能抓到 Google 登入或其它腳本寫入的最新名稱
+    myUsername = localStorage.getItem('studyVerseUser');
+
     if (!myUsername) {
-        document.getElementById('loginOverlay').classList.remove('hidden');
-        setTimeout(() => document.getElementById('setupName').focus(), 100);
+        const loginOverlay = document.getElementById('loginOverlay');
+        if (loginOverlay) {
+            loginOverlay.classList.remove('hidden');
+            setTimeout(() => {
+                const setupName = document.getElementById('setupName');
+                if (setupName) setupName.focus();
+            }, 100);
+        }
     } else {
-        document.getElementById('navName').innerText = myUsername;
-        document.getElementById('navAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${myUsername}&backgroundColor=b6e3f4`;
+        // 1. 更新右上角導覽列姓名 (navName)
+        const navName = document.getElementById('navName');
+        if (navName) {
+            navName.innerText = myUsername;
+        }
+
+        // 2. 更新右上角頭像 (navAvatar)
+        const navAvatar = document.getElementById('navAvatar');
+        if (navAvatar) {
+            navAvatar.src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${myUsername}&backgroundColor=b6e3f4`;
+        }
         
-        // 登入後向伺服器註冊身份
+        // 3. 登入後向伺服器註冊身份
         socket.emit('join', { name: myUsername, role: 'student' });
         
+        // 4. 讀取個人雲端數據
         fetchUserStats();
 
-        // 呼叫各頁面專屬的初始化邏輯 (由各別的 main.js 或 team.js 定義)
+        // 5. 呼叫各頁面專屬的初始化邏輯 (由各別的 main.js 或 team.js 定義)
         if (typeof window.pageSpecificInit === 'function') {
             window.pageSpecificInit();
         }
@@ -283,20 +304,15 @@ async function fetchUserStats() {
         // ==========================================
         // 【修正後的精準等級與經驗值計算邏輯】
         // ==========================================
-        // 1. 抓取後端資料庫中累計的總經驗值 (對應 server.js 存入的 totalExp)
         const totalExp = data.user ? data.user.total_seconds : (data.total_seconds || 0); 
-        
-        // 2. 設定「升一級需要多少經驗值」(你可以隨時改這個數字，例如改為 1000)
         const expPerLevel = 1000; 
 
-        // 3. 計算等級與當下經驗值 (完美符合要求：升級後扣除所需的經驗值)
-        const level = Math.floor(totalExp / expPerLevel) + 1; // 總經驗除以升級門檻，+1 是因為初始是 LV.1
-        const currentExp = totalExp % expPerLevel;            // % 取餘數：升級後剩下的經驗值，絕對不會超過 expPerLevel
-        const nextLevelExp = expPerLevel;                     // 下一級所需的經驗值
+        const level = Math.floor(totalExp / expPerLevel) + 1; 
+        const currentExp = totalExp % expPerLevel; 
+        const nextLevelExp = expPerLevel; 
         
-        const expProgress = (currentExp / nextLevelExp) * 100; // 計算進度條百分比
+        const expProgress = (currentExp / nextLevelExp) * 100; 
 
-        // 更新右上角經驗值 UI
         const levelEl = document.getElementById('userLevel');
         const expTextEl = document.getElementById('userExpText');
         const expBarEl = document.getElementById('userExpBar');
@@ -306,7 +322,7 @@ async function fetchUserStats() {
         if (expBarEl) expBarEl.style.width = `${expProgress}%`;
         // ==========================================
 
-        // 保留原有的介面更新 (相容舊有 HTML 結構)
+        // 保留原有的介面更新
         if (document.getElementById('totalTimeDisplay')) {
             document.getElementById('totalTimeDisplay').innerHTML = `${totalMinutes}<span class="text-lg text-gray-500 ml-1">min</span>`;
         }

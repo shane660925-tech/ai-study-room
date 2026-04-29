@@ -7,6 +7,18 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('@supabase/supabase-js');
 const ScoringService = require('./ScoringService');
+const { OAuth2Client } = require('google-auth-library');
+
+// 動態判斷網址 (本地端 vs 正式上線端)
+const GOOGLE_CALLBACK_URL = process.env.NODE_ENV === 'production'
+    ? 'https://study-universe.onrender.com/api/auth/google/callback'
+    : 'http://localhost:3000/api/auth/google/callback';
+
+const googleClient = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_CALLBACK_URL
+);
 
 const app = express();
 const server = http.createServer(app);
@@ -23,8 +35,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ==========================================
 // 1. 連線 Supabase 雲端資料庫
 // ==========================================
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+// 加上 .trim() 預防不小心從 .env 讀取到頭尾的空白或換行符號
+const supabaseUrl = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.trim() : '';
+const supabaseKey = process.env.SUPABASE_KEY ? process.env.SUPABASE_KEY.trim() : '';
 
 if (!supabaseUrl || !supabaseKey) {
     console.error('❌ 錯誤：找不到 Supabase 設定，請檢查 .env 檔案！');
@@ -41,6 +54,9 @@ console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 app.post('/api/register', async (req, res) => {
     const { username, account, password } = req.body;
     
+    // 增加這行：在終端機印出前端傳來的真實資料，方便我們檢查
+    console.log("🚀 收到註冊請求:", { username, account, password });
+
     if (!username || !account || !password) {
         return res.status(400).json({ error: '缺少註冊參數' });
     }
@@ -55,7 +71,7 @@ app.post('/api/register', async (req, res) => {
 
         if (existingAccount) return res.status(400).json({ error: '此帳號已被註冊！' });
 
-        // 2. 檢查暱稱是否重複 (保留原本以暱稱為主鍵的防呆)
+        // 2. 檢查暱稱是否重複
         const { data: existingUser } = await supabase
             .from('users')
             .select('username')
@@ -66,11 +82,11 @@ app.post('/api/register', async (req, res) => {
 
         const today = new Date().toISOString().split('T')[0];
 
-        // 3. 寫入新使用者資料 (注意: 實際上線建議將密碼透過 bcrypt 加密)
+        // 3. 寫入新使用者資料 (加入 String() 強制轉為純文字)
         const { error } = await supabase.from('users').insert([{ 
-            username: username, 
-            account: account,
-            password: password,
+            username: String(username), 
+            account: String(account),
+            password: String(password), // <--- 強制轉文字，杜絕 boolean 錯誤
             total_seconds: 0, 
             streak: 1, 
             last_login: today, 
@@ -112,6 +128,132 @@ app.post('/api/login', async (req, res) => {
     } catch (err) {
         console.error("登入失敗:", err);
         res.status(500).json({ error: '系統登入失敗，請稍後再試。' });
+    }
+});
+
+// ==========================================
+// [新增] Google OAuth 登入路由 (保持原有功能)
+// ==========================================
+app.get('/api/auth/google', (req, res) => {
+    const url = googleClient.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['email', 'profile'],
+    });
+    res.redirect(url);
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+    const { code } = req.query;
+    if (!code) return res.status(400).send('❌ 缺少授權碼');
+
+    try {
+        const { tokens } = await googleClient.getToken(code);
+        googleClient.setCredentials(tokens);
+        const ticket = await googleClient.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const { email, name, sub: googleId } = payload;
+
+        // 檢查 Supabase 是否已有此帳號
+        let { data: user } = await supabase
+            .from('users')
+            .select('*')
+            .eq('account', email)
+            .maybeSingle();
+
+        if (!user) {
+            // 自動註冊新帳號
+            let finalName = name || 'Google學員';
+            const { data: nameCheck } = await supabase.from('users').select('username').eq('username', finalName).maybeSingle();
+            if (nameCheck) finalName += Math.floor(Math.random() * 1000);
+
+            const { data: newUser, error: insErr } = await supabase.from('users').insert([{
+                username: String(finalName),
+                account: String(email),
+                password: String(googleId), // 使用 Google ID 作為佔位密碼
+                total_seconds: 0,
+                streak: 1,
+                last_login: new Date().toISOString().split('T')[0],
+                role: 'student',
+                integrity_score: 100
+            }]).select().single();
+            if (insErr) throw insErr;
+            user = newUser;
+        }
+
+        // 登入成功：導向回首頁並帶入參數讓前端讀取
+        res.redirect(`/?username=${encodeURIComponent(user.username)}&login_success=true`);
+    } catch (err) {
+        console.error('Google Auth Error:', err);
+        res.status(500).send('Google 登入失敗，請稍後再試。');
+    }
+});
+
+// --- [新增] Google 登入入口 API ---
+// 前端只要把畫面導向這個網址，就會自動跳轉到 Google 的登入畫面
+app.get('/api/auth/google', (req, res) => {
+    const url = googleClient.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['email', 'profile'] // 要求讀取信箱與基本資料
+    });
+    res.redirect(url);
+});
+
+// --- [新增] Google 登入成功後的回傳 API (Callback) ---
+app.get('/api/auth/google/callback', async (req, res) => {
+    const code = req.query.code; // Google 登入成功後會帶一串授權碼回來
+    if (!code) return res.status(400).send('❌ 錯誤：缺少 Google 授權碼');
+
+    try {
+        // 1. 用 code 換取 token，並解析出使用者的 Google 資料
+        const { tokens } = await googleClient.getToken(code);
+        googleClient.setCredentials(tokens);
+        const ticket = await googleClient.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const { email, name, sub: googleId } = payload; // 取出信箱、名字、Google唯一ID
+
+        // 2. 去 Supabase 檢查這個信箱是不是已經註冊過了
+        let { data: existingUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('account', email) // 這裡我們把 Google 信箱當作 account
+            .maybeSingle();
+
+        // 3. 如果是全新使用者，自動幫他建立帳號！
+        if (!existingUser) {
+            let finalUsername = name || 'Google學員';
+            
+            // 簡單防呆：避免暱稱重複
+            const { data: nameCheck } = await supabase.from('users').select('username').eq('username', finalUsername).maybeSingle();
+            if (nameCheck) finalUsername = finalUsername + Math.floor(Math.random() * 1000); // 如果重複加個隨機數字
+
+            const today = new Date().toISOString().split('T')[0];
+            const { data: newUser, error } = await supabase.from('users').insert([{
+                username: String(finalUsername),
+                account: String(email),
+                password: String(googleId), // Google 登入不用密碼，直接把 Google ID 當作密碼欄位佔位
+                total_seconds: 0,
+                streak: 1,
+                last_login: today,
+                role: 'student',
+                integrity_score: 100
+            }]).select().single();
+
+            if (error) throw error;
+            existingUser = newUser;
+        }
+
+        // 4. 登入成功！把網頁導向回前端首頁，並在網址帶上使用者的名字
+        res.redirect(`/?username=${encodeURIComponent(existingUser.username)}&login_success=true`);
+
+    } catch (error) {
+        console.error('Google 登入失敗:', error);
+        res.status(500).send('系統發生錯誤，Google 登入失敗。');
     }
 });
 

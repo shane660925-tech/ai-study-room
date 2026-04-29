@@ -29,7 +29,7 @@ class SharedModals extends HTMLElement {
                     <hr class="flex-grow border-gray-700">
                 </div>
                 <div class="flex gap-4 justify-center">
-                    <button onclick="alert('Gmail 登入 API 準備中')" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <button onclick="location.href='/api/auth/google'" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
                         <i class="fab fa-google text-red-500"></i> Gmail
                     </button>
                     <button onclick="alert('LINE 登入 API 準備中')" class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
@@ -95,9 +95,8 @@ window.handleRealLogin = async function() {
         });
         const data = await res.json();
         if (res.ok) {
-            // 登入成功，儲存暱稱至 localStorage (維持原有大廳讀取邏輯)
             localStorage.setItem('studyVerseUser', data.username);
-            location.reload(); // 重整頁面讓大廳邏輯自動載入
+            location.reload(); 
         } else {
             alert("登入失敗：" + data.error);
         }
@@ -107,28 +106,34 @@ window.handleRealLogin = async function() {
 };
 
 window.handleRealRegister = async function() {
-    const name = document.getElementById('regUsername').value.trim();
-    const acc = document.getElementById('regAccount').value.trim();
-    const pass = document.getElementById('regPassword').value;
+    const username = document.getElementById('regUsername').value.trim();
+    const account = document.getElementById('regAccount').value.trim();
+    const password = document.getElementById('regPassword').value;
     
-    if (!name || !acc || !pass) return alert("請填寫完整的註冊資訊！");
+    if (!username || !account || !password) {
+        alert("請完整填寫暱稱、帳號與密碼！");
+        return;
+    }
 
     try {
-        const res = await fetch('/api/register', {
+        const response = await fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: name, account: acc, password: pass })
+            body: JSON.stringify({ username, account, password }) 
         });
-        const data = await res.json();
-        if (res.ok) {
+
+        const data = await response.json();
+        
+        if (response.ok) {
             alert("註冊成功！系統將自動為您登入。");
             localStorage.setItem('studyVerseUser', data.username);
             location.reload(); 
         } else {
             alert("註冊失敗：" + data.error);
         }
-    } catch(e) {
-        alert("網路連線錯誤，請稍後再試！");
+    } catch (err) {
+        console.error("錯誤:", err);
+        alert("網路連線異常，請稍後再試！");
     }
 };
 
@@ -212,3 +217,27 @@ class SharedFooter extends HTMLElement {
     }
 }
 customElements.define('shared-footer', SharedFooter);
+
+// --- [核心修正] 自動處理 Google 登入回傳的參數 ---
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const username = urlParams.get('username');
+    const isLoginSuccess = urlParams.get('login_success');
+
+    if (isLoginSuccess === 'true' && username) {
+        // 1. 立即寫入 localStorage
+        localStorage.setItem('studyVerseUser', username);
+        
+        // 2. 立即隱藏登入彈窗（避免閃爍）
+        const loginOverlay = document.getElementById('loginOverlay');
+        if (loginOverlay) {
+            loginOverlay.classList.add('hidden');
+        }
+
+        // 3. 清理網址上的參數（加上 origin 確保跨平台相容性）
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+        
+        console.log("Google 登入攔截成功，已儲存用戶名：", username);
+    }
+})();
