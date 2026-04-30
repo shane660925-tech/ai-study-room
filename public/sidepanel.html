@@ -109,6 +109,8 @@ if (role === 'student') {
     socket.on('deviceLinked', (data) => {
         if (data.success) {
             updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
+            // 👇 [新增] 學生端變成黃燈後，主動把狀態 relay (轉發) 給老師
+              socket.emit('relay_to_teacher', { status: 'yellow', name: userName });
         }
     });
 

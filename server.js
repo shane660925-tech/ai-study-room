@@ -23,6 +23,13 @@ const googleClient = new OAuth2Client(
 
 const app = express();
 const server = http.createServer(app);
+// 👇 [新增] 允許 Google Meet 跨網域發送背景報到 API (CORS 設定)
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+// 👆 ----------------------------------------------------
 const io = new Server(server, {
     maxHttpBufferSize: 1e7 // 增加緩衝區大小以支援截圖傳輸
 });
