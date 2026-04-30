@@ -1,34 +1,42 @@
-// sockets/roomHandler.js
+// 建立一個記憶對照表，記錄「學生擴充套件 ID」對應的「會議室代碼」
+const studentRooms = {};
 
 module.exports = (io) => {
   io.on('connection', (socket) => {
-    // 1. 取得前端傳來的 meetId, name, role
     const { meetId, name, role } = socket.handshake.query;
 
+    // 1. 使用者加入專屬會議室
     if (meetId) {
-      // 2. 讓使用者加入專屬該會議的房間
       socket.join(meetId);
-      console.log(`${name}(${role}) 加入了會議室: ${meetId}`);
-
-      // 3. 如果是學生連線，告知該房間的老師
+      
+      // 如果是學生擴充套件連線，記錄他的房間，並通知老師
       if (role === 'student') {
-        // 只傳給同一個 meetId 房間裡的其他人（老師）
+        studentRooms[socket.id] = meetId;
         socket.to(meetId).emit('student_joined', { socketId: socket.id, name });
       }
     }
 
-    // 4. 處理學生翻轉手機後的狀態更新
+    // 2. 處理手機翻轉的狀態更新
     socket.on('student_status_changed', (data) => {
-      // data 包含：status (red/yellow/green), name 等
-      // 使用 io.to(meetId).emit，確保只有「同一個會議室」的老師會收到
-      io.to(meetId).emit('update_status', {
-        ...data,
-        socketId: socket.id
-      });
+      // data.sync 是手機傳來的「學生擴充套件 Socket ID」
+      // 透過對照表，找出這個學生在哪個會議室
+      const targetMeetId = studentRooms[data.sync];
+
+      if (targetMeetId) {
+        // 精準廣播給該會議室的老師與學生！
+        io.to(targetMeetId).emit('update_status', {
+          status: data.status,
+          name: data.name,
+          socketId: data.sync // 確保老師端能用這個 ID 找到對應的 UI
+        });
+      }
     });
 
+    // 3. 斷線時清理記憶體
     socket.on('disconnect', () => {
-      console.log(`${name} 已斷線`);
+      if (studentRooms[socket.id]) {
+        delete studentRooms[socket.id];
+      }
     });
   });
 };

@@ -133,20 +133,19 @@ if (role === 'teacher') {
     const countSpan = document.getElementById('count');
     let onlineCount = 0;
 
-    // 1. 監聽「學生剛打開側邊欄」的事件 (預設顯示未連線)
     socket.on('student_joined', (data) => {
-        // 如果畫面上有「等待學生加入中...」，就把它清空
         if (studentList.innerHTML.includes('等待學生加入中')) {
             studentList.innerHTML = '';
         }
 
-        // 避免重複加入同一個學生
-        if (!document.getElementById(`student-${data.socketId}`)) {
+        // [新增防呆] 檢查畫面上是不是已經有這個名字的學生了？
+        const existingStudent = Array.from(document.querySelectorAll('.student-name')).find(el => el.innerText === data.name);
+
+        if (!existingStudent) {
+            // 如果沒重複，產生新的學生區塊
             const div = document.createElement('div');
             div.id = `student-${data.socketId}`;
-            div.className = 'student-item status-unfocus'; // 預設左側為紅線
-            
-            // 建立學生的 UI 區塊
+            div.className = 'student-item status-unfocus';
             div.innerHTML = `
                 <div class="student-header">
                     <span class="student-name">${data.name}</span>
@@ -154,10 +153,13 @@ if (role === 'teacher') {
                 </div>
             `;
             studentList.appendChild(div);
-
-            // 更新在線人數
             onlineCount++;
             countSpan.innerText = onlineCount;
+        } else {
+            // 如果已經存在 (背景報到過了)，只要更新他的 DOM ID 綁定最新狀態即可
+            const parentDiv = existingStudent.closest('.student-item');
+            parentDiv.id = `student-${data.socketId}`;
+            parentDiv.querySelector('.badge').id = `badge-${data.socketId}`;
         }
     });
 

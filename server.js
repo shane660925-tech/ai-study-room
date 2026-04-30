@@ -343,6 +343,19 @@ app.get('/api/user-stats', async (req, res) => {
     }
 });
 
+// --- 新增：接收學生背景自動報到的 API ---
+app.post('/api/student-enter', (req, res) => {
+    const { meetId, userName } = req.body;
+    if (meetId && userName) {
+        // 發送給該會議室的老師，使用一個加上 auto- 前綴的虛擬 ID
+        io.to(meetId).emit('student_joined', {
+            socketId: 'auto-' + Date.now(), 
+            name: userName
+        });
+    }
+    res.sendStatus(200);
+});
+// ------------------------------------
 // ==========================================
 // 核心修正：修改 save-focus API (結算點)
 // ==========================================
