@@ -136,10 +136,13 @@ app.post('/api/login', async (req, res) => {
 // [新增] Google OAuth 登入路由 (保持原有功能)
 // ==========================================
 app.get('/api/auth/google', (req, res) => {
+    // 明確傳入 redirect_uri 確保參數不會遺失
     const url = googleClient.generateAuthUrl({
         access_type: 'offline',
         scope: ['email', 'profile'],
+        redirect_uri: GOOGLE_CALLBACK_URL // 加入這行
     });
+    console.log("🔗 生成的 Google 登入網址:", url); // 建議加上 log 檢查生成的網址
     res.redirect(url);
 });
 
@@ -148,7 +151,11 @@ app.get('/api/auth/google/callback', async (req, res) => {
     if (!code) return res.status(400).send('❌ 缺少授權碼');
 
     try {
-        const { tokens } = await googleClient.getToken(code);
+        // 同樣明確指定 redirect_uri
+const { tokens } = await googleClient.getToken({
+    code: code,
+    redirect_uri: GOOGLE_CALLBACK_URL
+});
         googleClient.setCredentials(tokens);
         const ticket = await googleClient.verifyIdToken({
             idToken: tokens.id_token,
@@ -274,6 +281,14 @@ app.get('/api/auth/line/callback', async (req, res) => {
     }
 });
 
+// [新增] 接收 LINE Webhook 訊號的路徑
+app.post('/api/line/webhook', (req, res) => {
+    // 收到 LINE 的驗證或訊息時，先簡單回傳 200 代表伺服器活著
+    res.sendStatus(200);
+    
+    // 如果你想看 LINE 傳了什麼過來，可以取消下行的註解
+    console.log('收到 Webhook 訊號:', JSON.stringify(req.body, null, 2));
+});
 
 app.get('/api/user-stats', async (req, res) => {
     const username = req.query.username;
