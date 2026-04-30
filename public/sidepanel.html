@@ -91,27 +91,41 @@ const socket = io({
   }
 });
 
-    // ================= 學生端專屬邏輯 =================
-    if (role === 'student') {
-      socket.on('connect', () => {
-          // 產生 QR Code，並把學生的名字包進去
-          const qrUrl = `https://study-universe.onrender.com/mobile.html?sync=${socket.id}&name=${encodeURIComponent(userName)}`;
-          const qrImg = document.getElementById('qrcode-img');
-          
-          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrUrl)}`;
-          qrImg.onload = () => {
-              document.getElementById('qr-loading').style.display = 'none';
-              qrImg.style.display = 'block';
-          };
-      });
+   // ================= 學生端專屬邏輯 =================
+if (role === 'student') {
+    socket.on('connect', () => {
+        // 產生 QR Code，並把學生的名字包進去
+        const qrUrl = `https://study-universe.onrender.com/mobile.html?sync=${socket.id}&name=${encodeURIComponent(userName)}`;
+        const qrImg = document.getElementById('qrcode-img');
+        
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrUrl)}`;
+        qrImg.onload = () => {
+            document.getElementById('qr-loading').style.display = 'none';
+            qrImg.style.display = 'block';
+        };
+    });
 
-      // 監聽手機連線狀態... (這裡保留你原本的燈號切換邏輯)
-      socket.on('deviceLinked', (data) => {
-          if (data.success) {
-              updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
-          }
-      });
-    }
+    // 1. 監聽手機剛掃描連線的狀態
+    socket.on('deviceLinked', (data) => {
+        if (data.success) {
+            updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
+        }
+    });
+
+    // 2. [新增] 監聽手機翻轉的狀態更新
+    socket.on('update_status', (data) => {
+        // 確保這個廣播是屬於「自己」的狀態更新，避免被其他同學影響
+        if (data.name === userName) {
+            if (data.status === 'green') {
+                updateStudentUI('green', '綠燈：深度專注中', '太棒了！請保持手機蓋上');
+            } else if (data.status === 'yellow') {
+                updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
+            } else if (data.status === 'red') {
+                updateStudentUI('red', '紅燈：尚未連線', '連線中斷，請重新掃描 QR Code');
+            }
+        }
+    });
+}
 
     // ================= 教師端專屬邏輯 =================
 if (role === 'teacher') {
