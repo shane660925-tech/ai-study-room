@@ -114,13 +114,65 @@ const socket = io({
     }
 
     // ================= 教師端專屬邏輯 =================
-    if (role === 'teacher') {
-      // 這裡保留你原本接收學生狀態、渲染列表的邏輯
-      socket.on('update_status', (data) => {
-          // ... 更新畫面邏輯 ...
-      });
-    }
+if (role === 'teacher') {
+    const studentList = document.getElementById('student-list');
+    const countSpan = document.getElementById('count');
+    let onlineCount = 0;
 
+    // 1. 監聽「學生剛打開側邊欄」的事件 (預設顯示未連線)
+    socket.on('student_joined', (data) => {
+        // 如果畫面上有「等待學生加入中...」，就把它清空
+        if (studentList.innerHTML.includes('等待學生加入中')) {
+            studentList.innerHTML = '';
+        }
+
+        // 避免重複加入同一個學生
+        if (!document.getElementById(`student-${data.socketId}`)) {
+            const div = document.createElement('div');
+            div.id = `student-${data.socketId}`;
+            div.className = 'student-item status-unfocus'; // 預設左側為紅線
+            
+            // 建立學生的 UI 區塊
+            div.innerHTML = `
+                <div class="student-header">
+                    <span class="student-name">${data.name}</span>
+                    <span class="badge bg-red" id="badge-${data.socketId}">未連線</span>
+                </div>
+            `;
+            studentList.appendChild(div);
+
+            // 更新在線人數
+            onlineCount++;
+            countSpan.innerText = onlineCount;
+        }
+    });
+
+    // 2. 監聽「學生掃碼連線」或「翻轉手機」的狀態更新
+    socket.on('update_status', (data) => {
+        const studentDiv = document.getElementById(`student-${data.socketId}`);
+        const badge = document.getElementById(`badge-${data.socketId}`);
+        
+        if (studentDiv && badge) {
+            if (data.status === 'yellow') {
+                studentDiv.className = 'student-item'; // 移除紅線
+                studentDiv.style.borderLeftColor = '#f1c40f'; // 變成黃線
+                badge.className = 'badge';
+                badge.style.backgroundColor = '#f1c40f'; // 黃色標籤
+                badge.innerText = '已連線，未蓋上';
+            } else if (data.status === 'green') {
+                studentDiv.className = 'student-item status-focus'; // 變成綠線
+                badge.className = 'badge bg-green';
+                badge.innerText = '深度專注中';
+                badge.style.backgroundColor = ''; // 清除 inline 樣式，吃 bg-green
+            } else if (data.status === 'red') {
+                studentDiv.className = 'student-item status-unfocus'; // 變成紅線
+                badge.className = 'badge bg-red';
+                badge.innerText = '未連線 / 離開';
+                badge.style.backgroundColor = '';
+            }
+        }
+    });
+}
     // 輔助函數：切換燈號
     function updateStudentUI(color, title, desc) {
         const card = document.getElementById('student-status-card');
