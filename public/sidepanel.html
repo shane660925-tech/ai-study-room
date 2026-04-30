@@ -68,21 +68,28 @@
   <script src="/socket.io/socket.io.js"></script>
   
   <script>
-    // 1. 從網址抓取擴充功能傳來的身分與姓名
-    const urlParams = new URLSearchParams(window.location.search);
-    const role = urlParams.get('role') || 'student';
-    const userName = urlParams.get('name') || '未知學生';
+  // 1. 從網址抓取擴充功能傳來的參數 (新增抓取 meetId)
+const urlParams = new URLSearchParams(window.location.search);
+const role = urlParams.get('role') || 'student';
+const userName = urlParams.get('name') || '未知學生';
+const currentMeetId = urlParams.get('meetId'); // 抓取 Google Meet 代碼
 
-    // 2. 智慧顯示：老師就只看得到老師畫面，學生只看得到學生畫面！
-    if (role === 'teacher') {
-      document.getElementById('view-teacher').classList.add('active');
-    } else {
-      document.getElementById('view-student').classList.add('active');
-      document.getElementById('display-name').innerText = userName;
-    }
+// 2. 智慧顯示：老師看老師畫面，學生看學生畫面
+if (role === 'teacher') {
+  document.getElementById('view-teacher').classList.add('active');
+} else {
+  document.getElementById('view-student').classList.add('active');
+  document.getElementById('display-name').innerText = userName;
+}
 
-    // 3. 連線到後端
-    const socket = io();
+// 3. 連線到後端 (⚠️ 這裡最重要：把資料傳給 Server)
+const socket = io({
+  query: {
+    meetId: currentMeetId,
+    name: userName,
+    role: role
+  }
+});
 
     // ================= 學生端專屬邏輯 =================
     if (role === 'student') {

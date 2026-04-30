@@ -26,6 +26,12 @@ const server = http.createServer(app);
 const io = new Server(server, {
     maxHttpBufferSize: 1e7 // 增加緩衝區大小以支援截圖傳輸
 });
+
+// --- 這裡就是載入你放在資料夾裡的邏輯 ---
+const registerRoomHandler = require('./sockets/roomHandler');
+registerRoomHandler(io); 
+// ------------------------------------
+
 // 儲存各個特約教室的專屬課表
 const tutorSchedules = {};
 
