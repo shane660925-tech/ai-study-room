@@ -118,8 +118,8 @@ if (role === 'student') {
         
         // 設定隨機時間區間：這裡設定 10 到 20 分鐘
         // (💡開發測試時，你可以先把這裡改成 1 到 2 分鐘方便測試)
-        const minMinutes = 10; 
-        const maxMinutes = 20;
+        const minMinutes = 1; 
+        const maxMinutes = 2;
         const randomTime = Math.floor(Math.random() * (maxMinutes - minMinutes + 1) + minMinutes) * 60 * 1000;
         
         flowRandomTimer = setTimeout(triggerFlowCheck, randomTime);
@@ -241,13 +241,30 @@ if (role === 'student') {
             const badge = document.getElementById(`badge-${data.socketId}`);
             
             if (studentDiv && badge) {
+                // 取得前一次的狀態，用來防止重複紀錄相同燈號
+                const prevStatus = studentDiv.dataset.currentStatus;
+                studentDiv.dataset.currentStatus = data.status;
+
                 if (data.status === 'yellow') {
                     studentDiv.className = 'student-item'; 
                     studentDiv.style.borderLeftColor = '#f1c40f'; 
                     badge.className = 'badge';
                     badge.style.backgroundColor = '#f1c40f'; 
                     badge.innerText = '已連線，未蓋上';
-                    // (黃燈時不觸發連線紀錄)
+                    
+                    // [新增] 如果原本是綠燈，突然變成黃燈，代表手機被拿起來了，記錄並視為違規！
+                    if (prevStatus === 'green') {
+                        addSystemRecord(data.socketId, '⚠️ 手機被翻開 (中斷專注)', false);
+                        
+                        // 讓違規數字 + 1
+                        const countBadge = document.getElementById(`vcount-${data.socketId}`);
+                        if (countBadge) {
+                            let count = parseInt(countBadge.textContent) || 0;
+                            count++;
+                            countBadge.textContent = count;
+                            countBadge.style.display = 'inline-block';
+                        }
+                    }
                     
                 } else if (data.status === 'green') {
                     studentDiv.className = 'student-item status-focus'; 
@@ -255,16 +272,14 @@ if (role === 'student') {
                     badge.innerText = '深度專注中';
                     badge.style.backgroundColor = ''; 
 
-                    // [新增] 只有從「未連線(或斷線)」變成綠燈時，才進行紀錄
-                    if (studentDiv.dataset.isOnline !== 'true') {
-                        // 判斷是否為第一次連線
+                    // 只有從別的狀態變成綠燈，才紀錄連線
+                    if (prevStatus !== 'green') {
                         if (studentDiv.dataset.hasConnectedBefore !== 'true') {
-                            addSystemRecord(data.socketId, '學生已連線', true);
-                            studentDiv.dataset.hasConnectedBefore = 'true'; // 標記已擁有初次連線紀錄
+                            addSystemRecord(data.socketId, '✅ 學生已連線並進入專注', true);
+                            studentDiv.dataset.hasConnectedBefore = 'true';
                         } else {
-                            addSystemRecord(data.socketId, '學生已重新連線', true);
+                            addSystemRecord(data.socketId, '✅ 學生已重新進入專注', true);
                         }
-                        studentDiv.dataset.isOnline = 'true'; // 標記目前已成功在線
                     }
 
                 } else if (data.status === 'red') {
@@ -273,8 +288,19 @@ if (role === 'student') {
                     badge.innerText = '未連線 / 離開';
                     badge.style.backgroundColor = '';
                     
-                    // [新增] 斷線時將狀態設為 false，這樣下次恢復綠燈時才會再次觸發「重新連線」紀錄
-                    studentDiv.dataset.isOnline = 'false';
+                    // [新增] 如果原本在線上，突然變成紅燈，代表斷線或離開，寫入紀錄！
+                    if (prevStatus === 'green' || prevStatus === 'yellow') {
+                        addSystemRecord(data.socketId, '❌ 學生已斷線或離開教室', false);
+                        
+                        // 讓違規數字 + 1
+                        const countBadge = document.getElementById(`vcount-${data.socketId}`);
+                        if (countBadge) {
+                            let count = parseInt(countBadge.textContent) || 0;
+                            count++;
+                            countBadge.textContent = count;
+                            countBadge.style.display = 'inline-block';
+                        }
+                    }
                 }
             }
         });
