@@ -56,8 +56,10 @@
       <img id="qrcode-img" src="" alt="QR Code">
     </div>
 
-    <div class="flow-placeholder">
-      [ 預留區塊 ] <br> 未來「心流校驗按鈕」將會顯示於此處
+    <div id="flow-container" style="display: none; text-align: center; margin-top: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid #3498db;">
+      <div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">心流校驗：請在時間內點擊按鈕</div>
+      <button id="flow-btn" style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 16px; cursor: pointer;">我還在專注中！</button>
+      <div id="flow-timer" style="margin-top: 10px; color: #e74c3c; font-weight: bold;">剩餘時間：60 秒</div>
     </div>
   </div>
 
@@ -99,6 +101,59 @@ const socket = io({
 
    // ================= 學生端專屬邏輯 =================
 if (role === 'student') {
+    let flowRandomTimer = null;
+    let flowCountdownInterval = null;
+
+    // 清除校驗 (當學生未蓋上手機時，暫停抽查)
+    function resetFlowCheck() {
+        clearTimeout(flowRandomTimer);
+        clearInterval(flowCountdownInterval);
+        flowRandomTimer = null;
+        document.getElementById('flow-container').style.display = 'none';
+    }
+
+    // 開始隨機心流抽查
+    function startRandomFlowCheck() {
+        resetFlowCheck();
+        
+        // 設定隨機時間區間：這裡設定 10 到 20 分鐘
+        // (💡開發測試時，你可以先把這裡改成 1 到 2 分鐘方便測試)
+        const minMinutes = 10; 
+        const maxMinutes = 20;
+        const randomTime = Math.floor(Math.random() * (maxMinutes - minMinutes + 1) + minMinutes) * 60 * 1000;
+        
+        flowRandomTimer = setTimeout(triggerFlowCheck, randomTime);
+    }
+
+    // 觸發按鈕與 60 秒倒數
+    function triggerFlowCheck() {
+        const container = document.getElementById('flow-container');
+        const timerDisplay = document.getElementById('flow-timer');
+        let timeLeft = 60; // 60 秒點擊時間
+        
+        container.style.display = 'block';
+        timerDisplay.innerText = `剩餘時間：${timeLeft} 秒`;
+
+        flowCountdownInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.innerText = `剩餘時間：${timeLeft} 秒`;
+
+            if (timeLeft <= 0) {
+                // 時間到，學生沒點擊
+                resetFlowCheck();
+                socket.emit('flow_record', { sync: socket.id, status: 'missed' }); // 傳送失敗紀錄
+                startRandomFlowCheck(); // 重新開始下一輪隨機
+            }
+        }, 1000);
+    }
+
+    // 綁定學生點擊按鈕事件
+    document.getElementById('flow-btn').addEventListener('click', () => {
+        resetFlowCheck();
+        socket.emit('flow_record', { sync: socket.id, status: 'clicked' }); // 傳送成功紀錄
+        startRandomFlowCheck(); // 重新開始下一輪隨機
+    });
+
     socket.on('connect', () => {
         // 產生 QR Code，並把學生的名字包進去
         const qrUrl = `https://study-universe.onrender.com/mobile.html?sync=${socket.id}&name=${encodeURIComponent(userName)}`;
@@ -122,14 +177,17 @@ if (role === 'student') {
 
     // 2. [優化] 監聽後端廣播的狀態更新 (讓學生自己也變成綠燈)
     socket.on('update_status', (data) => {
-        // 🚀 使用 socketId 進行精準匹配，確保只接收屬於這台連動裝置的訊號
         if (data.socketId === socket.id) {
             if (data.status === 'green') {
                 updateStudentUI('green', '綠燈：深度專注中', '太棒了！請保持手機蓋上');
+                // [新增] 只有進入綠燈狀態，才開始背景隨機倒數
+                if (!flowRandomTimer) startRandomFlowCheck();
             } else if (data.status === 'yellow') {
                 updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
+                resetFlowCheck(); // [新增] 手機拿起來了，取消抽查倒數
             } else if (data.status === 'red') {
                 updateStudentUI('red', '紅燈：尚未連線', '連線中斷，請重新掃描 QR Code');
+                resetFlowCheck(); // [新增] 斷線，取消抽查倒數
             }
         }
     });
@@ -189,20 +247,64 @@ if (role === 'student') {
                     badge.className = 'badge';
                     badge.style.backgroundColor = '#f1c40f'; 
                     badge.innerText = '已連線，未蓋上';
+                    // (黃燈時不觸發連線紀錄)
+                    
                 } else if (data.status === 'green') {
                     studentDiv.className = 'student-item status-focus'; 
                     badge.className = 'badge bg-green';
                     badge.innerText = '深度專注中';
                     badge.style.backgroundColor = ''; 
+
+                    // [新增] 只有從「未連線(或斷線)」變成綠燈時，才進行紀錄
+                    if (studentDiv.dataset.isOnline !== 'true') {
+                        // 判斷是否為第一次連線
+                        if (studentDiv.dataset.hasConnectedBefore !== 'true') {
+                            addSystemRecord(data.socketId, '學生已連線', true);
+                            studentDiv.dataset.hasConnectedBefore = 'true'; // 標記已擁有初次連線紀錄
+                        } else {
+                            addSystemRecord(data.socketId, '學生已重新連線', true);
+                        }
+                        studentDiv.dataset.isOnline = 'true'; // 標記目前已成功在線
+                    }
+
                 } else if (data.status === 'red') {
                     studentDiv.className = 'student-item status-unfocus'; 
                     badge.className = 'badge bg-red';
                     badge.innerText = '未連線 / 離開';
                     badge.style.backgroundColor = '';
+                    
+                    // [新增] 斷線時將狀態設為 false，這樣下次恢復綠燈時才會再次觸發「重新連線」紀錄
+                    studentDiv.dataset.isOnline = 'false';
                 }
             }
         });
 
+        // 專門用來將系統通知 (連線/重新連線) 寫入紀錄列表的函式
+        function addSystemRecord(socketId, message, isSuccess) {
+            const listContainer = document.getElementById(`vlist-${socketId}`);
+            if (listContainer) {
+                const emptyMsg = listContainer.querySelector('.empty-violation');
+                if (emptyMsg) emptyMsg.remove(); 
+
+                // 取得當下時間 (格式為 HH:MM)
+                const now = new Date();
+                const timeString = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+                const item = document.createElement('div');
+                item.className = 'violation-item';
+                
+                // 成功/正向的訊息改為綠色樣式
+                if (isSuccess) {
+                    item.style.color = '#27ae60';
+                    item.style.borderLeftColor = '#27ae60';
+                }
+                
+                item.textContent = `${message} ${timeString}`;
+
+                // 將這筆通知加在最上面
+                listContainer.insertBefore(item, listContainer.firstChild);
+            }
+        }
         // 👇 確保這段獨立運作，接收違規並加到下拉清單中
         socket.on('violation_alert', (data) => {
             const listContainer = document.getElementById(`vlist-${data.socketId}`);
@@ -214,13 +316,34 @@ if (role === 'student') {
 
                 const item = document.createElement('div');
                 item.className = 'violation-item';
-                item.innerText = data.message;
-                listContainer.appendChild(item);
+                item.textContent = data.message; 
+                // [修改] 將新紀錄安插在容器的最前面，這樣越新的就會在越上面
+                listContainer.insertBefore(item, listContainer.firstChild);
 
                 if (countBadge) {
                     let count = parseInt(countBadge.innerText) || 0;
                     count++;
                     countBadge.innerText = count;
+                    countBadge.style.display = 'inline-block';
+                }
+            }
+        });
+
+        // [新增] 接收心流校驗結果
+        socket.on('flow_alert', (data) => {
+            if (data.status === 'clicked') {
+                // 成功點擊：綠色紀錄
+                addSystemRecord(data.socketId, '心流校驗：通過', true);
+            } else if (data.status === 'missed') {
+                // 未點擊：紅色紀錄 (視為離座/違規)
+                addSystemRecord(data.socketId, '心流校驗：未點擊 (疑似離座)', false);
+                
+                // [可選功能] 如果你希望未點擊也算進右上角的紅色違規次數中，就保留這段
+                const countBadge = document.getElementById(`vcount-${data.socketId}`);
+                if (countBadge) {
+                    let count = parseInt(countBadge.textContent) || 0;
+                    count++;
+                    countBadge.textContent = count;
                     countBadge.style.display = 'inline-block';
                 }
             }

@@ -34,13 +34,13 @@ module.exports = (io) => {
       }
     });
 
-    // 👇 負責接收手機傳來的違規，轉發給老師端
-    socket.on('violation_record', (data) => {
+    // 👇 接收學生端的心流校驗結果，並轉發給老師
+    socket.on('flow_record', (data) => {
       const targetMeetId = studentRooms[data.sync];
       if (targetMeetId) {
-        io.to(targetMeetId).emit('violation_alert', {
+        io.to(targetMeetId).emit('flow_alert', {
           socketId: data.sync,
-          message: data.message
+          status: data.status
         });
       }
     });
