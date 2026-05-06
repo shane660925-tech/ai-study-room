@@ -136,7 +136,6 @@ if (role === 'student') {
 }
 
     // ================= 教師端專屬邏輯 =================
-// ================= 教師端專屬邏輯 =================
     if (role === 'teacher') {
         const studentList = document.getElementById('student-list');
         const countSpan = document.getElementById('count');
@@ -204,6 +203,28 @@ if (role === 'student') {
             }
         });
 
+        // 👇 確保這段獨立運作，接收違規並加到下拉清單中
+        socket.on('violation_alert', (data) => {
+            const listContainer = document.getElementById(`vlist-${data.socketId}`);
+            const countBadge = document.getElementById(`vcount-${data.socketId}`);
+            
+            if (listContainer) {
+                const emptyMsg = listContainer.querySelector('.empty-violation');
+                if (emptyMsg) emptyMsg.remove(); // 移除「目前無違規紀錄」的字樣
+
+                const item = document.createElement('div');
+                item.className = 'violation-item';
+                item.innerText = data.message;
+                listContainer.appendChild(item);
+
+                if (countBadge) {
+                    let count = parseInt(countBadge.innerText) || 0;
+                    count++;
+                    countBadge.innerText = count;
+                    countBadge.style.display = 'inline-block';
+                }
+            }
+        });
     }
 
     // 輔助函數：切換燈號
