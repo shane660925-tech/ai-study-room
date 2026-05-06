@@ -37,6 +37,12 @@
     .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; color: white; }
     .bg-green { background: #27ae60; }
     .bg-red { background: #e74c3c; }
+
+    /* ================= 違規紀錄專用樣式 ================= */
+    .violation-container { display: none; padding: 10px 12px; background: #fffcfc; border-top: 1px solid #eee; font-size: 12px; color: #c0392b; }
+    .violation-item { margin-bottom: 4px; padding-left: 10px; border-left: 2px solid #e74c3c; }
+    .empty-violation { color: #95a5a6; border-left: 2px solid #bdc3c7; }
+    .violation-count { background: #e74c3c; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; margin-left: 5px; display: none; }
   </style>
 </head>
 <body>
@@ -68,11 +74,11 @@
   <script src="/socket.io/socket.io.js"></script>
   
   <script>
-  // 1. 從網址抓取擴充功能傳來的參數 (新增抓取 meetId)
+  // 1. 從網址抓取擴充功能傳來的參數
 const urlParams = new URLSearchParams(window.location.search);
-const role = urlParams.get('role') || 'student';
-const userName = urlParams.get('name') || '未知學生';
-const currentMeetId = urlParams.get('meetId'); // 抓取 Google Meet 代碼
+const meetId = urlParams.get('meetId');
+const role = urlParams.get('role');
+const userName = urlParams.get('name');
 
 // 2. 智慧顯示：老師看老師畫面，學生看學生畫面
 if (role === 'teacher') {
@@ -82,12 +88,12 @@ if (role === 'teacher') {
   document.getElementById('display-name').innerText = userName;
 }
 
-// 3. 連線到後端 (⚠️ 這裡最重要：把資料傳給 Server)
+// 3. 連線到後端
 const socket = io({
   query: {
-    meetId: currentMeetId,
-    name: userName,
-    role: role
+    meetId: meetId,
+    role: role,
+    name: userName
   }
 });
 
@@ -109,15 +115,15 @@ if (role === 'student') {
     socket.on('deviceLinked', (data) => {
         if (data.success) {
             updateStudentUI('yellow', '黃燈：已連線', '請將手機翻轉蓋上');
-            // 👇 [新增] 學生端變成黃燈後，主動把狀態 relay (轉發) 給老師
-              socket.emit('relay_to_teacher', { status: 'yellow', name: userName });
+            // 學生端變成黃燈後，主動把狀態 relay (轉發) 給老師
+            socket.emit('relay_to_teacher', { status: 'yellow', name: userName });
         }
     });
 
-    // 2. [新增] 監聽手機翻轉的狀態更新
+    // 2. [優化] 監聽後端廣播的狀態更新 (讓學生自己也變成綠燈)
     socket.on('update_status', (data) => {
-        // 確保這個廣播是屬於「自己」的狀態更新，避免被其他同學影響
-        if (data.name === userName) {
+        // 🚀 使用 socketId 進行精準匹配，確保只接收屬於這台連動裝置的訊號
+        if (data.socketId === socket.id) {
             if (data.status === 'green') {
                 updateStudentUI('green', '綠燈：深度專注中', '太棒了！請保持手機蓋上');
             } else if (data.status === 'yellow') {
@@ -130,74 +136,93 @@ if (role === 'student') {
 }
 
     // ================= 教師端專屬邏輯 =================
-if (role === 'teacher') {
-    const studentList = document.getElementById('student-list');
-    const countSpan = document.getElementById('count');
-    let onlineCount = 0;
+// ================= 教師端專屬邏輯 =================
+    if (role === 'teacher') {
+        const studentList = document.getElementById('student-list');
+        const countSpan = document.getElementById('count');
+        let onlineCount = 0;
 
-    socket.on('student_joined', (data) => {
-        if (studentList.innerHTML.includes('等待學生加入中')) {
-            studentList.innerHTML = '';
-        }
-
-        // [新增防呆] 檢查畫面上是不是已經有這個名字的學生了？
-        const existingStudent = Array.from(document.querySelectorAll('.student-name')).find(el => el.innerText === data.name);
-
-        if (!existingStudent) {
-            // 如果沒重複，產生新的學生區塊
-            const div = document.createElement('div');
-            div.id = `student-${data.socketId}`;
-            div.className = 'student-item status-unfocus';
-            div.innerHTML = `
-                <div class="student-header">
-                    <span class="student-name">${data.name}</span>
-                    <span class="badge bg-red" id="badge-${data.socketId}">未連線</span>
-                </div>
-            `;
-            studentList.appendChild(div);
-            onlineCount++;
-            countSpan.innerText = onlineCount;
-        } else {
-            // 如果已經存在 (背景報到過了)，只要更新他的 DOM ID 綁定最新狀態即可
-            const parentDiv = existingStudent.closest('.student-item');
-            parentDiv.id = `student-${data.socketId}`;
-            parentDiv.querySelector('.badge').id = `badge-${data.socketId}`;
-        }
-    });
-
-    // 2. 監聽「學生掃碼連線」或「翻轉手機」的狀態更新
-    socket.on('update_status', (data) => {
-        const studentDiv = document.getElementById(`student-${data.socketId}`);
-        const badge = document.getElementById(`badge-${data.socketId}`);
-        
-        if (studentDiv && badge) {
-            if (data.status === 'yellow') {
-                studentDiv.className = 'student-item'; // 移除紅線
-                studentDiv.style.borderLeftColor = '#f1c40f'; // 變成黃線
-                badge.className = 'badge';
-                badge.style.backgroundColor = '#f1c40f'; // 黃色標籤
-                badge.innerText = '已連線，未蓋上';
-            } else if (data.status === 'green') {
-                studentDiv.className = 'student-item status-focus'; // 變成綠線
-                badge.className = 'badge bg-green';
-                badge.innerText = '深度專注中';
-                badge.style.backgroundColor = ''; // 清除 inline 樣式，吃 bg-green
-            } else if (data.status === 'red') {
-                studentDiv.className = 'student-item status-unfocus'; // 變成紅線
-                badge.className = 'badge bg-red';
-                badge.innerText = '未連線 / 離開';
-                badge.style.backgroundColor = '';
+        socket.on('student_joined', (data) => {
+            if (studentList.innerHTML.includes('等待學生加入中')) {
+                studentList.innerHTML = '';
             }
-        }
-    });
-}
+
+            const existingStudent = Array.from(document.querySelectorAll('.student-name')).find(el => el.innerText.includes(data.name));
+
+            if (!existingStudent) {
+                const div = document.createElement('div');
+                div.id = `student-${data.socketId}`;
+                div.className = 'student-item status-unfocus';
+                div.innerHTML = `
+                    <div class="student-header" onclick="toggleViolations('${data.socketId}')">
+                        <span class="student-name">
+                            ${data.name} 
+                            <span class="violation-count" id="vcount-${data.socketId}">0</span>
+                        </span>
+                        <span class="badge bg-red" id="badge-${data.socketId}">未連線</span>
+                    </div>
+                    <div class="violation-container" id="vlist-${data.socketId}">
+                        <div class="empty-violation">目前無違規紀錄</div>
+                    </div>
+                `;
+                studentList.appendChild(div);
+                onlineCount++;
+                countSpan.innerText = onlineCount;
+            } else {
+                const parentDiv = existingStudent.closest('.student-item');
+                parentDiv.id = `student-${data.socketId}`;
+                parentDiv.querySelector('.badge').id = `badge-${data.socketId}`;
+                // 確保重新綁定最新的 onclick 事件與 ID
+                parentDiv.querySelector('.student-header').setAttribute('onclick', `toggleViolations('${data.socketId}')`);
+                parentDiv.querySelector('.violation-count').id = `vcount-${data.socketId}`;
+                parentDiv.querySelector('.violation-container').id = `vlist-${data.socketId}`;
+            }
+        });
+
+        socket.on('update_status', (data) => {
+            const studentDiv = document.getElementById(`student-${data.socketId}`);
+            const badge = document.getElementById(`badge-${data.socketId}`);
+            
+            if (studentDiv && badge) {
+                if (data.status === 'yellow') {
+                    studentDiv.className = 'student-item'; 
+                    studentDiv.style.borderLeftColor = '#f1c40f'; 
+                    badge.className = 'badge';
+                    badge.style.backgroundColor = '#f1c40f'; 
+                    badge.innerText = '已連線，未蓋上';
+                } else if (data.status === 'green') {
+                    studentDiv.className = 'student-item status-focus'; 
+                    badge.className = 'badge bg-green';
+                    badge.innerText = '深度專注中';
+                    badge.style.backgroundColor = ''; 
+                } else if (data.status === 'red') {
+                    studentDiv.className = 'student-item status-unfocus'; 
+                    badge.className = 'badge bg-red';
+                    badge.innerText = '未連線 / 離開';
+                    badge.style.backgroundColor = '';
+                }
+            }
+        });
+
+    }
+
     // 輔助函數：切換燈號
     function updateStudentUI(color, title, desc) {
         const card = document.getElementById('student-status-card');
-        card.className = `status-card ${color}`;
-        document.getElementById('student-status-title').innerText = title;
-        document.getElementById('student-status-desc').innerText = desc;
+        if (card) {
+          card.className = `status-card ${color}`;
+          document.getElementById('student-status-title').innerText = title;
+          document.getElementById('student-status-desc').innerText = desc;
+        }
     }
+
+    // 點擊學生區塊展開/收起違規紀錄
+    window.toggleViolations = function(socketId) {
+        const list = document.getElementById(`vlist-${socketId}`);
+        if (list) {
+            list.style.display = (list.style.display === 'none' || list.style.display === '') ? 'block' : 'none';
+        }
+    };
   </script>
 </body>
 </html>

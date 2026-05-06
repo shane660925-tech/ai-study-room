@@ -136,32 +136,42 @@
 
     function handleOrientation(event) {
         if (event.beta === null) return;
-        
-        // 🚀 新增：休息時間豁免，直接略過所有的翻轉偵測與倒數計時！
-        if (isAIPaused) return; 
+        if (isAIPaused) return;
 
         const isFaceDown = Math.abs(event.beta) > 130;
+        const urlParams = new URLSearchParams(window.location.search);
+        const syncToken = urlParams.get('sync');
 
         if (isFaceDown) {
             if (!hasFlipped) {
                 hasFlipped = true;
+                
                 if (flipWarningTimer) {
                     clearInterval(flipWarningTimer);
                     flipWarningTimer = null;
+                    
+                    // 💡 [發送紀錄] 5秒內成功蓋回
+                    const now = new Date();
+                    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    if (syncToken) {
+                        socket.emit('violation_record', {
+                            sync: syncToken,
+                            message: `翻開手機5秒內蓋回 ${timeString}`
+                        });
+                    }
                 }
+
                 document.getElementById('flippedOverlay').classList.remove('hidden');
                 document.getElementById('warningOverlay').classList.add('hidden');
                 
                 socket.emit('update_status', { name: studentName, isFlipped: true });
-                
-                const urlParams = new URLSearchParams(window.location.search);
-                const syncToken = urlParams.get('sync');
-                socket.emit('mobile_sync_update', { 
-                    type: 'FLIP_COMPLETED', 
-                    studentName: studentName,
-                    syncToken: syncToken 
-                });
+                socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName, syncToken: syncToken });
 
+                if (syncToken) {
+                    socket.emit('student_status_changed', { sync: syncToken, status: 'green', name: studentName });
+                }
+                
                 const isStandalone = urlParams.get('standalone') === 'true';
                 const targetRoom = urlParams.get('targetRoom');
                 if (isStandalone && targetRoom) {
@@ -180,6 +190,10 @@
                 socket.emit('update_status', { name: studentName, isFlipped: false });
                 socket.emit('mobile_sync_update', { type: 'FLIP_WARNING', studentName: studentName });
 
+                if (syncToken) {
+                    socket.emit('student_status_changed', { sync: syncToken, status: 'yellow', name: studentName });
+                }
+
                 flipWarningTimer = setInterval(() => {
                     flipWarningCount--;
                     document.getElementById('warningCounter').innerText = flipWarningCount;
@@ -189,6 +203,20 @@
                         flipWarningTimer = null;
                         
                         socket.emit('flip_failed', { name: studentName });
+
+                        // 💡 [發送紀錄] 5秒到未蓋回，強制斷線
+                        if (syncToken) {
+                            const now = new Date();
+                            const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                            
+                            socket.emit('violation_record', {
+                                sync: syncToken,
+                                message: `學生翻開手機並斷線 ${timeString}`
+                            });
+
+                            socket.emit('student_status_changed', { sync: syncToken, status: 'red', name: studentName });
+                        }
+                        
                         hasFlipped = false;
                         document.getElementById('warningOverlay').classList.add('hidden');
                         document.getElementById('syncView').classList.add('hidden');

@@ -12,7 +12,6 @@ module.exports = (io) => {
       }
     }
 
-    // [新增] 接收學生端主動轉發的狀態 (解決黃燈老師看不到的問題)
     socket.on('relay_to_teacher', (data) => {
       const targetMeetId = studentRooms[socket.id];
       if (targetMeetId) {
@@ -24,7 +23,6 @@ module.exports = (io) => {
       }
     });
 
-    // 處理手機翻轉的狀態更新 (綠燈)
     socket.on('student_status_changed', (data) => {
       const targetMeetId = studentRooms[data.sync];
       if (targetMeetId) {
@@ -32,6 +30,17 @@ module.exports = (io) => {
           status: data.status,
           name: data.name,
           socketId: data.sync 
+        });
+      }
+    });
+
+    // 👇 負責接收手機傳來的違規，轉發給老師端
+    socket.on('violation_record', (data) => {
+      const targetMeetId = studentRooms[data.sync];
+      if (targetMeetId) {
+        io.to(targetMeetId).emit('violation_alert', {
+          socketId: data.sync,
+          message: data.message
         });
       }
     });
