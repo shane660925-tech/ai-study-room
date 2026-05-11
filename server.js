@@ -1409,35 +1409,47 @@ io.on('connection', (socket) => {
 
     // 1. 學生進入特約教室 (雙機分開加入)
     socket.on('join_tutor_room', (data) => {
-        const { username, roomId, deviceType } = data; // deviceType: 'pc' 或 'mobile'
-        
-        socket.join(roomId);
-        socket.username = username;
-        socket.roomId = roomId;
-        socket.deviceType = deviceType;
+    if (!data) return;
 
-        // 🛡️ 攔截幽靈連線：如果沒有名字、名字是空字串，或是字串的 'undefined'
-    if (!data || !data.userName || data.userName === 'undefined' || data.userName === '神秘學員') {
-        console.log("❌ 擋下了一個無效的幽靈連線，不寫入點名表");
-        // 可以選擇 emit 一個錯誤給前端，或是直接 return 中斷執行
-        return; 
+    const username = data.username || data.userName || data.name;
+    const roomId = data.roomId || data.room || data.meetId;
+    const deviceType = data.deviceType || data.device || 'pc';
+
+    if (!username || username === 'undefined' || username === '神秘學員') {
+        console.log("❌ 擋下無效特約教室連線：缺少 username");
+        return;
     }
-    
-        if (!tutorRoomSchedules.has(username)) {
-            tutorRoomSchedules.set(username, { pc: null, mobile: null, status: 'RED' });
-        }
-        
-        const userDevices = tutorRoomSchedules.get(username);
-        userDevices[deviceType] = socket.id;
 
-        console.log(`[特約教室] ${username} 使用 ${deviceType} 進入了 ${roomId}`);
-        
-        updateTutorStatus(username, roomId);
+    if (!roomId || roomId === 'undefined') {
+        console.log("❌ 擋下無效特約教室連線：缺少 roomId");
+        return;
+    }
 
-        // 只要有人加入，順便推送一次最新的全域時間給他
-        const timeState = getTutorRoomTimeState(roomId);
-        if (timeState) socket.emit('tutor_timer_sync', timeState);
-    });
+    socket.join(roomId);
+    socket.username = username;
+    socket.roomId = roomId;
+    socket.deviceType = deviceType;
+
+    if (!tutorRoomSchedules.has(username)) {
+        tutorRoomSchedules.set(username, {
+            pc: null,
+            mobile: null,
+            status: 'RED',
+            roomId
+        });
+    }
+
+    const userDevices = tutorRoomSchedules.get(username);
+    userDevices.roomId = roomId;
+    userDevices[deviceType] = socket.id;
+
+    console.log(`[特約教室] ${username} 使用 ${deviceType} 進入了 ${roomId}`);
+
+    updateTutorStatus(username, roomId);
+
+    const timeState = getTutorRoomTimeState(roomId);
+    if (timeState) socket.emit('tutor_timer_sync', timeState);
+});
 
     // 2. 監聽手機翻轉狀態 (特約教室專用，取消豁免權)
     socket.on('tutor_mobile_sync', (data) => {
@@ -1457,23 +1469,33 @@ io.on('connection', (socket) => {
 
     // 2. 黑板公告
     socket.on('update_blackboard', (data) => {
-    const targetRoomMode = data?.roomMode || data?.roomId || socket.roomMode;
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId ||
+        data?.roomMode ||
+        socket.roomMode;
 
-    if (targetRoomMode) {
-        io.to(targetRoomMode).emit('update_blackboard', data);
+    if (targetRoom) {
+        io.to(targetRoom).emit('update_blackboard', data);
     } else {
-        socket.emit('update_blackboard', data);
+        socket.broadcast.emit('update_blackboard', data);
     }
 });
 
     // 3. 導師個別警告
     socket.on('send_warning', (data) => {
-    const targetRoomMode = data?.roomMode || data?.roomId || socket.roomMode;
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId ||
+        data?.roomMode ||
+        socket.roomMode;
 
-    if (targetRoomMode) {
-        io.to(targetRoomMode).emit('receive_warning', data);
+    if (targetRoom) {
+        io.to(targetRoom).emit('receive_warning', data);
     } else {
-        socket.emit('receive_warning', data);
+        socket.broadcast.emit('receive_warning', data);
     }
 });
 
@@ -1500,7 +1522,7 @@ io.on('connection', (socket) => {
     // 新增：特約教室/一般教室的違規轉發橋樑
     // ==========================================
     socket.on('violation', (data) => {
-    console.log(`[伺服器轉發] 收到學生違規: ${data.name} - ${data.type}`);
+    console.log(`[伺服器轉發] 收到學生違規: ${data?.name || data?.username} - ${data?.type}`);
 
     const user = onlineUsers.find(u =>
         u.id === socket.id ||
@@ -1508,12 +1530,17 @@ io.on('connection', (socket) => {
         u.name === data?.username
     );
 
-    const targetRoomMode = data?.roomMode || user?.roomMode;
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId ||
+        data?.roomMode ||
+        user?.roomMode;
 
-    if (targetRoomMode) {
-        io.to(targetRoomMode).emit('violation', data);
+    if (targetRoom) {
+        io.to(targetRoom).emit('violation', data);
     } else {
-        socket.emit('violation', data);
+        socket.broadcast.emit('violation', data);
     }
 });
 
@@ -1996,15 +2023,22 @@ broadcastUpdateRank();
         u.name === reportData?.username
     );
 
-    const targetRoomMode = reportData?.roomMode || user?.roomMode;
+    const targetRoom =
+        reportData?.roomId ||
+        reportData?.room ||
+        socket.roomId ||
+        reportData?.roomMode ||
+        user?.roomMode;
 
-    if (targetRoomMode) {
-        io.to(targetRoomMode).emit('teacher_receive_report', reportData);
+    if (targetRoom) {
+        io.to(targetRoom).emit('teacher_receive_report', reportData);
 
         addTeacherLog(
-            `🏁 結算: ${reportData.name} 已結束自習。專注評分: ${reportData.score} 分。違規: ${reportData.violationCount} 次`,
-            targetRoomMode
+            `🏁 結算: ${reportData.name || reportData.username} 已結束自習。專注評分: ${reportData.score} 分。違規: ${reportData.violationCount} 次`,
+            targetRoom
         );
+    } else {
+        socket.broadcast.emit('teacher_receive_report', reportData);
     }
 });
 
