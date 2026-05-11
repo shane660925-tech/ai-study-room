@@ -63,7 +63,7 @@ window.startDesktopCountdown = function() {
             if (typeof socket !== 'undefined' && socket.connected) {
                 // 發送踢出指令給伺服器，並通知大廳
                 socket.emit('flip_failed', { name: myName });
-                socket.emit('violation', { 
+                emitTutorViolation({ 
                     name: myName, 
                     type: '🚨 翻轉中斷 (強制踢出教室)', 
                     image: null 
@@ -105,6 +105,20 @@ if (typeof window.socket === 'undefined') {
     window.socket = typeof io !== 'undefined' ? io() : null;
 }
 const socket = window.socket;
+
+function getTutorRoomCode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || params.get('roomId') || null;
+}
+
+function emitTutorViolation(payload) {
+    if (typeof socket === 'undefined' || !socket) return;
+
+    socket.emit('violation', {
+        ...payload,
+        roomId: getTutorRoomCode()
+    });
+}
 
 if (!socket) {
     console.error("❌ Socket.io 未載入！");
@@ -181,7 +195,7 @@ window.triggerViolation = function(reason) {
     }
 
     if (typeof socket !== 'undefined') {
-        socket.emit('violation', {
+        emitTutorViolation({
     name: myName,
     type: reason || 'AI 偵測異常',
     image: snapImg,
@@ -640,7 +654,7 @@ document.addEventListener('CameraViolation', (e) => {
 
         if (typeof socket !== 'undefined') {
             const leaveTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-            socket.emit('violation', { 
+            emitTutorViolation({ 
                 name: name, 
                 type: `🪑 離座 (離位時間: ${leaveTime} / 尚未回位)`, 
                 image: snapImg 
@@ -673,7 +687,7 @@ document.addEventListener('CameraViolation', (e) => {
     } catch (error) {}
 
     if (typeof socket !== 'undefined') {
-        socket.emit('violation', {
+        emitTutorViolation({
     name: name,
     type: reason,
     image: snapImg,
@@ -694,7 +708,7 @@ window.handleReturnSeat = function() {
     const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
     if (typeof socket !== 'undefined') {
         const returnTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-        socket.emit('violation', { 
+        emitTutorViolation({ 
     name: myName, 
     type: `【更新狀態】學生已回位 (回位時間: ${returnTime})`, 
     image: null,
@@ -742,7 +756,7 @@ document.addEventListener('TabSwitchedViolation', (e) => {
     roomId: getTutorRoomCode()
 });
 
-socket.emit('violation', {
+emitTutorViolation({
     name: name,
     type: '🚫 切換分頁 (離開自習室畫面)',
     image: null,

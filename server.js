@@ -1560,8 +1560,10 @@ socket.on('get_attendance', (data) => {
 
     if (targetRoom) {
         io.to(targetRoom).emit('violation', data);
+        io.to(targetRoom).emit('student_violation', data);
     } else {
         socket.broadcast.emit('violation', data);
+        socket.broadcast.emit('student_violation', data);
     }
 });
 
