@@ -183,7 +183,7 @@ window.endSession = async function() {
                 creditDelta: creditDelta,
                 deviceMode: window.isPhoneFlipped ? 'ULTIMATE' : 'VISUAL',
                 roomType: window.currentRoomMode,
-                integrityScore: report.integrityScore, // 新增此行：將本次誠信分傳給後端
+                integrityScore: report.integrity,
                 teamSize: window.remoteUsers ? window.remoteUsers.length + 1 : 1,
                 flippedCount: window.remoteUsers ? window.remoteUsers.filter(u => u.isFlipped).length + (window.isPhoneFlipped ? 1 : 0) : (window.isPhoneFlipped ? 1 : 0)
             })

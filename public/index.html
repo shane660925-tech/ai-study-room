@@ -40,7 +40,8 @@
             <div class="flex items-center gap-3 border-l border-white/10 pl-6">
                 <div class="text-right hidden sm:block">
                     <p id="navName" class="text-sm font-black text-white tracking-tighter">指揮官</p>
-                    <p class="text-[10px] text-blue-500 font-bold uppercase tracking-widest opacity-80">Online</p>
+<p id="displayLinkCode" class="text-[10px] text-green-400 font-bold tracking-widest hidden">CODE: ------</p>
+<p class="text-[10px] text-blue-500 font-bold uppercase tracking-widest opacity-80">Online</p>
                 </div>
                 <img id="navAvatar" src="" class="w-10 h-10 rounded-xl border-2 border-gray-700 bg-gray-800 object-cover" alt="User Avatar">
                 <button onclick="logout()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-gray-500" title="登出">
@@ -76,8 +77,8 @@
 
         <section class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div class="lg:col-span-3 flex flex-col gap-8">
-                <div>
-                    <div class="flex items-center justify-between mb-4">
+                <div id="intro-ai-rooms">
+    <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-white flex items-center"><i class="fas fa-layer-group mr-3 text-blue-400"></i>AI 專業自習空間</h2>
                         <span class="text-[10px] text-blue-500 font-bold bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 uppercase">Sync Enabled</span>
                     </div>
@@ -89,25 +90,25 @@
                             <div class="w-full text-center bg-white/5 group-hover:bg-purple-600 py-2 rounded-lg text-xs font-bold text-white transition-all">進入教室</div>
                         </div>
 
-                        <div class="glass-panel p-6 rounded-3xl room-card flex flex-col border-2 border-blue-500/30 group cursor-pointer relative overflow-hidden" onclick="handleRoomEntry('managed-room.html')">
+                        <div class="glass-panel p-6 rounded-3xl room-card flex flex-col border-2 border-blue-500/30 group cursor-pointer relative overflow-hidden" onclick="showThemeRoomModal()">
                             <div class="absolute top-0 right-0 bg-blue-500 text-[8px] text-white px-3 py-1 font-black rounded-bl-xl uppercase">Best Sync</div>
                             <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-2xl mb-4 group-hover:bg-blue-500 group-hover:text-white transition-all"><i class="fas fa-users-viewfinder"></i></div>
-                            <h3 class="text-xl font-black text-white mb-1">模擬線上教室</h3>
-                            <p class="text-gray-500 text-xs mb-4 flex-1">支援手機翻轉連動。搭配跨裝置同步，大幅減少 AI 誤判率。</p>
-                            <div class="w-full text-center bg-blue-600 group-hover:bg-blue-400 py-2 rounded-lg text-xs font-bold text-white transition-all">進入教室</div>
+                            <h3 class="text-xl font-black text-white mb-1">限時主題教室</h3>
+                            <p class="text-gray-500 text-xs mb-4 flex-1">選擇目前開放的段考衝刺、學測衝刺等主題教室，同主題學生才會互相看見。</p>
+                            <div class="w-full text-center bg-blue-600 group-hover:bg-blue-400 py-2 rounded-lg text-xs font-bold text-white transition-all">選擇主題</div>
                         </div>
 
-                        <div class="glass-panel p-6 rounded-3xl room-card flex flex-col border border-white/5 group cursor-pointer" onclick="handleRoomEntry('course-room.html')">
-                            <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl mb-4 group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fas fa-graduation-cap"></i></div>
-                            <h3 class="text-xl font-black text-white mb-1">線上課程專區</h3>
-                            <p class="text-gray-500 text-xs mb-4 flex-1">寬鬆判定。自動辨識「寫筆記」動作，適合撰寫報告時使用。</p>
-                            <div class="w-full text-center bg-white/5 group-hover:bg-cyan-600 py-2 rounded-lg text-xs font-bold text-white transition-all">進入教室</div>
-                        </div>
+                        <div id="course-list-container" class="flex flex-col gap-4">
+    <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 items-center justify-center min-h-[200px]">
+        <div class="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
+        <p class="text-gray-500 text-[10px] tracking-widest uppercase animate-pulse">正在驗證課程權限...</p>
+    </div>
+</div>
                     </div>
                 </div>
 
-                <div>
-                    <div class="flex items-center justify-between mb-4">
+                <div id="intro-team-system">
+    <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-white flex items-center"><i class="fas fa-users mr-3 text-orange-400"></i>社群組隊與競賽</h2>
                         <span class="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-3 py-1 rounded-full border border-orange-500/20 uppercase">Beta</span>
                     </div>
@@ -131,7 +132,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="intro-vip-system" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="glass-panel p-6 rounded-3xl room-card flex flex-col border border-yellow-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)] group relative overflow-hidden">
                         <div class="absolute top-0 right-0 bg-yellow-500 text-[8px] text-black px-3 py-1 font-black rounded-bl-xl uppercase">Invite Only</div>
                         <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-500 text-2xl mb-4 group-hover:bg-yellow-500 group-hover:text-white transition-all"><i class="fas fa-crown"></i></div>
@@ -158,7 +159,7 @@
                     </div>
                 </div>
 
-                <div class="w-full">
+                <div id="intro-mission-logs" class="w-full">
                     <div class="glass-panel rounded-3xl overflow-hidden flex flex-col border border-white/5">
                         <div class="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
                             <h3 class="text-sm font-bold text-white uppercase tracking-tighter"><i class="fas fa-history mr-2 text-blue-400"></i>Mission Logs</h3>
@@ -186,9 +187,33 @@
                         <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">請用手機掃描並完成翻轉<br>即可在 AI 教室中獲得誤判豁免</p>
                         <button onclick="copyMobileUrl()" class="mt-4 text-[10px] text-blue-500 font-mono underline hover:text-blue-400 transition-colors">COPY MOBILE LINK</button>
                     </div>
+                     <div>
+    <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 italic">Parent Link</h2>
+
+    <div id="lineBindModule"
+         class="glass-panel p-6 rounded-3xl border border-green-500/20 text-center flex flex-col items-center">
+
+        <div class="text-green-500 text-xs font-black mb-4 flex items-center gap-2">
+            <i class="fab fa-line"></i> LINE 學習紀錄綁定 QR CODE
+        </div>
+
+        <div id="lineBindQrcode"
+             class="p-2 bg-white rounded-xl shadow-2xl shadow-green-500/20"></div>
+
+        <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">
+            掃描後即可綁定 LINE<br>
+之後將收到學習紀錄
+        </p>
+
+        <p id="lineBindStatus"
+           class="text-[10px] text-green-400 mt-3 font-bold">
+            載入中...
+        </p>
+    </div>
+</div>
                 </div>
 
-                <a href="flip-room.html" 
+                <a id="intro-standalone-mode" href="flip-room.html" 
                    class="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white font-black rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.6)] hover:shadow-[0_0_35px_rgba(59,130,246,0.9)] hover:-translate-y-1 transition-all duration-300 animate-pulse border border-blue-400/50 group w-full sm:w-auto">
                     
                     <div class="relative">
@@ -511,5 +536,21 @@
         </div>
     </div>
 
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(async () => {
+        const username = localStorage.getItem('studyVerseUser');
+        if (username) {
+            const res = await fetch(`/api/user-stats?username=${encodeURIComponent(username)}`);
+            const data = await res.json();
+            if (data.user && data.user.link_code) {
+                const el = document.getElementById('displayLinkCode');
+                el.innerText = `CODE: ${data.user.link_code}`;
+                el.classList.remove('hidden');
+            }
+        }
+    }, 1500); // 確保在其他登入資訊抓取完後執行
+});
+</script>
 </body>
 </html>

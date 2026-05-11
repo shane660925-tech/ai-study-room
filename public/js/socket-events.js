@@ -12,12 +12,27 @@ window.setupSocketEvents = function(socket, myUsername) {
     // 1. 連線成功處理
     socket.on('connect', () => {
         console.log("✅ Socket 已連線，正在登錄身分...");
-        socket.emit("update_status", { 
-            status: window.myStatus || "FOCUSED", 
-            name: myUsername, 
-            isFlipped: window.isPhoneFlipped,
-            isCaptain: window.isAuditMode 
-        });
+        const urlParams = new URLSearchParams(window.location.search);
+const themeSlug = urlParams.get('theme');
+
+if (themeSlug) {
+    window.currentRoomMode = `theme:${themeSlug}`;
+}
+
+const finalRoomMode =
+    window.currentRoomMode ||
+    window.roomMode ||
+    "managed";
+
+console.log("🧪 Socket connect roomMode =", finalRoomMode);
+
+socket.emit("update_status", { 
+    status: window.myStatus || "FOCUSED", 
+    name: myUsername, 
+    isFlipped: window.isPhoneFlipped,
+    isCaptain: window.isAuditMode,
+    roomMode: finalRoomMode
+});
     });
 
     // 2. 手機同步更新

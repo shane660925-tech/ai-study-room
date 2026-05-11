@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const { createClient } = require('@supabase/supabase-js');
 const ScoringService = require('./ScoringService');
 const { OAuth2Client } = require('google-auth-library');
+const crypto = require('crypto');
 
 // 動態判斷網址 (本地端 vs 正式上線端)
 const GOOGLE_CALLBACK_URL = process.env.NODE_ENV === 'production'
@@ -24,9 +25,22 @@ const googleClient = new OAuth2Client(
 const app = express();
 const server = http.createServer(app);
 // 👇 [新增] 允許 Google Meet 跨網域發送背景報到 API (CORS 設定)
+// [修改] server.js 
+// 尋找原本的 app.use((req, res, next) => { ... }) 區塊，替換成以下內容：
+
 app.use((req, res, next) => {
+    // 允許跨網域請求
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // 👇 [關鍵修改] 允許被 Chrome Extension 嵌入
+    // 移除預設的拒絕嵌入標頭
+    res.removeHeader('X-Frame-Options'); 
+    
+    // 設定 CSP 允許來自任何地方的嵌入 (或是指定 chrome-extension:// 協議)
+    // 這裡為了相容性先設為允許所有，若要更嚴謹可限制來源
+    res.header('Content-Security-Policy', "frame-ancestors *;"); 
+    
     next();
 });
 // 👆 ----------------------------------------------------
@@ -61,6 +75,63 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 
 // ==========================================
+// [新增功能] 產生 6 位數唯一且不可重複的代碼
+// ==========================================
+async function generateUniqueLinkCode() {
+    let code;
+    let isUnique = false;
+    while (!isUnique) {
+        // 產生 100000 ~ 999999 的隨機數
+        code = Math.floor(100000 + Math.random() * 900000).toString();
+        // 檢查資料庫是否已存在
+        const { data } = await supabase.from('users').select('link_code').eq('link_code', code).maybeSingle();
+        if (!data) isUnique = true;
+    }
+    return code;
+}
+
+async function generateUniqueLineBindToken() {
+    let token;
+    let isUnique = false;
+
+    while (!isUnique) {
+        token = crypto.randomBytes(24).toString('hex');
+
+        const { data } = await supabase
+            .from('users')
+            .select('line_bind_token')
+            .eq('line_bind_token', token)
+            .maybeSingle();
+
+        if (!data) isUnique = true;
+    }
+
+    return token;
+}
+
+async function generateUniqueLineBindShortCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code;
+    let isUnique = false;
+
+    while (!isUnique) {
+        code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+
+        const { data } = await supabase
+            .from('users')
+            .select('line_bind_short_code')
+            .eq('line_bind_short_code', code)
+            .maybeSingle();
+
+        if (!data) isUnique = true;
+    }
+
+    return code;
+}
+// ==========================================
 // 2. API 路由設定
 // ==========================================
 
@@ -68,7 +139,6 @@ console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 app.post('/api/register', async (req, res) => {
     const { username, account, password } = req.body;
     
-    // 增加這行：在終端機印出前端傳來的真實資料，方便我們檢查
     console.log("🚀 收到註冊請求:", { username, account, password });
 
     if (!username || !account || !password) {
@@ -76,40 +146,30 @@ app.post('/api/register', async (req, res) => {
     }
 
     try {
-        // 1. 檢查帳號是否已被註冊
-        const { data: existingAccount } = await supabase
-            .from('users')
-            .select('account')
-            .eq('account', account)
-            .maybeSingle();
-
+        const { data: existingAccount } = await supabase.from('users').select('account').eq('account', account).maybeSingle();
         if (existingAccount) return res.status(400).json({ error: '此帳號已被註冊！' });
 
-        // 2. 檢查暱稱是否重複
-        const { data: existingUser } = await supabase
-            .from('users')
-            .select('username')
-            .eq('username', username)
-            .maybeSingle();
-
+        const { data: existingUser } = await supabase.from('users').select('username').eq('username', username).maybeSingle();
         if (existingUser) return res.status(400).json({ error: '此暱稱已有人使用，請換一個！' });
 
         const today = new Date().toISOString().split('T')[0];
+        
+        // --- [新增] 註冊時產生代碼 ---
+        const newLinkCode = await generateUniqueLinkCode();
 
-        // 3. 寫入新使用者資料 (加入 String() 強制轉為純文字)
         const { error } = await supabase.from('users').insert([{ 
             username: String(username), 
             account: String(account),
-            password: String(password), // <--- 強制轉文字，杜絕 boolean 錯誤
+            password: String(password),
             total_seconds: 0, 
             streak: 1, 
             last_login: today, 
             role: 'student', 
-            integrity_score: 100 
+            integrity_score: 100,
+            link_code: newLinkCode // [新增欄位]
         }]);
 
         if (error) throw error;
-        
         res.json({ message: '註冊成功！', username: username });
     } catch (err) {
         console.error("註冊失敗:", err);
@@ -120,31 +180,219 @@ app.post('/api/register', async (req, res) => {
 // --- [新增] 登入 API ---
 app.post('/api/login', async (req, res) => {
     const { account, password } = req.body;
-    
-    if (!account || !password) {
-        return res.status(400).json({ error: '請輸入帳號密碼' });
-    }
+    if (!account || !password) return res.status(400).json({ error: '請輸入帳號密碼' });
 
     try {
-        // 透過帳號與密碼比對登入
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('account', account)
-            .eq('password', password)
-            .maybeSingle();
+        const { data: user, error } = await supabase.from('users').select('*').eq('account', account).eq('password', password).maybeSingle();
+        if (error || !user) return res.status(401).json({ error: '帳號或密碼錯誤！' });
 
-        if (error || !user) {
-            return res.status(401).json({ error: '帳號或密碼錯誤！' });
+        // --- [新增] 舊用戶若無代碼則自動補發 ---
+        if (!user.link_code) {
+            const newLinkCode = await generateUniqueLinkCode();
+            await supabase.from('users').update({ link_code: newLinkCode }).eq('username', user.username);
         }
 
         res.json({ message: '登入成功！', username: user.username });
     } catch (err) {
-        console.error("登入失敗:", err);
+        console.error("登入失敗:", err); // 保留你的 log
         res.status(500).json({ error: '系統登入失敗，請稍後再試。' });
     }
 });
 
+// --- 隱私與學習監測同意 API ---
+app.post('/api/privacy-consent', async (req, res) => {
+    const { username, version } = req.body;
+
+    if (!username || !version) {
+        return res.status(400).json({ error: '缺少 username 或 version' });
+    }
+
+    try {
+        const { data: user, error: findError } = await supabase
+            .from('users')
+            .select('username')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (findError) throw findError;
+
+        if (!user) {
+            return res.status(404).json({ error: '找不到使用者' });
+        }
+
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({
+                privacy_consent_at: new Date().toISOString(),
+                privacy_consent_version: version
+            })
+            .eq('username', username);
+
+        if (updateError) throw updateError;
+
+        res.json({
+            message: '隱私與學習監測同意已記錄',
+            username,
+            version
+        });
+
+    } catch (err) {
+        console.error('隱私同意紀錄失敗:', err);
+        res.status(500).json({ error: '隱私同意紀錄失敗' });
+    }
+});
+
+// --- 新手導覽完成 API ---
+app.post('/api/intro-complete', async (req, res) => {
+    const { username } = req.body;
+
+    if (!username) {
+        return res.status(400).json({ error: '缺少 username' });
+    }
+
+    try {
+        const { error } = await supabase
+            .from('users')
+            .update({
+                has_seen_intro: true
+            })
+            .eq('username', username);
+
+        if (error) throw error;
+
+        res.json({
+            message: '新手導覽已完成',
+            username
+        });
+
+    } catch (err) {
+        console.error('新手導覽完成紀錄失敗:', err);
+        res.status(500).json({ error: '新手導覽完成紀錄失敗' });
+    }
+});
+
+// --- 主題教室列表 API ---
+app.get('/api/theme-rooms', async (req, res) => {
+    try {
+        const now = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('theme_rooms')
+            .select('*')
+            .eq('is_active', true)
+            .or(`starts_at.is.null,starts_at.lte.${now}`)
+            .or(`ends_at.is.null,ends_at.gte.${now}`)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+
+        const roomsWithCount = (data || []).map(room => {
+            const themeRoomMode = `theme:${room.slug}`;
+
+            const onlineCount = onlineUsers.filter(user =>
+                user.roomMode === themeRoomMode &&
+                user.status !== 'OFFLINE'
+            ).length;
+
+            return {
+                ...room,
+                online_count: onlineCount
+            };
+        });
+
+        res.json({
+            rooms: roomsWithCount
+        });
+
+    } catch (err) {
+        console.error('取得主題教室失敗:', err);
+        res.status(500).json({ error: '取得主題教室失敗' });
+    }
+});
+
+app.get('/api/line-bind-info', async (req, res) => {
+    const username = req.query.username;
+
+    if (!username) {
+        return res.status(400).json({ error: '缺少 username' });
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, line_bind_token, line_bind_short_code')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!user) return res.status(404).json({ error: '找不到使用者' });
+
+        let token = user.line_bind_token;
+        let shortCode = user.line_bind_short_code;
+
+        const updates = {};
+
+if (!token) {
+    token = await generateUniqueLineBindToken();
+    updates.line_bind_token = token;
+    updates.line_bind_token_created_at = new Date().toISOString();
+}
+
+if (!shortCode) {
+    shortCode = await generateUniqueLineBindShortCode();
+    updates.line_bind_short_code = shortCode;
+}
+
+if (Object.keys(updates).length > 0) {
+    const { error: updateError } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('username', username);
+
+    if (updateError) throw updateError;
+}
+
+        const publicBaseUrl =
+    process.env.PUBLIC_BASE_URL ||
+    `${req.protocol}://${req.get('host')}`;
+
+const bindUrl =
+    `${publicBaseUrl}/line-bind.html?token=${encodeURIComponent(token)}`;
+
+        res.json({
+    username,
+    token,
+    shortCode,
+    bindUrl,
+    lineOfficialUrl: 'https://lin.ee/VvxVzKT'
+});
+
+    } catch (err) {
+        console.error('取得 LINE 綁定資訊失敗:', err);
+        res.status(500).json({ error: '取得 LINE 綁定資訊失敗' });
+    }
+});
+
+app.get('/api/line/auto-bind', async (req, res) => {
+    const token = req.query.token;
+
+    if (!token) {
+        return res.status(400).send('缺少 token');
+    }
+
+    const state = encodeURIComponent(token);
+
+    const lineLoginUrl =
+`https://access.line.me/oauth2/v2.1/authorize
+?response_type=code
+&client_id=${process.env.LINE_CHANNEL_ID}
+&redirect_uri=${encodeURIComponent(process.env.LINE_CALLBACK_URL)}
+&state=${state}
+&scope=profile%20openid`
+.replace(/\n/g, '');
+
+    res.redirect(lineLoginUrl);
+});
 // ==========================================
 // [新增] Google OAuth 登入路由 (保持原有功能)
 // ==========================================
@@ -165,10 +413,10 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     try {
         // 同樣明確指定 redirect_uri
-const { tokens } = await googleClient.getToken({
-    code: code,
-    redirect_uri: GOOGLE_CALLBACK_URL
-});
+        const { tokens } = await googleClient.getToken({
+            code: code,
+            redirect_uri: GOOGLE_CALLBACK_URL
+        });
         googleClient.setCredentials(tokens);
         const ticket = await googleClient.verifyIdToken({
             idToken: tokens.id_token,
@@ -190,6 +438,9 @@ const { tokens } = await googleClient.getToken({
             const { data: nameCheck } = await supabase.from('users').select('username').eq('username', finalName).maybeSingle();
             if (nameCheck) finalName += Math.floor(Math.random() * 1000);
 
+            // --- [新增] 註冊時產生 6 位數代碼 ---
+            const newLinkCode = await generateUniqueLinkCode();
+
             const { data: newUser, error: insErr } = await supabase.from('users').insert([{
                 username: String(finalName),
                 account: String(email),
@@ -198,10 +449,16 @@ const { tokens } = await googleClient.getToken({
                 streak: 1,
                 last_login: new Date().toISOString().split('T')[0],
                 role: 'student',
-                integrity_score: 100
+                integrity_score: 100,
+                link_code: newLinkCode // [新增]
             }]).select().single();
             if (insErr) throw insErr;
             user = newUser;
+        } else if (!user.link_code) {
+            // --- [新增] 舊用戶若無代碼，則補發一組 ---
+            const newLinkCode = await generateUniqueLinkCode();
+            await supabase.from('users').update({ link_code: newLinkCode }).eq('username', user.username);
+            user.link_code = newLinkCode; // 確保後續邏輯可能用到
         }
 
         // 登入成功：導向回首頁並帶入參數讓前端讀取
@@ -227,6 +484,7 @@ app.get('/api/auth/line', (req, res) => {
 // --- 2. 接收 LINE 登入成功後的回傳資料 (Callback) ---
 app.get('/api/auth/line/callback', async (req, res) => {
     const code = req.query.code;
+    const state = req.query.state;
 
     if (!code) {
         return res.status(400).send('沒有收到授權碼');
@@ -252,8 +510,106 @@ app.get('/api/auth/line/callback', async (req, res) => {
         });
 
         const { userId: lineId, displayName, pictureUrl } = profileResponse.data;
+        // ======================================
+// 自動家長綁定流程
+// ======================================
 
-        // 步驟 C: 檢查 Supabase 是否已有此帳號 (使用現有已連線的 supabase client)
+if (state) {
+
+    const decodedToken = decodeURIComponent(state);
+
+    const { data: targetUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('line_bind_token', decodedToken)
+        .maybeSingle();
+
+    if (targetUser) {
+
+        let currentIds = [];
+
+        if (targetUser.bound_line_ids) {
+            currentIds = targetUser.bound_line_ids
+                .split(',')
+                .map(id => id.trim())
+                .filter(Boolean);
+        }
+
+        if (!currentIds.includes(lineId)) {
+            currentIds.push(lineId);
+        }
+
+        const newBoundIds = currentIds.join(',');
+
+        await supabase
+            .from('users')
+            .update({
+                bound_line_ids: newBoundIds
+            })
+            .eq('username', targetUser.username);
+
+            try {
+    await axios.post(
+        'https://api.line.me/v2/bot/message/push',
+        {
+            to: lineId,
+            messages: [
+                {
+                    type: 'text',
+                    text:
+`✅ LINE 家長綁定成功！
+
+已成功連結學生：「${targetUser.username}」
+
+之後此 LINE 帳號將收到：
+📘 學習總結
+⏱️ 專注時間紀錄
+⚠️ 重要學習提醒
+
+感謝您一起陪伴孩子建立穩定的學習習慣。`
+                }
+            ]
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+            }
+        }
+    );
+
+    console.log(`✅ 已推送 LINE 綁定成功通知給 ${lineId}`);
+
+} catch (pushErr) {
+    console.error('❌ LINE 綁定成功通知推播失敗');
+    console.error(pushErr.response?.data || pushErr.message);
+}
+        return res.send(`
+            <html>
+                <body style="
+                    background:#05070a;
+                    color:white;
+                    font-family:sans-serif;
+                    display:flex;
+                    justify-content:center;
+                    align-items:center;
+                    height:100vh;
+                    text-align:center;
+                    padding:20px;
+                ">
+                    <div>
+                        <h1>✅ LINE 綁定成功</h1>
+                        <p>已成功連結學生：</p>
+                        <h2>${targetUser.username}</h2>
+                        <p>現在可以直接關閉此頁面。</p>
+                    </div>
+                </body>
+            </html>
+        `);
+    }
+}
+
+        // 步驟 C: 檢查 Supabase 是否已有此帳號
         let { data: existingUser } = await supabase
             .from('users')
             .select('*')
@@ -269,6 +625,10 @@ app.get('/api/auth/line/callback', async (req, res) => {
             if (nameCheck) finalUsername = finalUsername + Math.floor(Math.random() * 1000);
 
             const today = new Date().toISOString().split('T')[0];
+
+            // --- [新增] 註冊時產生 6 位數代碼 ---
+            const newLinkCode = await generateUniqueLinkCode();
+
             const { data: newUser, error } = await supabase.from('users').insert([{
                 username: String(finalUsername),
                 account: String(lineId),
@@ -277,12 +637,17 @@ app.get('/api/auth/line/callback', async (req, res) => {
                 streak: 1,
                 last_login: today,
                 role: 'student',
-                integrity_score: 100
-                // avatar_url: pictureUrl  // 如果你的 users 表未來想加頭像欄位，可以取消註解這行
+                integrity_score: 100,
+                link_code: newLinkCode // [新增]
             }]).select().single();
 
             if (error) throw error;
             existingUser = newUser;
+        } else if (!existingUser.link_code) {
+            // --- [新增] 舊用戶補發邏輯 ---
+            const newLinkCode = await generateUniqueLinkCode();
+            await supabase.from('users').update({ link_code: newLinkCode }).eq('id', existingUser.id);
+            existingUser.link_code = newLinkCode;
         }
 
         // 步驟 E: 登入成功！把網頁導向回前端首頁，並帶上參數
@@ -294,13 +659,197 @@ app.get('/api/auth/line/callback', async (req, res) => {
     }
 });
 
-// [新增] 接收 LINE Webhook 訊號的路徑
-app.post('/api/line/webhook', (req, res) => {
-    // 收到 LINE 的驗證或訊息時，先簡單回傳 200 代表伺服器活著
+// [修改] 接收 LINE Webhook 訊號的路徑 (加入 6 位數代碼綁定邏輯)
+app.post('/api/line/webhook', async (req, res) => {
     res.sendStatus(200);
-    
-    // 如果你想看 LINE 傳了什麼過來，可以取消下行的註解
-    console.log('收到 Webhook 訊號:', JSON.stringify(req.body, null, 2));
+
+    try {
+        console.log('📩 收到 LINE Webhook:');
+        console.log(JSON.stringify(req.body, null, 2));
+
+        const events = req.body?.events;
+
+        if (!events || events.length === 0) {
+            console.log('⚠️ 沒有 events');
+            return;
+        }
+
+        for (const event of events) {
+
+            if (
+                event.type === 'message' &&
+                event.message &&
+                event.message.type === 'text'
+            ) {
+
+                const text = event.message.text.trim();
+                const lineId = event.source.userId;
+
+                console.log('🧪 使用者輸入:', text);
+                console.log('🧪 LINE ID:', lineId);
+
+                // 判斷是否為六位數舊綁定碼，或新的 QR token 綁定指令
+if (/^\d{6}$/.test(text) || /^[A-Z0-9]{6}$/.test(text) || text.startsWith('綁定 ')) {
+    let targetUser = null;
+
+if (text.startsWith('綁定 ')) {
+    const token = text.replace('綁定 ', '').trim();
+
+    const { data: userByToken, error: tokenFindError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('line_bind_token', token)
+        .maybeSingle();
+
+    if (tokenFindError) {
+        console.error('❌ token 查詢失敗:', tokenFindError);
+        return;
+    }
+
+    targetUser = userByToken;
+} else if (/^[A-Z0-9]{6}$/.test(text)) {
+    const { data: userByShortCode, error: shortCodeFindError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('line_bind_short_code', text)
+        .maybeSingle();
+
+    if (shortCodeFindError) {
+        console.error('❌ 短碼查詢失敗:', shortCodeFindError);
+        return;
+    }
+
+    targetUser = userByShortCode;
+} else {
+    const { data: userByCode, error: codeFindError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('link_code', text)
+        .maybeSingle();
+
+    if (codeFindError) {
+        console.error('❌ 綁定碼查詢失敗:', codeFindError);
+        return;
+    }
+
+    targetUser = userByCode;
+}
+
+                    console.log('🔍 查詢結果:', targetUser);
+
+if (targetUser) {
+
+                        // ===== 修正綁定邏輯 =====
+
+                        let currentIds = [];
+
+                        if (targetUser.bound_line_ids) {
+                            currentIds = targetUser.bound_line_ids
+                                .split(',')
+                                .map(id => id.trim())
+                                .filter(Boolean);
+                        }
+
+                        // 避免重複加入
+                        if (!currentIds.includes(lineId)) {
+                            currentIds.push(lineId);
+                        }
+
+                        const newBoundIds = currentIds.join(',');
+
+                        console.log('📝 準備寫入:', newBoundIds);
+
+                        const { error: updateError } = await supabase
+                            .from('users')
+                            .update({
+                                bound_line_ids: newBoundIds
+                            })
+                             .eq('username', targetUser.username);
+
+                        if (updateError) {
+                            console.error('❌ 寫入 bound_line_ids 失敗');
+                            console.error(updateError);
+
+                            await axios.post(
+                                'https://api.line.me/v2/bot/message/reply',
+                                {
+                                    replyToken: event.replyToken,
+                                    messages: [{
+                                        type: 'text',
+                                        text: '❌ 綁定失敗，資料庫寫入錯誤'
+                                    }]
+                                },
+                                {
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+                                    }
+                                }
+                            );
+
+                            continue;
+                        }
+
+                        console.log('✅ LINE 綁定成功');
+
+                        // ===== 成功回覆 =====
+
+                        await axios.post(
+                            'https://api.line.me/v2/bot/message/reply',
+                            {
+                                replyToken: event.replyToken,
+                                messages: [{
+                                    type: 'text',
+                                    text:
+`✅ 綁定成功！
+
+已成功連結指揮官「${targetUser.username}」
+
+之後學習總結將自動傳送到此 LINE 帳號 📘`
+                                }]
+                            },
+                            {
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+                                }
+                            }
+                        );
+
+                    } else {
+
+                        await axios.post(
+                            'https://api.line.me/v2/bot/message/reply',
+                            {
+                                replyToken: event.replyToken,
+                                messages: [{
+                                    type: 'text',
+                                    text: '❌ 找不到此綁定碼'
+                                }]
+                            },
+                            {
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+                                }
+                            }
+                        );
+                    }
+                }
+            }
+        }
+
+    } catch (err) {
+
+        console.error('❌ LINE Webhook 錯誤');
+
+        if (err.response) {
+            console.error(err.response.status);
+            console.error(JSON.stringify(err.response.data, null, 2));
+        } else {
+            console.error(err);
+        }
+    }
 });
 
 app.get('/api/user-stats', async (req, res) => {
@@ -350,6 +899,62 @@ app.get('/api/user-stats', async (req, res) => {
     }
 });
 
+// ==========================================
+// [合併版] 虛擬白名單與課程資料庫
+// ==========================================
+
+// 1. 定義白名單：誰買了哪些課 (支援多個測試帳號)
+const VIRTUAL_WHITELIST = {
+    "測試學員": ["course_pro_01", "course_pro_02"], 
+    "陳樂": ["course_pro_01"],
+    "Guest": [] 
+};
+
+// 2. 定義課程資料庫：課程代碼對應的詳細資訊
+// ==========================================
+// [修正] 請在此處填入真正的 Google Meet 代碼
+// ==========================================
+const VIRTUAL_COURSE_DB = {
+    // 將 'course_pro_01' 改成您開好的 Meet 代碼 (例如: mno-pqrs-tuv)
+    'course_pro_01': { 
+        meetId: 'hed-vrcs-mvf', // <--- 這裡要改！不要寫 course_pro_01
+        name: '多益考前衝刺班', 
+        icon: 'fa-language' 
+    },
+    
+    // 同理，第二門課也要改
+    'course_pro_02': { 
+        meetId: 'abc-defg-hij', // <--- 這裡要改！
+        name: 'Python 基礎實戰', 
+        icon: 'fa-code' 
+    },
+    
+    'course_pro_03': { 
+        meetId: 'xyz-wxyz-abc', // <--- 這裡要改！
+        name: '日檢 N3 文法特訓', 
+        icon: 'fa-book-open' 
+    }
+};
+
+// 3. 查詢學員課程權限的 API (只需保留這一個 app.get)
+app.get('/api/my-courses', (req, res) => {
+    const username = req.query.username;
+    
+    // 如果沒帶帳號，或帳號不在白名單內，回傳空陣列
+    if (!username || !VIRTUAL_WHITELIST[username]) {
+        return res.json([]);
+    }
+
+    const userCourseIds = VIRTUAL_WHITELIST[username];
+    
+    // 將該學員擁有的課程 ID 轉換成完整的資訊 (名稱、ID、圖示)
+    const courseData = userCourseIds.map(id => {
+        return VIRTUAL_COURSE_DB[id] || { meetId: id, name: '未命名課程', icon: 'fa-play-circle' };
+    });
+
+    res.json(courseData);
+});
+
 // --- 新增：接收學生背景自動報到的 API ---
 app.post('/api/student-enter', (req, res) => {
     const { meetId, userName } = req.body;
@@ -367,7 +972,19 @@ app.post('/api/student-enter', (req, res) => {
 // 核心修正：修改 save-focus API (結算點)
 // ==========================================
 app.post('/api/save-focus', async (req, res) => {
-    const { username, roomType, focusSeconds, deviceMode, teamSize, flippedCount, comment, creditDelta, violationDetails, integrityScore } = req.body;
+    const {
+    username,
+    score,
+    focusSeconds,
+    violationDetails,
+    comment,
+    creditDelta,
+    integrityScore,
+    deviceMode,
+    roomType,
+    teamSize,
+    flippedCount
+} = req.body;
     
     if (!username || !roomType || focusSeconds === undefined) {
         return res.status(400).json({ error: '缺少參數' });
@@ -416,6 +1033,16 @@ app.post('/api/save-focus', async (req, res) => {
             let currentIntegrity = user.integrity_score ?? 100;
             let dailyBonus = isFirstLoginToday ? 1 : 0;
             let sessionDelta = creditDelta !== undefined ? Number(creditDelta) : 0;
+            console.log("🧪 creditDelta:", creditDelta);
+console.log("🧪 sessionDelta:", sessionDelta);
+            // ======================================
+            // 使用前端實際誠信分
+const sessionScore = integrityScore ?? 100;
+
+const sessionPenalty = Math.max(
+    0,
+    100 - sessionScore
+);
             
             let newIntegrity = Math.max(0, Math.min(100, currentIntegrity + dailyBonus + sessionDelta));
 
@@ -428,8 +1055,90 @@ app.post('/api/save-focus', async (req, res) => {
                 })
                 .eq('username', username);
                 
-            console.log(`[系統結算] ${username} 最終獲得 EXP: ${totalExp}，誠信分變動: ${sessionDelta}`);
+           console.log(`[系統結算] ${username} 最終獲得 EXP: ${totalExp}`);
+            // ======================================
+// ======================================
+// LINE 學習總結推播
+// ======================================
 
+if (user.bound_line_ids) {
+
+    const lineIds = user.bound_line_ids
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+
+    // 違規資訊整理
+    let violationText = "無";
+
+    if (violationDetails && Object.keys(violationDetails).length > 0) {
+
+        violationText = Object.entries(violationDetails)
+            .map(([reason, count]) => `• ${reason} × ${count}`)
+            .join('\n');
+    }
+
+    // 使用前端真正的誠信分
+    const sessionScore = integrityScore ?? 100;
+
+    // 根據實際分數計算本次扣分
+    const sessionPenalty = Math.max(
+        0,
+        100 - sessionScore
+    );
+
+    const reportText =
+`📊 【Study Verse 學習總結報告】
+
+👨‍🚀 指揮官：${username}
+
+📅 ${new Date().toLocaleString('zh-TW')}
+
+⏱️ 本次專注時間：${Math.floor(focusSeconds / 60)} 分鐘
+
+⭐ 專注分數：${sessionScore}
+
+⚠️ 違規扣除：-${sessionPenalty}
+
+扣分原因：
+${violationText}
+
+教師評語：
+${comment || '繼續保持專注！🔥'}
+`;
+
+    for (const lineId of lineIds) {
+
+        try {
+
+            await axios.post(
+                'https://api.line.me/v2/bot/message/push',
+                {
+                    to: lineId,
+                    messages: [
+                        {
+                            type: 'text',
+                            text: reportText
+                        }
+                    ]
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+                    }
+                }
+            );
+
+            console.log(`✅ 已推播學習總結給 ${lineId}`);
+
+        } catch (pushErr) {
+
+            console.error('❌ LINE 推播失敗');
+            console.error(pushErr.response?.data || pushErr.message);
+        }
+    }
+}
             // 結算成功後，重置該 Session 的懲罰分數
             if (userSession.name) {
                 userSession.accumulatedPenaltyExp = 0;
@@ -461,7 +1170,7 @@ app.post('/api/save-focus', async (req, res) => {
 // 3. Socket.io 即時連線邏輯
 // ==========================================
 let onlineUsers = [];
-let teacherLogs = [];
+const teacherLogsByRoom = {};
 let violationSnaps = [];
 const disconnectTimeouts = {};
 
@@ -513,32 +1222,37 @@ function getTutorRoomTimeState(roomId) {
 const teamLeaderStates = {};
 
 async function broadcastUpdateRank() {
-    const rooms = [...new Set(onlineUsers.map(u => u.roomMode))];
-    rooms.forEach(room => {
-        const usersInRoom = onlineUsers.filter(u => u.roomMode === room).map(u => {
-            let isCap = false;
-            if (u.teamId && teamLeaderStates[u.teamId] && teamLeaderStates[u.teamId].leader === u.name) {
-                isCap = true;
-            }
-            return { ...u, isCaptain: isCap };
-        });
-        io.to(room).emit('update_rank', usersInRoom);
+    const usersWithCaptain = onlineUsers.map(u => {
+        const isCap =
+            u.teamId &&
+            teamLeaderStates[u.teamId] &&
+            teamLeaderStates[u.teamId].leader === u.name;
+
+        return {
+            ...u,
+            isCaptain: !!isCap
+        };
     });
 
-    const studentIds = new Set(onlineUsers.map(u => u.id));
-    const sockets = await io.fetchSockets();
-    
-    const fullUsersList = onlineUsers.map(u => {
-        let isCap = false;
-        if (u.teamId && teamLeaderStates[u.teamId] && teamLeaderStates[u.teamId].leader === u.name) {
-            isCap = true;
-        }
-        return { ...u, isCaptain: isCap };
+    const roomModes = [...new Set(
+        usersWithCaptain
+            .map(u => u.roomMode)
+            .filter(Boolean)
+    )];
+
+    roomModes.forEach(roomMode => {
+        const usersInRoom = usersWithCaptain.filter(u => u.roomMode === roomMode);
+
+        io.to(roomMode).emit('update_rank', usersInRoom);
     });
+
+    // 沒有 roomMode 的管理端 / 老師端，才看全域
+    const studentSocketIds = new Set(onlineUsers.map(u => u.id));
+    const sockets = await io.fetchSockets();
 
     sockets.forEach(s => {
-        if (!studentIds.has(s.id)) {
-            s.emit('update_rank', fullUsersList);
+        if (!studentSocketIds.has(s.id)) {
+            s.emit('update_rank', usersWithCaptain);
         }
     });
 }
@@ -617,8 +1331,11 @@ function updateTutorStatus(username, roomId) {
 
 io.on('connection', (socket) => {
     console.log('🔌 指揮官已連線：', socket.id);
-    socket.emit('update_rank', onlineUsers);
-    socket.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
+    socket.emit('update_rank', []);
+    socket.emit('teacher_update', {
+    logs: [],
+    snaps: []
+});
 
     // 新增：接收客戶端加入房間的請求
     socket.on('join_room', (room) => {
@@ -639,8 +1356,21 @@ io.on('connection', (socket) => {
 });
 
     socket.on('student_feedback', (data) => {
-        io.emit('student_feedback', data); // 前端會根據 data.target 自己過濾
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username ||
+        u.name === data?.studentName
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('student_feedback', data);
+    } else {
+        socket.emit('student_feedback', data);
+    }
+});
     // ------------------------------------
     // ==========================================
     // 特約教室 (Tutor Room) 核心邏輯
@@ -727,13 +1457,25 @@ io.on('connection', (socket) => {
 
     // 2. 黑板公告
     socket.on('update_blackboard', (data) => {
-        io.emit('update_blackboard', data);
-    });
+    const targetRoomMode = data?.roomMode || data?.roomId || socket.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('update_blackboard', data);
+    } else {
+        socket.emit('update_blackboard', data);
+    }
+});
 
     // 3. 導師個別警告
     socket.on('send_warning', (data) => {
-        io.emit('receive_warning', data);
-    });
+    const targetRoomMode = data?.roomMode || data?.roomId || socket.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('receive_warning', data);
+    } else {
+        socket.emit('receive_warning', data);
+    }
+});
 
     // 5. 讓老師把指令傳給學生的轉發通道 (計時器控制、強制同步等)
     socket.on('send_tutor_command', (data) => {
@@ -758,17 +1500,39 @@ io.on('connection', (socket) => {
     // 新增：特約教室/一般教室的違規轉發橋樑
     // ==========================================
     socket.on('violation', (data) => {
-        console.log(`[伺服器轉發] 收到學生違規: ${data.name} - ${data.type}`);
-        
-        // 將違規資料廣播給所有連線的客戶端（或是特定的教師房間）
-        // 這樣 tutor-dashboard.js 和 admin.js 就能順利收到了！
-        io.emit('violation', data); 
-    });
+    console.log(`[伺服器轉發] 收到學生違規: ${data.name} - ${data.type}`);
+
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('violation', data);
+    } else {
+        socket.emit('violation', data);
+    }
+});
 
     // 新增：切換分頁的專屬轉發
     socket.on('tab_switched', (data) => {
-        io.emit('tab_switched', data);
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('tab_switched', data);
+    } else {
+        socket.emit('tab_switched', data);
+    }
+});
     // ==========================================
     // 原有功能與連動邏輯
     // ==========================================
@@ -1008,8 +1772,13 @@ io.on('connection', (socket) => {
                 else if (user.roomMode === 'simulated') roomName = "模擬教室";
                 else if (user.roomMode === '1') roomName = "線上課程";
                 
-                addTeacherLog(`👤 ${username} 進入了[${roomName}] (誠信分: ${user.integrity_score})`);
-                io.emit('community_event', { type: 'ENTER', message: `${username} 進入了自習室。` });
+                addTeacherLog(`👤 ${username} 進入了[${roomName}] (誠信分: ${user.integrity_score})`,
+    user.roomMode
+);
+                io.to(user.roomMode).emit('community_event', {
+    type: 'ENTER',
+    message: `${username} 進入了自習室。`
+});
             } else {
                 // 如果不是佔位符，代表是重新連線或重複發送
                 user.status = 'FOCUSED'; 
@@ -1017,7 +1786,9 @@ io.on('connection', (socket) => {
                 user.integrity_score = dbUser ? (dbUser.integrity_score ?? 100) : user.integrity_score;
                 if (data.roomMode) user.roomMode = data.roomMode;
                 if (data.teamId) user.teamId = data.teamId;
-                addTeacherLog(`🔄 ${username} 重新連線成功`);
+                addTeacherLog(`🔄 ${username} 重新連線成功`,
+    user.roomMode
+);
             }
 
             // 清除之前的斷線計時器
@@ -1034,7 +1805,10 @@ io.on('connection', (socket) => {
             socket.join(user.roomMode);
             
             // 廣播最新出席表
-            io.emit('update_attendance', onlineUsers);
+            io.to(user.roomMode).emit(
+    'update_attendance',
+    onlineUsers.filter(u => u.roomMode === user.roomMode)
+);
 
             // 如果加入的是 VIP 教室，發送課表
             const roomNameParam = data.room || data.roomId || user.roomMode;
@@ -1061,7 +1835,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('update_status', (data) => {
-        const { name, isFlipped, isStandalone } = data;
+        const { name, isFlipped, isStandalone, roomMode } = data;
         if (name) {
             if (!globalUserStatus[name]) globalUserStatus[name] = {};
             if (isFlipped !== undefined) globalUserStatus[name].isFlipped = isFlipped;
@@ -1072,28 +1846,59 @@ io.on('connection', (socket) => {
         const user = onlineUsers.find(u => u.name === name || u.id === socket.id);
         if (user) {
             const oldStatus = user.status;
+            if (roomMode) {
+    user.roomMode = roomMode;
+}
             if (isStandalone !== undefined) user.isStandalone = isStandalone;
             if (isFlipped !== undefined) {
                 const prevFlipped = user.isFlipped;
                 user.isFlipped = isFlipped;
-                if (!prevFlipped && user.isFlipped) addTeacherLog(`📱 ${user.name} 已翻轉手機進入深度專注`);
+                if (!prevFlipped && user.isFlipped) addTeacherLog(`📱 ${user.name} 已翻轉手機進入深度專注`,
+    user.roomMode
+);
             }
             if (data.status) {
                 if (data.status === 'DISTRACTED' && user.isFlipped) user.status = 'FOCUSED';
                 else user.status = data.status;
             }
             if (oldStatus !== user.status) {
-                if (user.status === 'BREAK') addTeacherLog(`🚽 ${user.name} 申請生理需求 (${data.reason || '未註明'})`);
-                else if (user.status === 'DISTRACTED') addTeacherLog(`🚨 ${user.name} 偵測到違規行為`);
+                if (user.status === 'BREAK') addTeacherLog(`🚽 ${user.name} 申請生理需求 (${data.reason || '未註明'})`,
+    user.roomMode
+);
+                else if (user.status === 'DISTRACTED') addTeacherLog(`🚨 ${user.name} 偵測到違規行為`,
+    user.roomMode
+);
             }
         }
-        io.emit('update_status', data);
-        broadcastUpdateRank();
+        const targetRoomMode =
+    roomMode ||
+    user?.roomMode;
+
+if (targetRoomMode) {
+    io.to(targetRoomMode).emit('update_status', data);
+} else {
+    io.emit('update_status', data);
+}
+
+broadcastUpdateRank();
     });
 
     socket.on('mobile_sync_update', (data) => {
-        io.emit('mobile_sync_update', data);
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username ||
+        u.name === data?.studentName
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('mobile_sync_update', data);
+    } else {
+        socket.emit('mobile_sync_update', data);
+    }
+});
 
     // ==========================================
     // 修改後的 report_violation (動態扣分機制)
@@ -1141,7 +1946,9 @@ io.on('connection', (socket) => {
                 reason: reasonStr, 
                 penalty_points: integrityPenalty 
             }]);
-            addTeacherLog(`❌ 懲罰: ${user.name} 因 [${reasonStr}] 扣除誠信分 ${integrityPenalty} 點, EXP 扣除 ${expPenalty} 點`);
+            addTeacherLog(`❌ 懲罰: ${user.name} 因 [${reasonStr}] 扣除誠信分 ${integrityPenalty} 點, EXP 扣除 ${expPenalty} 點`,
+    user.roomMode
+);
         } catch (err) { 
             console.error("資料庫同步失敗:", err); 
         }
@@ -1159,32 +1966,52 @@ io.on('connection', (socket) => {
 
         // 以下為一般教室、或特約教室的「純文字違規 (切換分頁)」才會執行的證據流推播
         const newSnap = {
-            id: Date.now(),
-            name: data.name,
-            reason: reasonStr, 
-            image: data.image,
-            time: new Date().toLocaleTimeString(),
-            current_integrity: user.integrity_score
-        };
+    id: Date.now(),
+    name: data.name,
+    reason: reasonStr,
+    image: data.image,
+    time: new Date().toLocaleTimeString(),
+    current_integrity: user.integrity_score,
+    roomMode: user.roomMode
+};
         
         violationSnaps.unshift(newSnap);
         if (violationSnaps.length > 30) violationSnaps.pop();
 
-        io.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
+        io.to(user.roomMode).emit('teacher_update', {
+    logs: teacherLogsByRoom[user.roomMode] || [],
+    snaps: violationSnaps.filter(snap => snap.roomMode === user.roomMode)
+});
         broadcastUpdateRank();
     });
 
     socket.on('submit_final_report', (reportData) => {
-        io.emit('teacher_receive_report', reportData);
-        addTeacherLog(`🏁 結算: ${reportData.name} 已結束自習。專注評分: ${reportData.score} 分。違規: ${reportData.violationCount} 次`);
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === reportData?.name ||
+        u.name === reportData?.username
+    );
+
+    const targetRoomMode = reportData?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('teacher_receive_report', reportData);
+
+        addTeacherLog(
+            `🏁 結算: ${reportData.name} 已結束自習。專注評分: ${reportData.score} 分。違規: ${reportData.violationCount} 次`,
+            targetRoomMode
+        );
+    }
+});
 
     socket.on('early_leave', async (data) => {
         const user = onlineUsers.find(u => u.name === data.name);
         if (user) {
             const penalty = 15;
             user.integrity_score = Math.max(0, user.integrity_score - penalty);
-            addTeacherLog(`⚠️ 嚴重警告: ${data.name} 惡意早退，誠信分扣除 ${penalty} 分！`);
+            addTeacherLog(`⚠️ 嚴重警告: ${data.name} 惡意早退，誠信分扣除 ${penalty} 分！`,
+    user.roomMode
+);
             try {
                 await supabase.from('users').update({ integrity_score: user.integrity_score }).eq('username', data.name);
                 await supabase.from('violation_history').insert([{ username: data.name, reason: "🚫 惡意早退", penalty_points: penalty }]);
@@ -1192,17 +2019,30 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin_action', (data) => {
-        if (data.target) {
-            const targetUser = onlineUsers.find(u => u.name === data.target);
-            if (targetUser) {
-                io.to(targetUser.roomMode).emit('admin_action', data);
-            }
-        } else {
-            io.emit('admin_action', data);
+socket.on('admin_action', (data) => {
+    if (data.target) {
+        const targetUser = onlineUsers.find(u => u.name === data.target);
+        if (targetUser) {
+            io.to(targetUser.roomMode).emit('admin_action', data);
         }
-        if(data.type === 'BLACKBOARD') addTeacherLog(`📢 教師公告：${data.content}`);
-    });
+    } else {
+        const targetRoomMode = data?.roomMode || data?.roomId;
+
+        if (targetRoomMode) {
+            io.to(targetRoomMode).emit('admin_action', data);
+        } else {
+            socket.emit('admin_action', data);
+        }
+    }
+
+    if (data.type === 'BLACKBOARD') {
+        const targetRoomMode = data?.roomMode || data?.roomId;
+
+        if (targetRoomMode) {
+            addTeacherLog(`📢 教師公告：${data.content}`, targetRoomMode);
+        }
+    }
+});
 
     socket.on('send_reaction', (data) => {
         const user = onlineUsers.find(u => u.name === data.username);
@@ -1214,55 +2054,112 @@ io.on('connection', (socket) => {
     });
 
     socket.on('community_event', (data) => {
-        io.emit('community_event', data);
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('community_event', data);
+    } else {
+        socket.emit('community_event', data);
+    }
+});
 
     socket.on('flip_failed', (data) => {
-        io.emit('flip_failed', data);
-    });
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === data?.name ||
+        u.name === data?.username
+    );
+
+    const targetRoomMode = data?.roomMode || user?.roomMode;
+
+    if (targetRoomMode) {
+        io.to(targetRoomMode).emit('flip_failed', data);
+    } else {
+        socket.emit('flip_failed', data);
+    }
+});
 
     // 斷線處理：升級加入特約教室裝置清除邏輯
     socket.on('disconnect', () => {
-        const user = onlineUsers.find(u => u.id === socket.id);
-        
-        // 特約教室裝置清理邏輯
-        if (socket.username && tutorRoomSchedules.has(socket.username)) {
-            const userDevices = tutorRoomSchedules.get(socket.username);
-            if (socket.id === userDevices.pc) userDevices.pc = null;
-            if (socket.id === userDevices.mobile) userDevices.mobile = null;
-            updateTutorStatus(socket.username, socket.roomId);
-        }
+    const user = onlineUsers.find(u => u.id === socket.id);
 
-        if (user) {
-            const username = user.name;
-            const userTeamId = user.teamId;
+    // 特約教室裝置清理邏輯
+    if (socket.username && tutorRoomSchedules.has(socket.username)) {
+        const userDevices = tutorRoomSchedules.get(socket.username);
+        if (socket.id === userDevices.pc) userDevices.pc = null;
+        if (socket.id === userDevices.mobile) userDevices.mobile = null;
+        updateTutorStatus(socket.username, socket.roomId);
+    }
 
-            // [新增] 斷線時立即記錄離開時間並更新狀態為 OFFLINE
-            user.leaveTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-            user.status = 'OFFLINE';
-            io.emit('update_attendance', onlineUsers); // 廣播最新出席列表給教師端
+    if (user) {
+        const username = user.name;
+        const userTeamId = user.teamId;
+        const oldRoomMode = user.roomMode;
 
-            disconnectTimeouts[username] = setTimeout(() => {
-                addTeacherLog(`👋 ${username} 離開了教室`);
-                onlineUsers = onlineUsers.filter(u => u.name !== username);
-                if (userTeamId) removeUserFromTeam(username, userTeamId);
-                
-                // [新增] 真正從列表刪除後，再次廣播最新的出席列表
-                io.emit('update_attendance', onlineUsers);
-                
-                broadcastUpdateRank();
-                broadcastActiveTeams();
-                delete disconnectTimeouts[username];
-            }, 30000);
-        }
-    });
+        user.leaveTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        user.status = 'OFFLINE';
+
+        io.to(oldRoomMode).emit(
+            'update_attendance',
+            onlineUsers.filter(u => u.roomMode === oldRoomMode)
+        );
+
+        disconnectTimeouts[username] = setTimeout(() => {
+            addTeacherLog(`👋 ${username} 離開了教室`, oldRoomMode);
+
+            onlineUsers = onlineUsers.filter(u => u.name !== username);
+
+            if (userTeamId) {
+                removeUserFromTeam(username, userTeamId);
+            }
+
+            io.to(oldRoomMode).emit(
+                'update_attendance',
+                onlineUsers.filter(u => u.roomMode === oldRoomMode)
+            );
+
+            io.to(oldRoomMode).emit('community_event', {
+                type: 'LEAVE',
+                message: `${username} 離開了教室。`
+            });
+
+            broadcastUpdateRank();
+            broadcastActiveTeams();
+
+            delete disconnectTimeouts[username];
+        }, 30000);
+    }
+});
 });
 
-function addTeacherLog(msg) {
-    const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-    teacherLogs.unshift(`[${time}] ${msg}`);
-    if (teacherLogs.length > 50) teacherLogs.pop();
-    io.emit('teacher_update', { logs: teacherLogs, snaps: violationSnaps });
+function addTeacherLog(msg, roomMode = 'global') {
+
+    if (!teacherLogsByRoom[roomMode]) {
+        teacherLogsByRoom[roomMode] = [];
+    }
+
+    const time = new Date().toLocaleTimeString('zh-TW', {
+        hour12: false
+    });
+
+    teacherLogsByRoom[roomMode].unshift(`[${time}] ${msg}`);
+
+    if (teacherLogsByRoom[roomMode].length > 50) {
+        teacherLogsByRoom[roomMode].pop();
+    }
+
+    io.to(roomMode).emit('teacher_update', {
+        logs: teacherLogsByRoom[roomMode],
+        snaps: violationSnaps.filter(
+            s => s.roomMode === roomMode
+        )
+    });
 }
 
 setInterval(() => {

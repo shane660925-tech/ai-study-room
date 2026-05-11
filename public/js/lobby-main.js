@@ -206,9 +206,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-window.pageSpecificInit = function() {
+window.pageSpecificInit = async function() {
+    const canContinue = await checkPrivacyConsent();
+
+    if (!canContinue) {
+        return;
+    }
+
     initSyncQRCode();
+    initLineBindQRCode();
 };
+
+async function checkPrivacyConsent() {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) {
+        return false;
+    }
+
+    try {
+        const res = await fetch(`/api/user-stats?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.user) {
+            return false;
+        }
+
+        if (!data.user.privacy_consent_at) {
+            window.location.href = '/privacy-consent.html';
+            return false;
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error('檢查隱私同意狀態失敗:', err);
+        return false;
+    }
+}
 
 window.enterClassroomWithCheck = function(roomUrl) {
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -258,6 +293,192 @@ function initSyncQRCode() {
         correctLevel : QRCode.CorrectLevel.H
     });
 }
+
+async function initLineBindQRCode() {
+    const qrcodeContainer = document.getElementById("lineBindQrcode");
+    const statusText = document.getElementById("lineBindStatus");
+
+    if (!qrcodeContainer) return;
+
+    const username =
+        localStorage.getItem('studyVerseUser') ||
+        document.getElementById('navName')?.innerText ||
+        '';
+
+    if (!username) {
+        if (statusText) statusText.textContent = '請先登入後產生綁定 QR code';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/line-bind-info?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '取得 LINE 綁定資訊失敗');
+        }
+
+        qrcodeContainer.innerHTML = "";
+
+        new QRCode(qrcodeContainer, {
+            text: data.bindUrl,
+            width: 140,
+            height: 140,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        if (statusText) {
+            statusText.textContent = '掃描後可完成 LINE 一鍵綁定';
+        }
+
+    } catch (err) {
+        console.error("LINE 綁定 QR code 載入失敗:", err);
+
+        if (statusText) {
+            statusText.textContent = 'LINE 綁定 QR code 載入失敗';
+        }
+    }
+}
+
+async function showThemeRoomModal() {
+    let oldModal = document.getElementById('themeRoomModal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'themeRoomModal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
+
+    modal.innerHTML = `
+        <div class="bg-[#111827] w-full max-w-lg rounded-3xl border border-blue-500/30 shadow-2xl overflow-hidden relative">
+
+            <button onclick="document.getElementById('themeRoomModal').remove()"
+                    class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <div class="p-6 border-b border-gray-800 bg-gradient-to-b from-blue-900/30 to-transparent">
+                <h2 class="text-2xl font-black text-white flex items-center gap-2">
+                    <i class="fas fa-chalkboard text-blue-400"></i>
+                    限時主題教室
+                </h2>
+                <p class="text-gray-400 text-xs mt-2">
+                    請選擇目前開放中的主題教室。不同主題教室彼此隔離，不會互相看到。
+                </p>
+            </div>
+
+            <div id="themeRoomList" class="p-6 max-h-[65vh] overflow-y-auto">
+                <div class="flex flex-col items-center justify-center py-10 text-gray-500">
+                    <div class="w-10 h-10 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-xs tracking-widest uppercase">正在載入主題教室...</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    await loadThemeRoomModalList();
+}
+
+window.showThemeRoomModal = showThemeRoomModal;
+
+async function loadThemeRoomModalList() {
+    const list = document.getElementById('themeRoomList');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/theme-rooms');
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '取得主題教室失敗');
+        }
+
+        const rooms = data.rooms || [];
+
+        if (rooms.length === 0) {
+            list.innerHTML = `
+                <div class="text-center py-10">
+                    <div class="w-14 h-14 bg-gray-500/20 rounded-2xl flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
+                        <i class="fas fa-door-closed"></i>
+                    </div>
+                    <h3 class="text-white font-black mb-2">目前沒有開放中的主題教室</h3>
+                    <p class="text-gray-500 text-xs">請等待官方開放新的衝刺教室。</p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = rooms.map(room => {
+            const title = room.name || '主題教室';
+            const description = room.description || '官方開放中的主題教室。';
+            const badge = room.badge_text || '限時開放';
+            const slug = room.slug;
+            const roomPage = room.room_page || 'managed-room.html';
+            const onlineCount = room.online_count || 0;
+
+            const targetUrl = `${roomPage}?theme=${encodeURIComponent(slug)}`;
+
+            return `
+                <button onclick="enterThemeRoom('${targetUrl}')"
+                        class="w-full bg-white/5 hover:bg-blue-500/10 border border-white/10 hover:border-blue-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
+
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-2xl group-hover:bg-blue-500 group-hover:text-white transition-all">
+                            <i class="fas fa-users-viewfinder"></i>
+                        </div>
+
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="text-white font-black text-lg">${title}</h3>
+                                <span class="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-black">
+                                    ${badge}
+                                </span>
+                            </div>
+
+                            <p class="text-gray-500 text-xs leading-relaxed mb-3">
+                                ${description}
+                            </p>
+
+                            <div class="flex items-center justify-between">
+                                <span class="text-green-400 text-xs font-bold">
+                                    <i class="fas fa-circle text-[8px] mr-1"></i>
+                                    目前 ${onlineCount} 人
+                                </span>
+
+                                <span class="text-blue-400 text-xs font-black group-hover:text-blue-300">
+                                    進入教室 →
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('主題教室列表載入失敗:', err);
+
+        list.innerHTML = `
+            <div class="text-center py-10">
+                <div class="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center text-red-400 text-2xl mx-auto mb-4">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-red-300 font-black mb-2">主題教室載入失敗</h3>
+                <p class="text-gray-500 text-xs">請稍後重新整理頁面。</p>
+            </div>
+        `;
+    }
+}
+
+window.enterThemeRoom = function(targetUrl) {
+    const modal = document.getElementById('themeRoomModal');
+    if (modal) modal.remove();
+
+    handleRoomEntry(targetUrl);
+};
 
 window.copyMobileUrl = function() {
     const baseUrl = window.location.origin;
@@ -953,3 +1174,411 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) el.addEventListener('input', calculateTeacherEndTime);
     });
 });
+
+/**
+ * 執行 Google Meet 跳轉 (符合 Chrome 線上商店安全性規範)
+ */
+function enterCourseMeet(meetId) {
+    const username = localStorage.getItem('studyVerseUser') || "未知學生";
+    
+    // 將名字編碼並附加為 URL 參數，供擴充套件讀取
+    const encodedName = encodeURIComponent(username);
+    const targetUrl = `https://meet.google.com/${meetId}?sv_user_name=${encodedName}`;
+    
+    console.log("正在跳轉至會議:", targetUrl);
+    window.open(targetUrl, '_blank');
+}
+
+/**
+ * 從後端白名單載入課程按鈕
+ */
+async function refreshCourseList() {
+    const username = localStorage.getItem('studyVerseUser');
+    const container = document.getElementById('course-list-container');
+    if (!container) return;
+
+    const dimmedCardHTML = `
+        <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden">
+            <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">尚未解鎖</div>
+            <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 text-2xl mb-4">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h3 class="text-xl font-black text-gray-400 mb-1">線上課程</h3>
+            <p class="text-gray-600 text-xs mb-4 flex-1">此專區僅限已購課程學員進入。請先至官網選購課程以開啟權限。</p>
+            <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">未獲得授權</div>
+        </div>
+    `;
+
+    if (!username) {
+        container.innerHTML = dimmedCardHTML;
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/my-courses?username=${encodeURIComponent(username)}`);
+        const courses = await response.json();
+
+        if (courses.length === 0) {
+            container.innerHTML = dimmedCardHTML;
+            return;
+        }
+
+        // --- [修改] 不管有幾門課，大廳只顯示一個總入口卡片 ---
+        container.innerHTML = ''; 
+        const card = document.createElement('div');
+        card.className = "glass-panel p-6 rounded-3xl room-card flex flex-col border border-white/5 group cursor-pointer transition-all hover:border-cyan-500/50";
+        // 點擊後改為呼叫彈窗函式，並把課程資料傳進去
+        card.onclick = () => showCoursesModal(courses); 
+        card.innerHTML = `
+            <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl mb-4 group-hover:bg-cyan-500 group-hover:text-white transition-all">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <h3 class="text-xl font-black text-white mb-1">線上課程</h3>
+            <p class="text-gray-500 text-xs mb-4 flex-1">您擁有 <span class="text-cyan-400 font-bold">${courses.length}</span> 門已解鎖課程。點擊開啟課程清單並進入教室。</p>
+            <div class="w-full text-center bg-white/5 group-hover:bg-cyan-600 py-2 rounded-lg text-xs font-bold text-white transition-all">選擇課程</div>
+        `;
+        container.appendChild(card);
+
+    } catch (err) {
+        console.error("載入課程失敗:", err);
+        container.innerHTML = dimmedCardHTML; 
+    }
+}
+
+/**
+ * [新增] 顯示課程選擇彈窗
+ */
+function showCoursesModal(courses) {
+    // 1. 如果已經有彈窗存在，先移除避免重複
+    const oldModal = document.getElementById('courseSelectionModal');
+    if (oldModal) oldModal.remove();
+
+    // 2. 建立新彈窗容器
+    const modal = document.createElement('div');
+    modal.id = 'courseSelectionModal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in';
+    
+    // 3. 根據學生擁有的課程，動態生成清單按鈕
+    const courseButtonsHTML = courses.map(course => `
+        <button onclick="enterCourseMeet('${course.meetId}')" class="w-full bg-white/5 hover:bg-cyan-500/20 border border-white/10 hover:border-cyan-500 p-4 rounded-xl flex items-center gap-4 transition-all group mb-3 text-left">
+            <div class="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center text-cyan-400 group-hover:text-cyan-300">
+                <i class="fas ${course.icon || 'fa-play-circle'}"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="text-white font-bold text-sm mb-1">${course.name}</h4>
+                <p class="text-gray-500 text-[10px]">點擊跳轉至 Google Meet 教室</p>
+            </div>
+            <i class="fas fa-external-link-alt text-gray-600 group-hover:text-cyan-400 text-sm"></i>
+        </button>
+    `).join('');
+
+    // 4. 組合彈窗的 HTML 結構
+    modal.innerHTML = `
+        <div class="bg-[#111827] w-full max-w-md rounded-3xl border border-gray-800 shadow-2xl overflow-hidden relative scale-95 animate-scale-up">
+            <button onclick="document.getElementById('courseSelectionModal').remove()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="p-6 border-b border-gray-800 bg-gradient-to-b from-cyan-900/20 to-transparent">
+                <h2 class="text-xl font-black text-white flex items-center gap-2">
+                    <i class="fas fa-layer-group text-cyan-500"></i>
+                    我的線上課程
+                </h2>
+                <p class="text-gray-400 text-xs mt-1">請選擇您現在要進入的課程教室</p>
+            </div>
+            <div class="p-6 max-h-[60vh] overflow-y-auto">
+                ${courseButtonsHTML}
+            </div>
+        </div>
+    `;
+
+    // 5. 將彈窗加入畫面中
+    document.body.appendChild(modal);
+}
+
+// 確保網頁載入時觸發更新
+document.addEventListener('DOMContentLoaded', () => {
+    refreshCourseList(); 
+});
+
+// =========================================================================
+// (5) 新手導覽系統 Intro Tutorial v2
+// =========================================================================
+
+const introSteps = [
+    {
+        target: '#intro-ai-rooms',
+        title: '歡迎來到 STUDY VERSE',
+        description: '這裡是 AI 自習空間。你可以進入沉浸式自習室、模擬線上教室與線上課程。'
+    },
+    {
+        target: '#syncModule',
+        title: '手機連動系統',
+        description: '掃描 QR Code 後將手機翻面，可降低 AI 誤判並獲得專注加成。'
+    },
+    {
+        target: '#lineBindModule',
+        title: 'LINE 學習紀錄綁定',
+        description: '綁定 LINE 後，可接收每日學習總結與重要提醒。家長或學生本人都可綁定。'
+    },
+    {
+        target: '#intro-standalone-mode',
+        title: '單機翻轉模式',
+        description: '即使沒有電腦，也能直接用手機進入專注模式與游擊隊挑戰。'
+    },
+    {
+    target: '#intro-team-system',
+    title: '小組學習加成',
+    description:
+        '可以創建或加入小組，和朋友一起專注學習。小組成員一起自習時，學習經驗值會獲得加成。'
+},
+    {
+    target: '#intro-vip-system',
+    title: 'VIP 特約教室',
+    description:
+        '教師開課後會產生專屬教室代碼，學生輸入代碼即可進入指定教室學習。'
+},
+    {
+        target: '#intro-mission-logs',
+        title: 'Mission Logs',
+        description: '這裡會記錄你的專注時數、任務紀錄與學習成長軌跡。'
+    }
+];
+
+let currentIntroStep = 0;
+let currentIntroTarget = null;
+
+function startIntroTutorial() {
+    const introCompleted =
+    localStorage.getItem('studyVerseIntroCompleted');
+
+if (introCompleted === 'true') {
+    return;
+}
+
+    injectIntroStyle();
+    showIntroStep(0);
+}
+
+function injectIntroStyle() {
+    if (document.getElementById('intro-style')) return;
+
+    const style = document.createElement('style');
+    style.id = 'intro-style';
+    style.innerHTML = `
+        .intro-highlight-target {
+            position: relative !important;
+            z-index: 1000001 !important;
+            box-shadow: 0 0 0 4px rgba(59,130,246,0.95), 0 0 45px rgba(59,130,246,0.9) !important;
+            border-radius: 24px !important;
+            background: rgba(17,24,39,0.98) !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function clearIntroHighlight() {
+    if (currentIntroTarget) {
+        currentIntroTarget.classList.remove('intro-highlight-target');
+        currentIntroTarget = null;
+    }
+
+    const oldOverlay = document.getElementById('intro-overlay');
+    if (oldOverlay) oldOverlay.remove();
+}
+
+function showIntroStep(index) {
+    clearIntroHighlight();
+
+    currentIntroStep = index;
+    const step = introSteps[index];
+
+    if (!step) {
+        finishIntroTutorial();
+        return;
+    }
+
+    const target = document.querySelector(step.target);
+
+    if (!target) {
+        showIntroStep(index + 1);
+        return;
+    }
+
+    currentIntroTarget = target;
+    target.classList.add('intro-highlight-target');
+
+    target.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+    });
+
+    setTimeout(() => {
+        renderIntroOverlay(step, index, target);
+    }, 450);
+}
+
+function renderIntroOverlay(step, index, target) {
+    const rect = target.getBoundingClientRect();
+    const overlay = document.createElement('div');
+    overlay.id = 'intro-overlay';
+
+    const wideTargets = [
+    '#intro-ai-rooms',
+    '#intro-team-system',
+    '#intro-vip-system'
+];
+
+const isWideTarget = wideTargets.includes(introSteps[index].target);
+
+const cardWidth = isWideTarget
+    ? Math.min(320, window.innerWidth - 32)
+    : Math.min(460, window.innerWidth - 32);
+
+const cardHeight = isWideTarget ? 360 : 240;
+const margin = 24;
+
+    const candidates = isWideTarget
+    ? [
+        { top: rect.top, left: rect.right + margin },
+        { top: rect.top, left: rect.left - cardWidth - margin },
+        { top: margin, left: window.innerWidth - cardWidth - margin },
+        { top: window.innerHeight - cardHeight - margin, left: window.innerWidth - cardWidth - margin },
+        { top: window.innerHeight - cardHeight - margin, left: margin }
+    ]
+    : [
+        { top: rect.bottom + margin, left: rect.left },
+        { top: rect.top - cardHeight - margin, left: rect.left },
+        { top: rect.top, left: rect.right + margin },
+        { top: rect.top, left: rect.left - cardWidth - margin },
+        { top: window.innerHeight - cardHeight - margin, left: margin },
+        { top: window.innerHeight - cardHeight - margin, left: window.innerWidth - cardWidth - margin },
+        { top: margin, left: margin },
+        { top: margin, left: window.innerWidth - cardWidth - margin }
+    ];
+
+    function isOverlapping(card) {
+        const cardRect = {
+            left: card.left,
+            right: card.left + cardWidth,
+            top: card.top,
+            bottom: card.top + cardHeight
+        };
+
+        return !(
+            cardRect.right < rect.left ||
+            cardRect.left > rect.right ||
+            cardRect.bottom < rect.top ||
+            cardRect.top > rect.bottom
+        );
+    }
+
+    const bestPosition =
+        candidates.find(pos =>
+            pos.top >= margin &&
+            pos.left >= margin &&
+            pos.left + cardWidth <= window.innerWidth - margin &&
+            pos.top + cardHeight <= window.innerHeight - margin &&
+            !isOverlapping(pos)
+        ) || {
+            top: window.innerHeight - cardHeight - margin,
+            left: margin
+        };
+
+    overlay.innerHTML = `
+        <div class="fixed inset-0 bg-black/75 z-[999999] pointer-events-none"></div>
+
+        <div
+    class="fixed bg-[#111827] border border-blue-500/40 rounded-3xl p-6 z-[1000002] shadow-2xl flex flex-col"
+            style="
+                top:${bestPosition.top}px;
+                left:${bestPosition.left}px;
+                width:${cardWidth}px;
+                min-height:${cardHeight}px;
+            ">
+
+            <div class="text-blue-400 text-xs font-black tracking-widest mb-2">
+                STUDY VERSE GUIDE
+            </div>
+
+            <h2 class="text-2xl font-black text-white mb-3">
+                ${step.title}
+            </h2>
+
+            <p class="text-sm text-gray-300 leading-relaxed mb-6">
+    ${step.description}
+</p>
+
+<div class="flex-1"></div>
+
+<div class="flex justify-between items-center">
+                <div class="text-xs text-gray-500">
+                    ${index + 1} / ${introSteps.length}
+                </div>
+
+                <div class="flex gap-3">
+                    <button
+                        onclick="skipIntroTutorial()"
+                        class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm">
+                        跳過
+                    </button>
+
+                    <button
+                        onclick="nextIntroStep()"
+                        class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm">
+                        ${index === introSteps.length - 1 ? '開始學習' : '下一步'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+}
+
+window.nextIntroStep = function() {
+    showIntroStep(currentIntroStep + 1);
+};
+
+window.skipIntroTutorial = function() {
+    finishIntroTutorial();
+};
+
+async function finishIntroTutorial() {
+
+    localStorage.setItem(
+        'studyVerseIntroCompleted',
+        'true'
+    );
+
+    const username =
+        localStorage.getItem('studyVerseUser');
+
+    if (username) {
+
+        try {
+
+            await fetch('/api/intro-complete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username
+                })
+            });
+
+        } catch (err) {
+
+            console.error(
+                '新手導覽完成同步失敗:',
+                err
+            );
+        }
+    }
+
+    clearIntroHighlight();
+}
+
+setTimeout(() => {
+    startIntroTutorial();
+}, 2500);

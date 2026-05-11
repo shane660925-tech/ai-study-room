@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE 家長綁定</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-[#05070a] text-white flex items-center justify-center p-6">
+
+    <div class="max-w-sm w-full bg-[#111827] border border-green-500/30 rounded-3xl p-8 text-center shadow-2xl">
+
+        <div class="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span class="text-4xl">✅</span>
+        </div>
+
+        <h1 class="text-2xl font-black mb-3">
+             LINE 學習記錄綁定
+        </h1>
+
+        <p id="statusText"
+           class="text-gray-400 text-sm leading-relaxed mb-6">
+            正在確認綁定資訊...
+        </p>
+
+        <!-- 一鍵綁定按鈕 -->
+        <a id="lineAddButton"
+           href="#"
+           class="hidden w-full bg-[#06C755] hover:bg-[#05b34c] text-white py-4 rounded-2xl font-black inline-block">
+            LINE 一鍵綁定
+        </a>
+        <p class="text-[11px] text-gray-500 mt-5 leading-relaxed">
+            點擊「LINE 一鍵綁定」後，即可自動完成連結。
+        </p>
+
+    </div>
+
+    <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    function initBindPage() {
+        const statusText = document.getElementById('statusText');
+        const lineAddButton = document.getElementById('lineAddButton');
+
+        if (!token) {
+            statusText.textContent = '缺少綁定 token，請重新掃描學生平台產生的 QR code。';
+            return;
+        }
+
+        lineAddButton.href = `/api/line/auto-bind?token=${encodeURIComponent(token)}`;
+        lineAddButton.classList.remove('hidden');
+
+        statusText.textContent = '已取得專屬綁定資訊，點擊下方按鈕即可自動完成 LINE 綁定。';
+    }
+
+    initBindPage();
+</script>
+
+</body>
+</html>
