@@ -131,7 +131,14 @@ window.latestAttendanceData = [];
 // 渲染出席表邏輯
 socket.on('update_attendance', (users) => {
     // 儲存最新資料供點名彈窗使用
-    window.latestAttendanceData = users; 
+    window.latestAttendanceData = users || [];
+
+    activeStudents = window.latestAttendanceData;
+    activeStudents.forEach(s => knownTutorNames.add(s.name));
+
+    if (typeof renderStudents === 'function') {
+        renderStudents();
+    } 
     
     // 如果彈窗目前是開啟狀態，就即時更新裡面的表格
     if (document.getElementById('attendanceModal') && !document.getElementById('attendanceModal').classList.contains('hidden')) {

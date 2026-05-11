@@ -182,10 +182,11 @@ window.triggerViolation = function(reason) {
 
     if (typeof socket !== 'undefined') {
         socket.emit('violation', {
-            name: myName,
-            type: reason || 'AI 偵測異常',
-            image: snapImg
-        });
+    name: myName,
+    type: reason || 'AI 偵測異常',
+    image: snapImg,
+    roomId: getTutorRoomCode()
+});
     }
 };
 
@@ -230,13 +231,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const isStandalone = urlParams.get('standalone') === 'true';
 
     const roomCode = urlParams.get('room') || urlParams.get('roomId'); 
-    if (typeof socket !== 'undefined') {
-        if (roomCode) {
-            socket.emit('join_room', roomCode);
-            console.log(`🚪 準備加入房間，已發送請求: ${roomCode}`);
-        } else {
-            console.warn("⚠️ 找不到房間代碼，無法加入專屬房間！這會導致收不到專屬廣播。");
-        }
+if (typeof socket !== 'undefined') {
+    if (roomCode) {
+        socket.emit('join_room', roomCode);
+
+        const tutorName =
+            urlParams.get('username') ||
+            localStorage.getItem('studyVerseUser') ||
+            document.getElementById('inputName')?.value ||
+            '特約學員';
+
+        socket.emit('join_tutor_room', {
+            username: tutorName,
+            roomId: roomCode,
+            deviceType: 'pc',
+            role: 'student'
+        });
+
+        console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
+    }
 
         // 🚀 新增：攔截手機的即時狀態
         socket.on('update_status', (data) => {
@@ -255,6 +268,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    function getTutorRoomCode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || params.get('roomId') || window.currentTutorRoomCode || null;
+}
 
     updateTutorStatus('normal', '連線穩定，AI 觀測中');
 
@@ -655,7 +673,12 @@ document.addEventListener('CameraViolation', (e) => {
     } catch (error) {}
 
     if (typeof socket !== 'undefined') {
-        socket.emit('violation', { name: name, type: reason, image: snapImg });
+        socket.emit('violation', {
+    name: name,
+    type: reason,
+    image: snapImg,
+    roomId: getTutorRoomCode()
+});
     }
 });
 
@@ -672,10 +695,11 @@ window.handleReturnSeat = function() {
     if (typeof socket !== 'undefined') {
         const returnTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
         socket.emit('violation', { 
-            name: myName, 
-            type: `【更新狀態】學生已回位 (回位時間: ${returnTime})`, 
-            image: null 
-        });
+    name: myName, 
+    type: `【更新狀態】學生已回位 (回位時間: ${returnTime})`, 
+    image: null,
+    roomId: getTutorRoomCode()
+});
     }
 };
 
@@ -713,8 +737,17 @@ document.addEventListener('TabSwitchedViolation', (e) => {
     }
 
     if (typeof socket !== 'undefined') {
-        socket.emit('tab_switched', { name: name });
-        socket.emit('violation', { name: name, type: '🚫 切換分頁 (離開自習室畫面)', image: null });
+        socket.emit('tab_switched', {
+    name: name,
+    roomId: getTutorRoomCode()
+});
+
+socket.emit('violation', {
+    name: name,
+    type: '🚫 切換分頁 (離開自習室畫面)',
+    image: null,
+    roomId: getTutorRoomCode()
+});
     }
 });
 
