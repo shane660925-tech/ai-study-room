@@ -188,7 +188,11 @@
                 document.getElementById('warningCounter').innerText = flipWarningCount;
                 
                 socket.emit('update_status', { name: studentName, isFlipped: false });
-                socket.emit('mobile_sync_update', { type: 'FLIP_WARNING', studentName: studentName });
+                socket.emit('mobile_sync_update', {
+    type: 'FLIP_WARNING',
+    studentName: studentName,
+    syncToken: syncToken
+});
 
                 if (syncToken) {
                     socket.emit('student_status_changed', { sync: syncToken, status: 'yellow', name: studentName });

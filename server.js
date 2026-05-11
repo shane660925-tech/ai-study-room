@@ -1884,6 +1884,12 @@ broadcastUpdateRank();
     });
 
     socket.on('mobile_sync_update', (data) => {
+    // 手機 QR 連動：優先送回掃 QR 的那台電腦
+    if (data?.syncToken) {
+        io.to(data.syncToken).emit('mobile_sync_update', data);
+    }
+
+    // 一般教室同步：如果有 roomMode，再送給同教室
     const user = onlineUsers.find(u =>
         u.id === socket.id ||
         u.name === data?.name ||
@@ -1895,8 +1901,6 @@ broadcastUpdateRank();
 
     if (targetRoomMode) {
         io.to(targetRoomMode).emit('mobile_sync_update', data);
-    } else {
-        socket.emit('mobile_sync_update', data);
     }
 });
 
