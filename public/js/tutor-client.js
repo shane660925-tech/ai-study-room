@@ -62,12 +62,18 @@ window.startDesktopCountdown = function() {
 
             if (typeof socket !== 'undefined' && socket.connected) {
                 // 發送踢出指令給伺服器，並通知大廳
-                socket.emit('flip_failed', { name: myName });
-                emitTutorViolation({ 
-                    name: myName, 
-                    type: '🚨 翻轉中斷 (強制踢出教室)', 
-                    image: null 
-                });
+                const roomId = getTutorRoomCode();
+
+socket.emit('flip_failed', {
+    name: myName,
+    roomId
+});
+
+emitTutorViolation({ 
+    name: myName, 
+    type: '📱 手機翻轉中斷（超過5秒，已強制踢出教室）', 
+    image: null
+});
             }
             
             setTimeout(async () => {

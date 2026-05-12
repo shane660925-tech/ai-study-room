@@ -2119,18 +2119,22 @@ socket.on('admin_action', (data) => {
 });
 
     socket.on('flip_failed', (data) => {
-    const user = onlineUsers.find(u =>
-        u.id === socket.id ||
-        u.name === data?.name ||
-        u.name === data?.username
-    );
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId ||
+        data?.roomMode;
 
-    const targetRoomMode = data?.roomMode || user?.roomMode;
-
-    if (targetRoomMode) {
-        io.to(targetRoomMode).emit('flip_failed', data);
+    if (targetRoom) {
+        io.to(targetRoom).emit('flip_failed', data);
+        io.to(targetRoom).emit('student_violation', {
+            name: data.name || data.username,
+            type: '📱 手機翻轉中斷（超過5秒，已強制踢出教室）',
+            image: null,
+            roomId: targetRoom
+        });
     } else {
-        socket.emit('flip_failed', data);
+        socket.broadcast.emit('flip_failed', data);
     }
 });
 
