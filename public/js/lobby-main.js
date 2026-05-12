@@ -9,6 +9,33 @@ let targetRoomUrl = '';
 window.isDeviceLinked = false; 
 let rollCallTimer = null; // 點名計時器變數
 
+async function checkCurrentUserStatusOrLogout(username) {
+    if (!username) return false;
+
+    try {
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok || data.blocked) {
+            localStorage.removeItem('studyVerseUser');
+localStorage.removeItem('username');
+localStorage.removeItem('studyverse_username');
+localStorage.removeItem('currentUser');
+localStorage.removeItem('studyVerseIntroCompleted');
+sessionStorage.clear();
+
+            alert(data.error || '此帳號目前無法使用。');
+            window.location.href = '/';
+            return false;
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error('使用者狀態檢查失敗:', err);
+        return true;
+    }
+}
 // =========================================================================
 // (1) QR Code 攔截器：不管系統哪個角落產生 QR Code，自動把 ID 綁進網址
 // =========================================================================
@@ -207,11 +234,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.pageSpecificInit = async function() {
-    const canContinue = await checkPrivacyConsent();
+    const username = localStorage.getItem('studyVerseUser');
 
-    if (!canContinue) {
-        return;
-    }
+    const userOk = await checkCurrentUserStatusOrLogout(username);
+    if (!userOk) return;
+
+    const canContinue = await checkPrivacyConsent();
+    if (!canContinue) return;
 
     initSyncQRCode();
     initLineBindQRCode();
@@ -245,7 +274,10 @@ async function checkPrivacyConsent() {
     }
 }
 
-window.enterClassroomWithCheck = function(roomUrl) {
+window.enterClassroomWithCheck = async function(roomUrl) {
+    const username = localStorage.getItem('studyVerseUser');
+    const userOk = await checkCurrentUserStatusOrLogout(username);
+    if (!userOk) return;
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (isMobileDevice) {

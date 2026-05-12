@@ -582,6 +582,56 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// --- 檢查使用者狀態 API ---
+app.get('/api/auth/check-user', async (req, res) => {
+    const username = req.query.username;
+
+    if (!username) {
+        return res.status(400).json({
+            ok: false,
+            error: '缺少 username'
+        });
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, role, is_blocked, has_seen_intro, privacy_consent_at')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                ok: false,
+                blocked: true,
+                error: '此帳號已被平台停用，請聯繫管理員。'
+            });
+        }
+
+        res.json({
+            ok: true,
+            blocked: false,
+            user
+        });
+
+    } catch (err) {
+        console.error('檢查使用者狀態失敗:', err);
+        res.status(500).json({
+            ok: false,
+            error: '檢查使用者狀態失敗'
+        });
+    }
+});
+
 // --- 隱私與學習監測同意 API ---
 app.post('/api/privacy-consent', async (req, res) => {
     const { username, version } = req.body;
