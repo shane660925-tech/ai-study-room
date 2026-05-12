@@ -1181,6 +1181,13 @@ const globalUserStatus = {};
 const tutorRoomSchedules = new Map();
 const tutorAttendanceByRoom = new Map();
 
+function getTaiwanTimeString() {
+    return new Date().toLocaleTimeString('zh-TW', {
+        hour12: false,
+        timeZone: 'Asia/Taipei'
+    });
+}
+
 function getTutorAttendance(roomId) {
     if (!roomId || !tutorAttendanceByRoom.has(roomId)) return [];
 
@@ -1189,8 +1196,17 @@ function getTutorAttendance(roomId) {
 
 function broadcastTutorAttendance(roomId) {
     const list = getTutorAttendance(roomId);
+
+    const activeList = list.filter(u =>
+        !u.leaveTime &&
+        u.status !== 'OFFLINE'
+    );
+
+    // 點名：保留全部，包含已離開
     io.to(roomId).emit('update_attendance', list);
-    io.to(roomId).emit('update_rank', list);
+
+    // 中間學生圖卡：只顯示在線學生
+    io.to(roomId).emit('update_rank', activeList);
 }
 // 儲存特約教室的課表設定
 const tutorRoomSettings = new Map(); 
@@ -1462,7 +1478,7 @@ io.on('connection', (socket) => {
         roomMode: 'tutor',
         role: 'student',
         status: 'FOCUSED',
-        joinTime: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
+        joinTime: getTaiwanTimeString(),
         leaveTime: null
     });
 
@@ -2124,6 +2140,21 @@ socket.on('admin_action', (data) => {
         data?.room ||
         socket.roomId ||
         data?.roomMode;
+
+    const studentName = data.name || data.username;
+
+if (targetRoom && tutorAttendanceByRoom.has(targetRoom) && studentName) {
+    const roomMap = tutorAttendanceByRoom.get(targetRoom);
+    const student = roomMap.get(studentName);
+
+    if (student) {
+        student.status = 'OFFLINE';
+        student.leaveTime = getTaiwanTimeString();
+        roomMap.set(studentName, student);
+    }
+
+    broadcastTutorAttendance(targetRoom);
+}
 
     if (targetRoom) {
         io.to(targetRoom).emit('flip_failed', data);
