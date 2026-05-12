@@ -6,6 +6,7 @@
 // ==========================================
 // 全域音效與震動控制變數
 // ==========================================
+window.hasTutorSessionEnded = false;
 window.activeWarningAudio = null;
 window.activeBroadcastAudio = null;
 window.vibrationInterval = null; 
@@ -77,13 +78,14 @@ emitTutorViolation({
             }
             
             setTimeout(async () => {
-                alert("🚨 嚴重違規！您已被強制登出教室！");
-                if (typeof window.endSession === 'function') {
-                    await window.endSession();
-                } else {
-                    window.location.href = 'index.html';
-                }
-            }, 100);
+    alert("🚨 嚴重違規！您已被強制登出教室！");
+
+    if (typeof window.endSession === 'function') {
+        await window.endSession();
+    } else {
+        window.location.href = 'index.html';
+    }
+}, 100);
         }
     }, 1000);
 };
@@ -1005,4 +1007,34 @@ function updateStudentTimerUI(time, label, status, progress) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initStudentAutoTimer();
+});
+
+// ==========================================
+// VIP 結算防重複鎖
+// 防止手機翻轉、AI、room-ui、課程結束同時觸發 endSession
+// ==========================================
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        if (typeof window.endSession !== 'function') {
+            console.warn("⚠️ 找不到 window.endSession，防重複鎖尚未套用");
+            return;
+        }
+
+        if (window.__originalEndSession) return;
+
+        window.__originalEndSession = window.endSession;
+
+        window.endSession = async function(...args) {
+            if (window.hasTutorSessionEnded) {
+                console.log("⚠️ 已結算過，略過重複 endSession");
+                return;
+            }
+
+            window.hasTutorSessionEnded = true;
+
+            return await window.__originalEndSession.apply(this, args);
+        };
+
+        console.log("✅ VIP endSession 防重複鎖已啟用");
+    }, 1500);
 });
