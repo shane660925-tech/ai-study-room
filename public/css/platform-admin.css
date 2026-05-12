@@ -1,0 +1,153 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #05070a;
+  color: #e5e7eb;
+  font-family: Arial, "Noto Sans TC", sans-serif;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: #0a0e17;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  padding: 24px;
+}
+
+.sidebar h1 {
+  margin: 0;
+  color: #60a5fa;
+  font-size: 24px;
+}
+
+.sidebar p {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.sidebar input {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.sidebar button,
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #2563eb;
+  color: white;
+  font-weight: 700;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.sidebar nav button {
+  background: #111827;
+  text-align: left;
+}
+
+main {
+  flex: 1;
+  padding: 32px;
+  overflow: auto;
+}
+
+.hidden {
+  display: none;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.card,
+.form-card {
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.card span {
+  display: block;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.card strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 30px;
+  color: #facc15;
+}
+
+input,
+select {
+  background: #020617;
+  color: white;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+#userSearchInput {
+  width: 280px;
+  margin-bottom: 16px;
+}
+
+.form-card {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+  margin-bottom: 24px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #0f172a;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  text-align: left;
+  font-size: 14px;
+}
+
+th {
+  color: #93c5fd;
+  background: #111827;
+}
+
+td input {
+  width: 100%;
+}
+
+td button {
+  background: #374151;
+}

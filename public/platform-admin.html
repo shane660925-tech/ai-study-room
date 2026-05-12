@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Platform Admin | STUDY VERSE</title>
+  <link rel="stylesheet" href="/css/platform-admin.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>STUDY VERSE</h1>
+      <p>Platform Admin</p>
+
+      <input id="adminUsernameInput" placeholder="輸入 admin username" />
+      <button id="loginBtn">驗證管理員</button>
+
+      <nav>
+        <button onclick="switchTab('overview')">總覽</button>
+        <button onclick="switchTab('users')">會員管理</button>
+        <button onclick="switchTab('themes')">主題教室</button>
+      </nav>
+    </aside>
+
+    <main>
+      <section id="tab-overview" class="tab">
+        <h2>平台總覽</h2>
+        <div id="overviewCards" class="cards"></div>
+      </section>
+
+      <section id="tab-users" class="tab hidden">
+        <h2>會員管理</h2>
+        <input id="userSearchInput" placeholder="搜尋 username / account" />
+        <button onclick="loadUsers()">搜尋</button>
+        <div id="usersTable"></div>
+      </section>
+
+      <section id="tab-themes" class="tab hidden">
+        <h2>主題教室管理</h2>
+
+        <div class="form-card">
+  <h3>新增主題教室</h3>
+
+  <label>教室名稱，可輸入中文</label>
+  <input id="themeName" placeholder="例：段考衝刺教室" />
+
+  <label>網址代號 slug，請用英文、數字、短橫線</label>
+  <input id="themeSlug" placeholder="例：monthly-exam" />
+
+  <label>小標籤，可中文</label>
+  <input id="themeBadge" placeholder="例：熱門 / 限時 / NEW" />
+
+  <label>主題顏色</label>
+  <select id="themeColor">
+    <option value="blue">藍色</option>
+    <option value="red">紅色</option>
+    <option value="purple">紫色</option>
+    <option value="green">綠色</option>
+    <option value="amber">琥珀色</option>
+  </select>
+
+  <label>排序，數字越小越前面</label>
+  <input id="themeSort" type="number" placeholder="例：1" />
+
+  <button onclick="createThemeRoom()">新增主題教室</button>
+</div>
+
+        <div id="themeRoomsTable"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/js/platform-admin.js"></script>
+</body>
+</html>

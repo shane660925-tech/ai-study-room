@@ -135,6 +135,383 @@ async function generateUniqueLineBindShortCode() {
 // 2. API 路由設定
 // ==========================================
 
+// ==========================================
+// Admin Panel API - Platform Admin
+// ==========================================
+
+async function verifyAdmin(req, res, next) {
+    const adminUsername =
+        req.query.adminUsername ||
+        req.body.adminUsername ||
+        req.headers['x-admin-username'];
+
+    if (!adminUsername) {
+        return res.status(401).json({ error: '缺少 adminUsername' });
+    }
+
+    try {
+        const { data: adminUser, error } = await supabase
+            .from('users')
+            .select('username, role, is_blocked')
+            .eq('username', adminUsername)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!adminUser) {
+            return res.status(404).json({ error: '找不到管理員帳號' });
+        }
+
+        if (adminUser.is_blocked) {
+            return res.status(403).json({ error: '此管理員帳號已被停用' });
+        }
+
+        if (adminUser.role !== 'admin') {
+            return res.status(403).json({ error: '權限不足，僅限平台管理員' });
+        }
+
+        req.adminUser = adminUser;
+        next();
+
+    } catch (err) {
+        console.error('Admin 權限驗證失敗:', err);
+        res.status(500).json({ error: 'Admin 權限驗證失敗' });
+    }
+}
+
+// 檢查目前登入者是否為 admin
+app.get('/api/admin/me', verifyAdmin, async (req, res) => {
+    res.json({
+        message: 'Admin 驗證成功',
+        admin: req.adminUser
+    });
+});
+
+// 取得會員列表
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+    const keyword = req.query.keyword || '';
+
+    try {
+        let query = supabase
+            .from('users')
+            .select(`
+                username,
+                account,
+                role,
+                total_seconds,
+                streak,
+                last_login,
+                integrity_score,
+                bound_line_ids,
+                has_seen_intro,
+                privacy_consent_at,
+                privacy_consent_version,
+                is_blocked,
+                teacher_status,
+                violation_count,
+                updated_at
+            `)
+            .order('username', { ascending: true });
+
+        if (keyword) {
+            query = query.or(
+                `username.ilike.%${keyword}%,account.ilike.%${keyword}%`
+            );
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const users = (data || []).map(user => ({
+            ...user,
+            line_bound: !!user.bound_line_ids,
+            total_minutes: Math.floor((user.total_seconds || 0) / 60)
+        }));
+
+        res.json({ users });
+
+    } catch (err) {
+        console.error('取得會員列表失敗:', err);
+        res.status(500).json({ error: '取得會員列表失敗' });
+    }
+});
+
+// 更新會員狀態 / role / 教師資格
+app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
+    const targetUsername = req.params.username;
+
+    const {
+        role,
+        is_blocked,
+        teacher_status,
+        violation_count
+    } = req.body;
+
+    const updates = {
+        updated_at: new Date().toISOString()
+    };
+
+    if (role !== undefined) updates.role = role;
+    if (is_blocked !== undefined) updates.is_blocked = !!is_blocked;
+    if (teacher_status !== undefined) updates.teacher_status = teacher_status;
+    if (violation_count !== undefined) updates.violation_count = Number(violation_count) || 0;
+
+    try {
+        if (targetUsername === req.adminUser.username && updates.is_blocked === true) {
+            return res.status(400).json({ error: '不能封鎖自己的管理員帳號' });
+        }
+
+        const { data, error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('username', targetUsername)
+            .select(`
+                username,
+                account,
+                role,
+                is_blocked,
+                teacher_status,
+                violation_count,
+                updated_at
+            `)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return res.status(404).json({ error: '找不到目標會員' });
+
+        res.json({
+            message: '會員資料已更新',
+            user: data
+        });
+
+    } catch (err) {
+        console.error('更新會員失敗:', err);
+        res.status(500).json({ error: '更新會員失敗' });
+    }
+});
+
+// 刪除會員
+app.delete('/api/admin/users/:username', verifyAdmin, async (req, res) => {
+    const targetUsername = req.params.username;
+
+    if (targetUsername === req.adminUser.username) {
+        return res.status(400).json({ error: '不能刪除自己的管理員帳號' });
+    }
+
+    try {
+        const { error } = await supabase
+            .from('users')
+            .delete()
+            .eq('username', targetUsername);
+
+        if (error) throw error;
+
+        res.json({ message: '會員已刪除', username: targetUsername });
+
+    } catch (err) {
+        console.error('刪除會員失敗:', err);
+        res.status(500).json({ error: '刪除會員失敗，可能仍有學習紀錄關聯' });
+    }
+});
+
+// 取得主題教室列表
+app.get('/api/admin/theme-rooms', verifyAdmin, async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('theme_rooms')
+            .select('*')
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+
+        res.json({ rooms: data || [] });
+
+    } catch (err) {
+        console.error('取得後台主題教室失敗:', err);
+        res.status(500).json({ error: '取得後台主題教室失敗' });
+    }
+});
+
+// 新增主題教室
+app.post('/api/admin/theme-rooms', verifyAdmin, async (req, res) => {
+    const {
+        name,
+        slug,
+        description,
+        room_page,
+        starts_at,
+        ends_at,
+        is_active,
+        sort_order,
+        badge_text,
+        theme_color
+    } = req.body;
+
+    if (!name || !slug) {
+        return res.status(400).json({ error: '缺少 name 或 slug' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('theme_rooms')
+            .insert([{
+                name,
+                slug,
+                description: description || null,
+                room_page: room_page || 'managed-room.html',
+                starts_at: starts_at || null,
+                ends_at: ends_at || null,
+                is_active: is_active !== undefined ? !!is_active : true,
+                sort_order: Number(sort_order) || 0,
+                badge_text: badge_text || null,
+                theme_color: theme_color || 'blue'
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({
+            message: '主題教室已新增',
+            room: data
+        });
+
+    } catch (err) {
+        console.error('新增主題教室失敗:', err);
+        res.status(500).json({ error: '新增主題教室失敗，slug 可能已存在' });
+    }
+});
+
+// 修改主題教室
+app.patch('/api/admin/theme-rooms/:id', verifyAdmin, async (req, res) => {
+    const id = req.params.id;
+
+    const allowedFields = [
+        'name',
+        'slug',
+        'description',
+        'room_page',
+        'starts_at',
+        'ends_at',
+        'is_active',
+        'sort_order',
+        'badge_text',
+        'theme_color'
+    ];
+
+    const updates = {};
+
+    allowedFields.forEach(field => {
+        if (req.body[field] !== undefined) {
+            updates[field] = req.body[field];
+        }
+    });
+
+    if (updates.sort_order !== undefined) {
+        updates.sort_order = Number(updates.sort_order) || 0;
+    }
+
+    if (updates.is_active !== undefined) {
+        updates.is_active = !!updates.is_active;
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('theme_rooms')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return res.status(404).json({ error: '找不到主題教室' });
+
+        res.json({
+            message: '主題教室已更新',
+            room: data
+        });
+
+    } catch (err) {
+        console.error('修改主題教室失敗:', err);
+        res.status(500).json({ error: '修改主題教室失敗' });
+    }
+});
+
+// 學習紀錄中心
+app.get('/api/admin/focus-records', verifyAdmin, async (req, res) => {
+    const username = req.query.username || null;
+
+    try {
+        let query = supabase
+            .from('focus_records')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(200);
+
+        if (username) {
+            query = query.eq('username', username);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        res.json({ records: data || [] });
+
+    } catch (err) {
+        console.error('取得學習紀錄失敗:', err);
+        res.status(500).json({ error: '取得學習紀錄失敗' });
+    }
+});
+
+// 後台總覽統計
+app.get('/api/admin/overview', verifyAdmin, async (req, res) => {
+    try {
+        const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('username, role, total_seconds, integrity_score, is_blocked, teacher_status, violation_count');
+
+        if (usersError) throw usersError;
+
+        const { data: records, error: recordsError } = await supabase
+            .from('focus_records')
+            .select('focus_seconds, integrity_score, earned_exp');
+
+        if (recordsError) throw recordsError;
+
+        const totalUsers = users.length;
+        const blockedUsers = users.filter(u => u.is_blocked).length;
+        const teacherCount = users.filter(u => u.role === 'teacher').length;
+        const pendingTeachers = users.filter(u => u.teacher_status === 'pending').length;
+
+        const totalFocusSeconds = records.reduce((sum, r) => sum + (r.focus_seconds || 0), 0);
+        const totalExp = records.reduce((sum, r) => sum + (r.earned_exp || 0), 0);
+
+        const validScores = records
+            .map(r => r.integrity_score)
+            .filter(score => score !== null && score !== undefined);
+
+        const avgIntegrity =
+            validScores.length > 0
+                ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+                : 100;
+
+        res.json({
+            totalUsers,
+            blockedUsers,
+            teacherCount,
+            pendingTeachers,
+            totalFocusSeconds,
+            totalFocusMinutes: Math.floor(totalFocusSeconds / 60),
+            totalExp,
+            avgIntegrity
+        });
+
+    } catch (err) {
+        console.error('取得後台總覽失敗:', err);
+        res.status(500).json({ error: '取得後台總覽失敗' });
+    }
+});
+
 // --- [新增] 註冊 API ---
 app.post('/api/register', async (req, res) => {
     const { username, account, password } = req.body;
@@ -185,6 +562,12 @@ app.post('/api/login', async (req, res) => {
     try {
         const { data: user, error } = await supabase.from('users').select('*').eq('account', account).eq('password', password).maybeSingle();
         if (error || !user) return res.status(401).json({ error: '帳號或密碼錯誤！' });
+
+        if (user.is_blocked) {
+    return res.status(403).json({
+        error: '此帳號已被平台停用，請聯繫管理員。'
+    });
+}
 
         // --- [新增] 舊用戶若無代碼則自動補發 ---
         if (!user.link_code) {
@@ -412,57 +795,95 @@ app.get('/api/auth/google/callback', async (req, res) => {
     if (!code) return res.status(400).send('❌ 缺少授權碼');
 
     try {
-        // 同樣明確指定 redirect_uri
         const { tokens } = await googleClient.getToken({
             code: code,
             redirect_uri: GOOGLE_CALLBACK_URL
         });
+
         googleClient.setCredentials(tokens);
+
         const ticket = await googleClient.verifyIdToken({
             idToken: tokens.id_token,
             audience: process.env.GOOGLE_CLIENT_ID,
         });
+
         const payload = ticket.getPayload();
         const { email, name, sub: googleId } = payload;
 
-        // 檢查 Supabase 是否已有此帳號
-        let { data: user } = await supabase
+        let { data: user, error: findError } = await supabase
             .from('users')
             .select('*')
             .eq('account', email)
             .maybeSingle();
 
+        if (findError) throw findError;
+
         if (!user) {
-            // 自動註冊新帳號
             let finalName = name || 'Google學員';
-            const { data: nameCheck } = await supabase.from('users').select('username').eq('username', finalName).maybeSingle();
+
+            const { data: nameCheck } = await supabase
+                .from('users')
+                .select('username')
+                .eq('username', finalName)
+                .maybeSingle();
+
             if (nameCheck) finalName += Math.floor(Math.random() * 1000);
 
-            // --- [新增] 註冊時產生 6 位數代碼 ---
             const newLinkCode = await generateUniqueLinkCode();
 
-            const { data: newUser, error: insErr } = await supabase.from('users').insert([{
-                username: String(finalName),
-                account: String(email),
-                password: String(googleId), // 使用 Google ID 作為佔位密碼
-                total_seconds: 0,
-                streak: 1,
-                last_login: new Date().toISOString().split('T')[0],
-                role: 'student',
-                integrity_score: 100,
-                link_code: newLinkCode // [新增]
-            }]).select().single();
+            const { data: newUser, error: insErr } = await supabase
+                .from('users')
+                .insert([{
+                    username: String(finalName),
+                    account: String(email),
+                    password: String(googleId),
+                    total_seconds: 0,
+                    streak: 1,
+                    last_login: new Date().toISOString().split('T')[0],
+                    role: 'student',
+                    integrity_score: 100,
+                    link_code: newLinkCode
+                }])
+                .select()
+                .single();
+
             if (insErr) throw insErr;
             user = newUser;
-        } else if (!user.link_code) {
-            // --- [新增] 舊用戶若無代碼，則補發一組 ---
-            const newLinkCode = await generateUniqueLinkCode();
-            await supabase.from('users').update({ link_code: newLinkCode }).eq('username', user.username);
-            user.link_code = newLinkCode; // 確保後續邏輯可能用到
         }
 
-        // 登入成功：導向回首頁並帶入參數讓前端讀取
+        console.log('🔐 Google 登入使用者檢查:', {
+            username: user.username,
+            account: user.account,
+            is_blocked: user.is_blocked
+        });
+
+        if (user.is_blocked === true) {
+            return res.status(403).send(`
+                <html>
+                    <body style="background:#05070a;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;">
+                        <div>
+                            <h1>帳號已停用</h1>
+                            <p>此帳號已被平台停用，請聯繫管理員。</p>
+                            <a href="/" style="color:#60a5fa;">返回首頁</a>
+                        </div>
+                    </body>
+                </html>
+            `);
+        }
+
+        if (!user.link_code) {
+            const newLinkCode = await generateUniqueLinkCode();
+
+            await supabase
+                .from('users')
+                .update({ link_code: newLinkCode })
+                .eq('username', user.username);
+
+            user.link_code = newLinkCode;
+        }
+
         res.redirect(`/?username=${encodeURIComponent(user.username)}&login_success=true`);
+
     } catch (err) {
         console.error('Google Auth Error:', err);
         res.status(500).send('Google 登入失敗，請稍後再試。');
@@ -643,6 +1064,9 @@ if (state) {
 
             if (error) throw error;
             existingUser = newUser;
+            if (existingUser && existingUser.is_blocked) {
+    return res.status(403).send('此帳號已被平台停用，請聯繫管理員。');
+}
         } else if (!existingUser.link_code) {
             // --- [新增] 舊用戶補發邏輯 ---
             const newLinkCode = await generateUniqueLinkCode();
@@ -1026,6 +1450,11 @@ app.post('/api/save-focus', async (req, res) => {
             .maybeSingle();
 
         if (user) {
+            if (user.is_blocked) {
+    return res.status(403).json({
+        error: '此帳號已被平台停用，無法儲存學習紀錄。'
+    });
+}
             let newStreak = user.streak || 1;
             let isFirstLoginToday = user.last_login !== today;
             if (isFirstLoginToday) newStreak += 1;
@@ -1437,7 +1866,7 @@ io.on('connection', (socket) => {
     });
 
     // 1. 學生進入特約教室 (雙機分開加入)
-    socket.on('join_tutor_room', (data) => {
+    socket.on('join_tutor_room', async (data) => {
     if (!data) return;
 
     const roomId = data.roomId || data.room || data.meetId;
@@ -1464,6 +1893,19 @@ io.on('connection', (socket) => {
         return;
     }
 
+    const { data: dbUser } = await supabase
+    .from('users')
+    .select('username, is_blocked')
+    .eq('username', username)
+    .maybeSingle();
+
+if (dbUser && dbUser.is_blocked) {
+    socket.emit('blocked_account', {
+        message: '此帳號已被平台停用，無法進入特約教室。'
+    });
+    socket.disconnect(true);
+    return;
+}
     socket.username = username;
     socket.deviceType = data.deviceType || 'pc';
 
@@ -1813,6 +2255,15 @@ socket.on('get_attendance', (data) => {
                 .eq('username', username)
                 .maybeSingle();
 
+            if (dbUser && dbUser.is_blocked) {
+    socket.emit('blocked_account', {
+        message: '此帳號已被平台停用，無法進入教室。'
+    });
+
+    onlineUsers = onlineUsers.filter(u => u.name !== username);
+    socket.disconnect(true);
+    return;
+}
             // 再次從陣列拿出這個 user (確保改到的是陣列裡的同一個物件)
             user = onlineUsers.find(u => u.name === username);
             if (!user) return; 
