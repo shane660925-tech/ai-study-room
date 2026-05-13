@@ -97,53 +97,6 @@ adminUsersCache.sort((a, b) => {
   return String(a.username).localeCompare(String(b.username), 'zh-Hant');
 });
 
-async function loadTeacherReviews() {
-  try {
-    const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
-    adminUsersCache = data.users || [];
-
-    const pendingTeachers = adminUsersCache.filter(
-      user => user.teacher_status === 'pending'
-    );
-
-    if (pendingTeachers.length === 0) {
-      document.getElementById('teacherReviewList').innerHTML = `
-        <div class="empty-card">
-          目前沒有等待審核的教師申請
-        </div>
-      `;
-      return;
-    }
-
-    document.getElementById('teacherReviewList').innerHTML = pendingTeachers.map(user => `
-      <div class="teacher-review-card">
-        <div>
-          <h3>${escapeHtml(user.username)}</h3>
-          <p>${escapeHtml(user.account || '-')}</p>
-        </div>
-
-        <div>
-          <strong>申請科目</strong>
-          <p>${escapeHtml(user.teacher_subject || '-')}</p>
-        </div>
-
-        <div>
-          <strong>申請時間</strong>
-          <p>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</p>
-        </div>
-
-        <div class="teacher-review-actions">
-          <button onclick="openTeacherDetail('${escapeJs(user.username)}')">查看完整資料</button>
-          <button onclick="approveTeacher('${escapeJs(user.username)}')">批准</button>
-          <button onclick="rejectTeacher('${escapeJs(user.username)}')">拒絕</button>
-        </div>
-      </div>
-    `).join('');
-
-  } catch (err) {
-    alert(err.message);
-  }
-}
     const rows = adminUsersCache.map(user => `
       <tr>
         <td>${user.username}</td>
@@ -209,6 +162,54 @@ async function loadTeacherReviews() {
         <tbody>${rows}</tbody>
       </table>
     `;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function loadTeacherReviews() {
+  try {
+    const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
+    adminUsersCache = data.users || [];
+
+    const pendingTeachers = adminUsersCache.filter(
+      user => user.teacher_status === 'pending'
+    );
+
+    if (pendingTeachers.length === 0) {
+      document.getElementById('teacherReviewList').innerHTML = `
+        <div class="empty-card">
+          目前沒有等待審核的教師申請
+        </div>
+      `;
+      return;
+    }
+
+    document.getElementById('teacherReviewList').innerHTML = pendingTeachers.map(user => `
+      <div class="teacher-review-card">
+        <div>
+          <h3>${escapeHtml(user.username)}</h3>
+          <p>${escapeHtml(user.account || '-')}</p>
+        </div>
+
+        <div>
+          <strong>申請科目</strong>
+          <p>${escapeHtml(user.teacher_subject || '-')}</p>
+        </div>
+
+        <div>
+          <strong>申請時間</strong>
+          <p>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</p>
+        </div>
+
+        <div class="teacher-review-actions">
+          <button onclick="openTeacherDetail('${escapeJs(user.username)}')">查看完整資料</button>
+          <button onclick="approveTeacher('${escapeJs(user.username)}')">批准</button>
+          <button onclick="rejectTeacher('${escapeJs(user.username)}')">拒絕</button>
+        </div>
+      </div>
+    `).join('');
+
   } catch (err) {
     alert(err.message);
   }
