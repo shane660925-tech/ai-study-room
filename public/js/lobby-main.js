@@ -134,12 +134,48 @@ function closeAllEntryModals() {
 // ================= 新增：導師密碼驗證邏輯 =================
 
 // 顯示密碼驗證彈窗
-window.showTeacherPasswordModal = function() {
-    const pwdInput = document.getElementById('teacher-password-input');
-    if (pwdInput) pwdInput.value = ''; // 每次開啟清空輸入框
-    
-    document.getElementById('teacher-password-modal').classList.remove('hidden');
-    document.getElementById('teacher-password-modal').classList.add('flex');
+window.showTeacherPasswordModal = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) {
+        alert('請先登入後再使用教師功能。');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.user) {
+            alert(data.error || '無法確認教師資格。');
+            return;
+        }
+
+        const user = data.user;
+
+        if (user.role === 'teacher' && user.teacher_status === 'approved') {
+            if (typeof openTeacherSetupModal === 'function') {
+                openTeacherSetupModal();
+            }
+            return;
+        }
+
+        if (user.teacher_status === 'pending') {
+            alert('你的教師申請目前審核中，請等待平台管理員審核。');
+            return;
+        }
+
+        if (user.teacher_status === 'rejected') {
+            alert('你的教師申請未通過，如需重新申請，請修改資料後再次送出。');
+            return;
+        }
+
+        alert('此功能限通過審核的教師使用。請先在大廳送出教師申請。');
+
+    } catch (err) {
+        console.error('教師權限檢查失敗:', err);
+        alert('教師權限檢查失敗，請稍後再試。');
+    }
 };
 
 // 關閉密碼驗證彈窗

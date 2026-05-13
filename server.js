@@ -609,7 +609,7 @@ app.get('/api/auth/check-user', async (req, res) => {
     try {
         const { data: user, error } = await supabase
             .from('users')
-            .select('username, role, is_blocked, has_seen_intro, privacy_consent_at')
+            .select('username, role, is_blocked, has_seen_intro, privacy_consent_at, teacher_status')
             .eq('username', username)
             .maybeSingle();
 
