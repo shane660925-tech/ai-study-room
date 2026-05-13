@@ -99,10 +99,8 @@ adminUsersCache.sort((a, b) => {
 
 async function loadTeacherReviews() {
   try {
-    if (!adminUsersCache || adminUsersCache.length === 0) {
-      const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
-      adminUsersCache = data.users || [];
-    }
+    const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
+    adminUsersCache = data.users || [];
 
     const pendingTeachers = adminUsersCache.filter(
       user => user.teacher_status === 'pending'
