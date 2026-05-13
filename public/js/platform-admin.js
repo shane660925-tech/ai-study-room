@@ -90,6 +90,11 @@ async function loadUsers() {
     );
 
     adminUsersCache = data.users || [];
+    const roleFilter = document.getElementById('userRoleFilter')?.value || 'all';
+
+if (roleFilter !== 'all') {
+  adminUsersCache = adminUsersCache.filter(user => user.role === roleFilter);
+}
 
 adminUsersCache.sort((a, b) => {
   if (a.teacher_status === 'pending' && b.teacher_status !== 'pending') return -1;
@@ -110,14 +115,8 @@ adminUsersCache.sort((a, b) => {
           </select>
         </td>
         <td>
-          <select onchange="updateUser('${user.username}', { teacher_status: this.value })">
-            ${teacherStatusOption('none', user.teacher_status)}
-            ${teacherStatusOption('pending', user.teacher_status)}
-            ${teacherStatusOption('approved', user.teacher_status)}
-            ${teacherStatusOption('disabled', user.teacher_status)}
-            ${teacherStatusOption('rejected', user.teacher_status)}
-          </select>
-        </td>
+  ${renderTeacherStatusBadge(user.teacher_status)}
+</td>
         <td>${user.line_bound ? '已綁定' : '未綁定'}</td>
         <td>${user.total_minutes}</td>
         <td>${user.integrity_score ?? '-'}</td>
@@ -236,6 +235,39 @@ function teacherStatusOption(value, current) {
   };
 
   return `<option value="${value}" ${value === current ? 'selected' : ''}>${labelMap[value] || value}</option>`;
+}
+
+function renderTeacherStatusBadge(status) {
+  const map = {
+    none: {
+      label: '未申請',
+      className: 'badge-gray'
+    },
+    pending: {
+      label: '審核中',
+      className: 'badge-yellow'
+    },
+    approved: {
+      label: '已通過',
+      className: 'badge-green'
+    },
+    rejected: {
+      label: '已拒絕',
+      className: 'badge-red'
+    },
+    disabled: {
+      label: '已停用',
+      className: 'badge-dark'
+    }
+  };
+
+  const item = map[status] || map.none;
+
+  return `
+    <span class="status-badge ${item.className}">
+      ${item.label}
+    </span>
+  `;
 }
 
 async function updateUser(username, updates) {

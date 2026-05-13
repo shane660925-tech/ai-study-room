@@ -257,7 +257,6 @@ app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     const updates = {
         updated_at: new Date().toISOString()
     };
-
     if (role !== undefined) updates.role = role;
     if (is_blocked !== undefined) updates.is_blocked = !!is_blocked;
     if (teacher_status !== undefined) updates.teacher_status = teacher_status;
@@ -292,6 +291,32 @@ if (teacher_status === 'approved' || teacher_status === 'rejected') {
         if (error) throw error;
         if (!data) return res.status(404).json({ error: '找不到目標會員' });
 
+        // --- 教師審核通知 ---
+if (teacher_status === 'approved') {
+    await supabase
+        .from('notifications')
+        .insert({
+            username: req.params.username,
+            type: 'teacher_approved',
+            title: '教師資格審核通過',
+            message: '恭喜！你的教師資格已通過審核，現在可以建立特約教室。'
+        });
+}
+
+if (teacher_status === 'rejected') {
+    await supabase
+        .from('notifications')
+        .insert({
+            username: req.params.username,
+            type: 'teacher_rejected',
+            title: '教師資格審核未通過',
+            message:
+                teacher_review_note ||
+                '很抱歉，你的教師資格申請未通過，請調整資料後重新申請。'
+        });
+}
+
+
         res.json({
             message: '會員資料已更新',
             user: data
@@ -300,6 +325,71 @@ if (teacher_status === 'approved' || teacher_status === 'rejected') {
     } catch (err) {
         console.error('更新會員失敗:', err);
         res.status(500).json({ error: '更新會員失敗' });
+    }
+});
+
+// 取得未讀通知
+app.get('/api/notifications', async (req, res) => {
+    const username = req.query.username;
+
+    if (!username) {
+        return res.status(400).json({
+            error: '缺少 username'
+        });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('username', username)
+            .eq('is_read', false)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({
+            notifications: data || []
+        });
+
+    } catch (err) {
+        console.error('讀取通知失敗:', err);
+        res.status(500).json({
+            error: '讀取通知失敗'
+        });
+    }
+});
+
+// 已讀通知
+app.patch('/api/notifications/read', async (req, res) => {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+            error: '缺少通知 ids'
+        });
+    }
+
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .update({
+                is_read: true
+            })
+            .in('id', ids);
+
+        if (error) throw error;
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+        console.error('通知已讀失敗:', err);
+
+        res.status(500).json({
+            error: '通知已讀失敗'
+        });
     }
 });
 

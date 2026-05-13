@@ -1708,3 +1708,91 @@ window.submitTeacherApply = async function() {
         alert(err.message);
     }
 };
+
+async function loadUnreadNotifications() {
+    const username = localStorage.getItem('studyVerseUser');
+    if (!username) return;
+
+    try {
+        const res = await fetch(`/api/notifications?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok) return;
+
+        const notifications = data.notifications || [];
+        if (notifications.length === 0) return;
+
+        showNotificationModal(notifications);
+
+    } catch (err) {
+        console.error('讀取站內通知失敗:', err);
+    }
+}
+
+function showNotificationModal(notifications) {
+    const oldModal = document.getElementById('notificationModal');
+    if (oldModal) oldModal.remove();
+
+    const ids = notifications.map(n => n.id);
+
+    const modal = document.createElement('div');
+    modal.id = 'notificationModal';
+    modal.className = 'fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+
+    modal.innerHTML = `
+        <div class="bg-[#111827] border border-blue-500/30 rounded-3xl w-full max-w-md p-6 shadow-2xl">
+            <h2 class="text-2xl font-black text-white mb-4">
+                <i class="fas fa-bell text-yellow-400 mr-2"></i>
+                你有新的通知
+            </h2>
+
+            <div class="space-y-4 max-h-[55vh] overflow-y-auto">
+                ${notifications.map(n => `
+                    <div class="bg-black/40 border border-white/10 rounded-2xl p-4">
+                        <h3 class="text-blue-400 font-black mb-2">${escapeNotificationHtml(n.title)}</h3>
+                        <p class="text-gray-300 text-sm leading-relaxed">${escapeNotificationHtml(n.message)}</p>
+                        <p class="text-gray-500 text-[10px] mt-3">
+                            ${new Date(n.created_at).toLocaleString('zh-TW')}
+                        </p>
+                    </div>
+                `).join('')}
+            </div>
+
+            <button onclick="markNotificationsRead(${JSON.stringify(ids)})"
+                    class="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">
+                我知道了
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+async function markNotificationsRead(ids) {
+    try {
+        await fetch('/api/notifications/read', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids })
+        });
+    } catch (err) {
+        console.error('通知已讀失敗:', err);
+    }
+
+    const modal = document.getElementById('notificationModal');
+    if (modal) modal.remove();
+}
+
+function escapeNotificationHtml(str) {
+    return String(str || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+}
+
+setTimeout(() => {
+    loadUnreadNotifications();
+}, 2500);
