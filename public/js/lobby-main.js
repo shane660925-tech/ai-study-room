@@ -1083,6 +1083,41 @@ socket.on('mobile_sync_update', (data) => {
     }
 });
 
+window.enterMyTutorDashboard = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) {
+        alert('請先登入後再進入教師端。');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.user) {
+            alert(data.error || '無法確認教師資格。');
+            return;
+        }
+
+        const user = data.user;
+
+        if (user.role !== 'teacher' || user.teacher_status !== 'approved') {
+            alert('此功能限通過審核的教師使用。');
+            return;
+        }
+
+        const teacherRoomCode = `teacher_${username}`;
+
+        window.location.href =
+            `/tutor-dashboard.html?room=${encodeURIComponent(teacherRoomCode)}&teacher=${encodeURIComponent(username)}`;
+
+    } catch (err) {
+        console.error('進入教師端失敗:', err);
+        alert('進入教師端失敗，請稍後再試。');
+    }
+};
+
 // 開啟教師排課彈窗 (後續可加上權限驗證 API)
 window.openTeacherSetupModal = function() {
     const modal = document.getElementById('teacher-setup-modal');
@@ -1104,7 +1139,14 @@ window.generateTeacherRoom = function() {
     }
 
     // 隨機生成一組 6 碼的教室代碼
-    const roomCode = 'VIP-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const username = localStorage.getItem('studyVerseUser');
+
+if (!username) {
+    alert('請先登入後再建立教師教室。');
+    return;
+}
+
+const roomCode = `teacher_${username}`;
 
     // 【修正點】：將排程資料存入 localStorage，Key 使用動態 roomCode 以供同步
     const scheduleData = {

@@ -95,7 +95,11 @@ socket.on('connect', () => {
     const roomCode = window.currentTutorRoomCode;
     
     // 加入房間，角色設為 teacher
-    socket.emit('join_tutor_room', { room: roomCode, role: 'teacher' });
+    socket.emit('join_tutor_room', {
+    room: roomCode,
+    roomId: roomCode,
+    role: 'teacher'
+});
 
     // 如果有讀取到排程，立即補發同步
     if (window.currentScheduleData) {
@@ -113,9 +117,18 @@ let activeStudents = [];
 let knownTutorNames = new Set(); 
 
 socket.on('update_rank', (users) => {
-    activeStudents = users.filter(s => s.roomMode === 'tutor');
+    const currentRoomCode = window.currentTutorRoomCode;
+
+    activeStudents = users.filter(s =>
+        s.roomMode === 'tutor' &&
+        s.roomId === currentRoomCode
+    );
+
     activeStudents.forEach(s => knownTutorNames.add(s.name));
-    if (typeof renderStudents === 'function') renderStudents();
+
+    if (typeof renderStudents === 'function') {
+        renderStudents();
+    }
 });
 
 socket.on('receive_tutor_announcement', (data) => {
@@ -130,8 +143,11 @@ window.latestAttendanceData = [];
 
 // 渲染出席表邏輯
 socket.on('update_attendance', (users) => {
-    // 儲存最新資料供點名彈窗使用
-    window.latestAttendanceData = users || [];
+    const currentRoomCode = window.currentTutorRoomCode;
+
+    window.latestAttendanceData = (users || []).filter(u =>
+        !u.roomId || u.roomId === currentRoomCode
+    );
 
     activeStudents = window.latestAttendanceData;
     activeStudents.forEach(s => knownTutorNames.add(s.name));
@@ -185,7 +201,11 @@ window.sendAnnouncement = function() {
     }
 
     if (typeof socket !== 'undefined') {
-        socket.emit('send_tutor_announcement', { message: msg });
+        socket.emit('send_tutor_announcement', {
+    room: window.currentTutorRoomCode,
+    roomId: window.currentTutorRoomCode,
+    message: msg
+});
         alert(`🔊 大喇叭廣播已成功發送給全體學生！\n\n廣播內容：${msg}`);
         addLog(`已發送大喇叭廣播：${msg}`, "text-amber-400 font-bold");
         inputEl.value = '';
@@ -201,7 +221,11 @@ window.updateBlackboard = function() {
         return;
     }
     socket.emit('tutor_announcement', { message: text });
-    socket.emit('update_blackboard', { message: text });
+    socket.emit('update_blackboard', {
+    room: window.currentTutorRoomCode,
+    roomId: window.currentTutorRoomCode,
+    message: text
+});
     addLog(`發布黑板公告：${text}`, "text-amber-400");
     document.getElementById('announcementInput').value = '';
 };
