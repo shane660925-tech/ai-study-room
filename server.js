@@ -195,22 +195,28 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
         let query = supabase
             .from('users')
             .select(`
-                username,
-                account,
-                role,
-                total_seconds,
-                streak,
-                last_login,
-                integrity_score,
-                bound_line_ids,
-                has_seen_intro,
-                privacy_consent_at,
-                privacy_consent_version,
-                is_blocked,
-                teacher_status,
-                violation_count,
-                updated_at
-            `)
+    username,
+    account,
+    role,
+    total_seconds,
+    streak,
+    last_login,
+    integrity_score,
+    bound_line_ids,
+    has_seen_intro,
+    privacy_consent_at,
+    privacy_consent_version,
+    is_blocked,
+    teacher_status,
+    violation_count,
+    updated_at,
+
+    teacher_subject,
+    teacher_intro,
+    teacher_apply_at,
+    teacher_reviewed_at,
+    teacher_review_note
+`)
             .order('username', { ascending: true });
 
         if (keyword) {
@@ -629,6 +635,68 @@ app.get('/api/auth/check-user', async (req, res) => {
             ok: false,
             error: '檢查使用者狀態失敗'
         });
+    }
+});
+
+// --- 教師申請 API ---
+app.post('/api/teacher/apply', async (req, res) => {
+    const {
+        username,
+        teacher_subject,
+        teacher_intro
+    } = req.body;
+
+    if (!username || !teacher_subject || !teacher_intro) {
+        return res.status(400).json({
+            error: '請填寫完整教師申請資料'
+        });
+    }
+
+    try {
+        const { data: user, error: findError } = await supabase
+            .from('users')
+            .select('username, role, is_blocked, teacher_status')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (findError) throw findError;
+
+        if (!user) {
+            return res.status(404).json({ error: '找不到使用者' });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({ error: '此帳號已被停用，無法申請教師資格' });
+        }
+
+        if (user.role === 'teacher' && user.teacher_status === 'approved') {
+            return res.status(400).json({ error: '你已經是通過審核的教師' });
+        }
+
+        const { data, error } = await supabase
+            .from('users')
+            .update({
+                teacher_status: 'pending',
+                teacher_subject,
+                teacher_intro,
+                teacher_apply_at: new Date().toISOString(),
+                teacher_reviewed_at: null,
+                teacher_review_note: null
+            })
+            .eq('username', username)
+            .select('username, teacher_status, teacher_subject, teacher_intro, teacher_apply_at')
+            .maybeSingle();
+
+        if (error) throw error;
+
+        res.json({
+            message: '教師申請已送出，請等待平台管理員審核',
+            application: data
+        });
+
+    } catch (err) {
+        console.error('教師申請失敗:', err);
+        res.status(500).json({ error: '教師申請失敗' });
     }
 });
 

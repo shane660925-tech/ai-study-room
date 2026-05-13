@@ -112,11 +112,19 @@ async function loadUsers() {
         <td>${user.total_minutes}</td>
         <td>${user.integrity_score ?? '-'}</td>
         <td>${user.violation_count ?? 0}</td>
-        <td>
-          <button onclick="updateUser('${user.username}', { is_blocked: ${!user.is_blocked} })">
-            ${user.is_blocked ? '解封' : '封鎖'}
-          </button>
-        </td>
+<td>${user.teacher_subject || '-'}</td>
+<td>${user.teacher_intro || '-'}</td>
+<td>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</td>
+<td>
+  <button onclick="updateUser('${user.username}', { is_blocked: ${!user.is_blocked} })">
+    ${user.is_blocked ? '解封' : '封鎖'}
+  </button>
+
+  ${user.teacher_status === 'pending' ? `
+    <button onclick="approveTeacher('${user.username}')">批准教師</button>
+    <button onclick="rejectTeacher('${user.username}')">拒絕教師</button>
+  ` : ''}
+</td>
       </tr>
     `).join('');
 
@@ -132,7 +140,10 @@ async function loadUsers() {
             <th>學習分鐘</th>
             <th>誠信分</th>
             <th>違規次數</th>
-            <th>操作</th>
+<th>申請科目</th>
+<th>申請自介</th>
+<th>申請時間</th>
+<th>操作</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -180,6 +191,26 @@ async function updateUser(username, updates) {
   } catch (err) {
     alert(err.message);
   }
+}
+
+async function approveTeacher(username) {
+  if (!confirm(`確定批准 ${username} 成為教師嗎？`)) return;
+
+  await updateUser(username, {
+    role: 'teacher',
+    teacher_status: 'approved'
+  });
+}
+
+async function rejectTeacher(username) {
+  const note =
+    prompt(`請輸入拒絕 ${username} 的原因，可留空：`) || '';
+
+  await updateUser(username, {
+    role: 'student',
+    teacher_status: 'rejected',
+    teacher_review_note: note
+  });
 }
 
 async function loadThemeRooms() {

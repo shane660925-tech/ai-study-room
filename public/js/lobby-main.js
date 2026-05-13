@@ -1614,3 +1614,61 @@ async function finishIntroTutorial() {
 setTimeout(() => {
     startIntroTutorial();
 }, 2500);
+
+window.openTeacherApplyModal = function() {
+    const modal = document.getElementById('teacher-apply-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+
+window.closeTeacherApplyModal = function() {
+    const modal = document.getElementById('teacher-apply-modal');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+};
+
+window.submitTeacherApply = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+    const teacher_subject = document.getElementById('teacherApplySubject')?.value.trim();
+    const teacher_intro = document.getElementById('teacherApplyIntro')?.value.trim();
+
+    if (!username) {
+        alert('請先登入後再申請教師資格。');
+        return;
+    }
+
+    if (!teacher_subject || !teacher_intro) {
+        alert('請填寫教學科目與自我介紹。');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/teacher/apply', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username,
+                teacher_subject,
+                teacher_intro
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '教師申請送出失敗');
+        }
+
+        alert('教師申請已送出，請等待平台管理員審核。');
+        closeTeacherApplyModal();
+
+    } catch (err) {
+        alert(err.message);
+    }
+};
