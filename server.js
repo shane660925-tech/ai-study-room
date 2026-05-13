@@ -179,6 +179,44 @@ async function verifyAdmin(req, res, next) {
     }
 }
 
+async function createNotification({
+    username,
+    type,
+    title,
+    message
+}) {
+    if (!username || !type || !title || !message) {
+        console.warn('⚠️ createNotification 缺少必要欄位', {
+            username,
+            type,
+            title,
+            message
+        });
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('notifications')
+        .insert([{
+            username,
+            type,
+            title,
+            message,
+            is_read: false,
+            created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('❌ 通知寫入失敗:', error);
+        throw error;
+    }
+
+    console.log('✅ 通知已寫入:', data);
+    return data;
+}
+
 // 檢查目前登入者是否為 admin
 app.get('/api/admin/me', verifyAdmin, async (req, res) => {
     res.json({
@@ -247,12 +285,12 @@ app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     const targetUsername = req.params.username;
 
     const {
-    role,
-    is_blocked,
-    teacher_status,
-    violation_count,
-    teacher_review_note
-} = req.body;
+        role,
+        is_blocked,
+        teacher_status,
+        violation_count,
+        teacher_review_note
+    } = req.body;
 
     const updates = {
         updated_at: new Date().toISOString()
@@ -261,13 +299,16 @@ app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     if (role !== undefined) updates.role = role;
     if (is_blocked !== undefined) updates.is_blocked = !!is_blocked;
     if (teacher_status !== undefined) updates.teacher_status = teacher_status;
-    if (violation_count !== undefined) updates.violation_count = Number(violation_count) || 0;
+    if (violation_count !== undefined) {
+        updates.violation_count = Number(violation_count) || 0;
+    }
+    if (teacher_review_note !== undefined) {
+        updates.teacher_review_note = teacher_review_note;
+    }
 
-    if (teacher_review_note !== undefined) updates.teacher_review_note = teacher_review_note;
-
-if (teacher_status === 'approved' || teacher_status === 'rejected') {
-    updates.teacher_reviewed_at = new Date().toISOString();
-}
+    if (teacher_status === 'approved' || teacher_status === 'rejected') {
+        updates.teacher_reviewed_at = new Date().toISOString();
+    }
 
     try {
         if (targetUsername === req.adminUser.username && updates.is_blocked === true) {
@@ -285,12 +326,35 @@ if (teacher_status === 'approved' || teacher_status === 'rejected') {
                 is_blocked,
                 teacher_status,
                 violation_count,
+                teacher_review_note,
                 updated_at
             `)
             .maybeSingle();
 
         if (error) throw error;
         if (!data) return res.status(404).json({ error: '找不到目標會員' });
+
+        if (teacher_status === 'approved') {
+            await createNotification({
+                username: targetUsername,
+                type: 'teacher_approved',
+                title: '教師申請已通過',
+                message: '恭喜！你的教師資格已通過審核，現在可以建立特約教師教室。'
+            });
+        }
+
+        if (teacher_status === 'rejected') {
+            const reason = teacher_review_note
+                ? `原因：${teacher_review_note}`
+                : '你可以修改申請資料後再次送出。';
+
+            await createNotification({
+                username: targetUsername,
+                type: 'teacher_rejected',
+                title: '教師申請未通過',
+                message: `你的教師資格申請未通過。${reason}`
+            });
+        }
 
         res.json({
             message: '會員資料已更新',
