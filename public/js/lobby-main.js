@@ -1800,3 +1800,138 @@ function escapeNotificationHtml(str) {
 setTimeout(() => {
     loadUnreadNotifications();
 }, 2500);
+
+// =========================
+// 通知中心系統
+// =========================
+
+let notifications = [];
+
+async function loadNotifications() {
+    try {
+        const username = localStorage.getItem('studyVerseUser');
+
+        if (!username) return;
+
+        const res = await fetch(`/api/notifications?username=${encodeURIComponent(username)}`);
+
+        const data = await res.json();
+
+        notifications = data.notifications || [];
+
+        renderNotifications();
+
+    } catch (err) {
+        console.error('❌ 載入通知失敗:', err);
+    }
+}
+
+function renderNotifications() {
+    const list = document.getElementById('notificationList');
+    const badge = document.getElementById('notificationBadge');
+
+    if (!list || !badge) return;
+
+    // 未讀數量
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    // 顯示紅點
+    if (unreadCount > 0) {
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+
+    // 無通知
+    if (notifications.length === 0) {
+        list.innerHTML = `
+            <div class="p-6 text-center text-gray-500 text-xs">
+                尚無通知
+            </div>
+        `;
+        return;
+    }
+
+    // 生成通知列表
+    list.innerHTML = notifications.map(notification => {
+        const isUnread = !notification.is_read;
+
+        return `
+            <div 
+                onclick="markNotificationRead(${notification.id})"
+                class="p-4 hover:bg-white/5 transition-all cursor-pointer ${isUnread ? 'bg-blue-500/5' : ''}"
+            >
+                <div class="flex items-start gap-3">
+
+                    <div class="mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
+                        isUnread ? 'bg-blue-400' : 'bg-gray-600'
+                    }"></div>
+
+                    <div class="flex-1 min-w-0">
+
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <h4 class="text-sm font-bold text-white truncate">
+                                ${notification.title || '系統通知'}
+                            </h4>
+
+                            <span class="text-[10px] text-gray-500 whitespace-nowrap">
+                                ${formatNotificationTime(notification.created_at)}
+                            </span>
+                        </div>
+
+                        <p class="text-xs text-gray-400 leading-relaxed">
+                            ${notification.message || ''}
+                        </p>
+
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatNotificationTime(dateString) {
+    if (!dateString) return '';
+
+    const date = new Date(dateString);
+
+    return date.toLocaleDateString('zh-TW', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+async function markNotificationRead(notificationId) {
+    try {
+        await fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                notificationId
+            })
+        });
+
+        notifications = notifications.map(n => {
+            if (n.id === notificationId) {
+                n.is_read = true;
+            }
+            return n;
+        });
+
+        renderNotifications();
+
+    } catch (err) {
+        console.error('❌ 標記通知已讀失敗:', err);
+    }
+}
+
+// 頁面載入後讀取通知
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        loadNotifications();
+    }, 1200);
+});

@@ -37,6 +37,45 @@
                 </div>
             </div>
 
+            <!-- 通知中心 -->
+<div class="relative">
+    <button id="notificationBell"
+            onclick="toggleNotificationPanel()"
+            class="w-11 h-11 rounded-2xl bg-white/5 hover:bg-blue-500/20 border border-white/10 hover:border-blue-500/40 transition-all flex items-center justify-center text-gray-400 hover:text-blue-400 relative">
+
+        <i class="fas fa-bell text-sm"></i>
+
+        <!-- 未讀紅點 -->
+        <div id="notificationBadge"
+             class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+        </div>
+    </button>
+
+    <!-- 通知面板 -->
+    <div id="notificationPanel"
+         class="hidden absolute right-0 mt-3 w-[360px] max-h-[500px] overflow-y-auto rounded-3xl border border-blue-500/20 bg-[#0a0e17]/95 backdrop-blur-xl shadow-[0_0_40px_rgba(59,130,246,0.15)] z-[9999]">
+
+        <div class="p-5 border-b border-white/5 flex items-center justify-between">
+            <h3 class="text-sm font-black text-white tracking-wider uppercase">
+                Notifications
+            </h3>
+
+            <span class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                Study Verse
+            </span>
+        </div>
+
+        <div id="notificationList"
+             class="divide-y divide-white/5">
+
+            <div class="p-6 text-center text-gray-500 text-xs">
+                尚無通知
+            </div>
+
+        </div>
+    </div>
+</div>
+
             <div class="flex items-center gap-3 border-l border-white/10 pl-6">
                 <div class="text-right hidden sm:block">
                     <p id="navName" class="text-sm font-black text-white tracking-tighter">指揮官</p>
@@ -592,6 +631,28 @@
             </div>
         </div>
     </div>
+
+    <script>
+function toggleNotificationPanel() {
+    const panel = document.getElementById('notificationPanel');
+
+    panel.classList.toggle('hidden');
+}
+
+document.addEventListener('click', (e) => {
+    const bell = document.getElementById('notificationBell');
+    const panel = document.getElementById('notificationPanel');
+
+    if (!bell || !panel) return;
+
+    if (
+        !bell.contains(e.target) &&
+        !panel.contains(e.target)
+    ) {
+        panel.classList.add('hidden');
+    }
+});
+</script>
 
     <script>
 document.addEventListener('DOMContentLoaded', () => {
