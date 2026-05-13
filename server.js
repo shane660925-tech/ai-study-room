@@ -247,11 +247,12 @@ app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     const targetUsername = req.params.username;
 
     const {
-        role,
-        is_blocked,
-        teacher_status,
-        violation_count
-    } = req.body;
+    role,
+    is_blocked,
+    teacher_status,
+    violation_count,
+    teacher_review_note
+} = req.body;
 
     const updates = {
         updated_at: new Date().toISOString()
@@ -261,6 +262,12 @@ app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     if (is_blocked !== undefined) updates.is_blocked = !!is_blocked;
     if (teacher_status !== undefined) updates.teacher_status = teacher_status;
     if (violation_count !== undefined) updates.violation_count = Number(violation_count) || 0;
+
+    if (teacher_review_note !== undefined) updates.teacher_review_note = teacher_review_note;
+
+if (teacher_status === 'approved' || teacher_status === 'rejected') {
+    updates.teacher_reviewed_at = new Date().toISOString();
+}
 
     try {
         if (targetUsername === req.adminUser.username && updates.is_blocked === true) {

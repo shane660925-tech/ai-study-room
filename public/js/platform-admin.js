@@ -1,4 +1,5 @@
 let adminUsername = localStorage.getItem('studyverse_admin_username') || '';
+let adminUsersCache = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('adminUsernameInput');
@@ -87,7 +88,14 @@ async function loadUsers() {
       `/api/admin/users?${getAdminQuery()}&keyword=${encodeURIComponent(keyword)}`
     );
 
-    const rows = data.users.map(user => `
+    adminUsersCache = data.users || [];
+
+adminUsersCache.sort((a, b) => {
+  if (a.teacher_status === 'pending' && b.teacher_status !== 'pending') return -1;
+  if (a.teacher_status !== 'pending' && b.teacher_status === 'pending') return 1;
+  return String(a.username).localeCompare(String(b.username), 'zh-Hant');
+});
+    const rows = adminUsersCache.map(user => `
       <tr>
         <td>${user.username}</td>
         <td>${user.account || '-'}</td>
@@ -113,7 +121,10 @@ async function loadUsers() {
         <td>${user.integrity_score ?? '-'}</td>
         <td>${user.violation_count ?? 0}</td>
 <td>${user.teacher_subject || '-'}</td>
-<td>${user.teacher_intro || '-'}</td>
+<td>
+  ${user.teacher_intro ? escapeHtml(user.teacher_intro.slice(0, 12)) + '...' : '-'}
+  ${user.teacher_intro ? `<button onclick="openTeacherDetail('${escapeJs(user.username)}')">查看</button>` : ''}
+</td>
 <td>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</td>
 <td>
   <button onclick="updateUser('${user.username}', { is_blocked: ${!user.is_blocked} })">
@@ -322,4 +333,63 @@ function escapeHtml(str) {
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+}
+
+function escapeJs(str) {
+  return String(str || '')
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('"', '\\"');
+}
+
+function openTeacherDetail(username) {
+  const user = adminUsersCache.find(u => u.username === username);
+  if (!user) return;
+
+  const oldModal = document.getElementById('teacherDetailModal');
+  if (oldModal) oldModal.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'teacherDetailModal';
+  modal.className = 'admin-modal-overlay';
+
+  modal.innerHTML = `
+    <div class="admin-modal-card">
+      <button class="admin-modal-close" onclick="closeTeacherDetail()">×</button>
+
+      <h2>教師申請完整資料</h2>
+
+      <div class="admin-detail-grid">
+        <p><strong>姓名：</strong>${escapeHtml(user.username)}</p>
+        <p><strong>Email / Account：</strong>${escapeHtml(user.account || '-')}</p>
+        <p><strong>Role：</strong>${escapeHtml(user.role || '-')}</p>
+        <p><strong>教師狀態：</strong>${escapeHtml(user.teacher_status || '-')}</p>
+        <p><strong>LINE：</strong>${user.line_bound ? '已綁定' : '未綁定'}</p>
+        <p><strong>累積學習分鐘：</strong>${user.total_minutes ?? 0}</p>
+        <p><strong>誠信分：</strong>${user.integrity_score ?? '-'}</p>
+        <p><strong>違規次數：</strong>${user.violation_count ?? 0}</p>
+        <p><strong>申請科目：</strong>${escapeHtml(user.teacher_subject || '-')}</p>
+        <p><strong>申請時間：</strong>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</p>
+      </div>
+
+      <div class="admin-detail-block">
+        <strong>自我介紹 / 教學經驗：</strong>
+        <div>${escapeHtml(user.teacher_intro || '-')}</div>
+      </div>
+
+      <div class="admin-detail-actions">
+        ${user.teacher_status === 'pending' ? `
+          <button onclick="approveTeacher('${escapeJs(user.username)}'); closeTeacherDetail();">批准教師</button>
+          <button onclick="rejectTeacher('${escapeJs(user.username)}'); closeTeacherDetail();">拒絕教師</button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function closeTeacherDetail() {
+  const modal = document.getElementById('teacherDetailModal');
+  if (modal) modal.remove();
 }
