@@ -705,6 +705,63 @@ app.get('/api/auth/check-user', async (req, res) => {
     }
 });
 
+// --- 取得站內通知 API ---
+app.get('/api/notifications', async (req, res) => {
+    const username = req.query.username;
+
+    if (!username) {
+        return res.status(400).json({ error: '缺少 username' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, username, type, title, message, is_read, created_at')
+            .eq('username', username)
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+        if (error) throw error;
+
+        res.json({
+            notifications: data || []
+        });
+
+    } catch (err) {
+        console.error('取得通知失敗:', err);
+        res.status(500).json({ error: '取得通知失敗' });
+    }
+});
+
+// --- 標記站內通知已讀 API ---
+app.post('/api/notifications/read', async (req, res) => {
+    const { notificationId } = req.body;
+
+    if (!notificationId) {
+        return res.status(400).json({ error: '缺少 notificationId' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', notificationId)
+            .select()
+            .maybeSingle();
+
+        if (error) throw error;
+
+        res.json({
+            message: '通知已標記為已讀',
+            notification: data
+        });
+
+    } catch (err) {
+        console.error('標記通知已讀失敗:', err);
+        res.status(500).json({ error: '標記通知已讀失敗' });
+    }
+});
+
 // --- 教師申請 API ---
 app.post('/api/teacher/apply', async (req, res) => {
     const {
