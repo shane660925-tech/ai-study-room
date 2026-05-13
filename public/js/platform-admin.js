@@ -59,8 +59,9 @@ function switchTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 
   if (tab === 'overview') loadOverview();
-  if (tab === 'users') loadUsers();
-  if (tab === 'themes') loadThemeRooms();
+if (tab === 'users') loadUsers();
+if (tab === 'teachers') loadTeacherReviews();
+if (tab === 'themes') loadThemeRooms();
 }
 
 async function loadOverview() {
@@ -95,6 +96,56 @@ adminUsersCache.sort((a, b) => {
   if (a.teacher_status !== 'pending' && b.teacher_status === 'pending') return 1;
   return String(a.username).localeCompare(String(b.username), 'zh-Hant');
 });
+
+async function loadTeacherReviews() {
+  try {
+    if (!adminUsersCache || adminUsersCache.length === 0) {
+      const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
+      adminUsersCache = data.users || [];
+    }
+
+    const pendingTeachers = adminUsersCache.filter(
+      user => user.teacher_status === 'pending'
+    );
+
+    if (pendingTeachers.length === 0) {
+      document.getElementById('teacherReviewList').innerHTML = `
+        <div class="empty-card">
+          目前沒有等待審核的教師申請
+        </div>
+      `;
+      return;
+    }
+
+    document.getElementById('teacherReviewList').innerHTML = pendingTeachers.map(user => `
+      <div class="teacher-review-card">
+        <div>
+          <h3>${escapeHtml(user.username)}</h3>
+          <p>${escapeHtml(user.account || '-')}</p>
+        </div>
+
+        <div>
+          <strong>申請科目</strong>
+          <p>${escapeHtml(user.teacher_subject || '-')}</p>
+        </div>
+
+        <div>
+          <strong>申請時間</strong>
+          <p>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</p>
+        </div>
+
+        <div class="teacher-review-actions">
+          <button onclick="openTeacherDetail('${escapeJs(user.username)}')">查看完整資料</button>
+          <button onclick="approveTeacher('${escapeJs(user.username)}')">批准</button>
+          <button onclick="rejectTeacher('${escapeJs(user.username)}')">拒絕</button>
+        </div>
+      </div>
+    `).join('');
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
     const rows = adminUsersCache.map(user => `
       <tr>
         <td>${user.username}</td>
@@ -208,9 +259,11 @@ async function approveTeacher(username) {
   if (!confirm(`確定批准 ${username} 成為教師嗎？`)) return;
 
   await updateUser(username, {
-    role: 'teacher',
-    teacher_status: 'approved'
-  });
+  role: 'teacher',
+  teacher_status: 'approved'
+});
+
+await loadTeacherReviews();
 }
 
 async function rejectTeacher(username) {
@@ -218,10 +271,12 @@ async function rejectTeacher(username) {
     prompt(`請輸入拒絕 ${username} 的原因，可留空：`) || '';
 
   await updateUser(username, {
-    role: 'student',
-    teacher_status: 'rejected',
-    teacher_review_note: note
-  });
+  role: 'student',
+  teacher_status: 'rejected',
+  teacher_review_note: note
+});
+
+await loadTeacherReviews();
 }
 
 async function loadThemeRooms() {

@@ -18,6 +18,7 @@
       <nav>
         <button onclick="switchTab('overview')">總覽</button>
         <button onclick="switchTab('users')">會員管理</button>
+        <button onclick="switchTab('teachers')">教師審核</button>
         <button onclick="switchTab('themes')">主題教室</button>
       </nav>
     </aside>
@@ -34,6 +35,12 @@
         <button onclick="loadUsers()">搜尋</button>
         <div id="usersTable"></div>
       </section>
+
+      <section id="tab-teachers" class="tab hidden">
+  <h2>教師審核</h2>
+  <p class="admin-hint">這裡只顯示等待審核的教師申請。</p>
+  <div id="teacherReviewList"></div>
+</section>
 
       <section id="tab-themes" class="tab hidden">
         <h2>主題教室管理</h2>
