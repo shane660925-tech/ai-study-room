@@ -293,27 +293,37 @@ if (teacher_status === 'approved' || teacher_status === 'rejected') {
 
         // --- 教師審核通知 ---
 if (teacher_status === 'approved') {
-    await supabase
+    if (teacher_status === 'rejected') {
+    const { error: notifyError } = await supabase
         .from('notifications')
         .insert({
-            username: req.params.username,
-            type: 'teacher_approved',
-            title: '教師資格審核通過',
-            message: '恭喜！你的教師資格已通過審核，現在可以建立特約教室。'
-        });
-}
-
-if (teacher_status === 'rejected') {
-    await supabase
-        .from('notifications')
-        .insert({
-            username: req.params.username,
+            username: targetUsername,
             type: 'teacher_rejected',
             title: '教師資格審核未通過',
             message:
                 teacher_review_note ||
                 '很抱歉，你的教師資格申請未通過，請調整資料後重新申請。'
         });
+
+    if (notifyError) {
+        console.error('❌ 教師拒絕通知寫入失敗:', notifyError);
+    }
+}
+}
+
+const { error: notifyError } = await supabase
+    .from('notifications')
+    .insert({
+        username: targetUsername,
+        type: 'teacher_rejected',
+        title: '教師資格審核未通過',
+        message:
+            teacher_review_note ||
+            '很抱歉，你的教師資格申請未通過，請調整資料後重新申請。'
+    });
+
+if (notifyError) {
+    console.error('❌ 教師拒絕通知寫入失敗:', notifyError);
 }
 
 

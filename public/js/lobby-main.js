@@ -1710,7 +1710,11 @@ window.submitTeacherApply = async function() {
 };
 
 async function loadUnreadNotifications() {
-    const username = localStorage.getItem('studyVerseUser');
+    const username =
+    localStorage.getItem('studyVerseUser') ||
+    localStorage.getItem('username') ||
+    localStorage.getItem('studyverse_username') ||
+    localStorage.getItem('currentUser');
     if (!username) return;
 
     try {
