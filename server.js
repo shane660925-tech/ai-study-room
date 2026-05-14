@@ -43,6 +43,12 @@ app.use((req, res, next) => {
     
     next();
 });
+
+// ==========================================
+// 單裝置登入：目前有效 socket 管理
+// ==========================================
+const activeUserSockets = new Map();
+
 // 👆 ----------------------------------------------------
 const io = new Server(server, {
     maxHttpBufferSize: 1e7 // 增加緩衝區大小以支援截圖傳輸
@@ -2361,6 +2367,28 @@ io.on('connection', (socket) => {
         socket.username = username;
         socket.sessionId = sessionId;
 
+        // ==========================================
+// 若已有舊 socket，強制踢出
+// ==========================================
+const oldSocketId = activeUserSockets.get(username);
+
+if (oldSocketId && oldSocketId !== socket.id) {
+
+    const oldSocket = io.sockets.sockets.get(oldSocketId);
+
+    if (oldSocket) {
+
+        oldSocket.emit('force_logout', {
+            reason: '此帳號已在其他裝置登入'
+        });
+
+        oldSocket.disconnect(true);
+    }
+}
+
+// 更新為最新 socket
+activeUserSockets.set(username, socket.id);
+
         await supabase
             .from('users')
             .update({
@@ -3226,6 +3254,14 @@ if (targetRoom && tutorAttendanceByRoom.has(targetRoom) && studentName) {
 
     // 斷線處理：升級加入特約教室裝置清除邏輯
     socket.on('disconnect', () => {
+        if (socket.username) {
+
+    const currentSocketId = activeUserSockets.get(socket.username);
+
+    if (currentSocketId === socket.id) {
+        activeUserSockets.delete(socket.username);
+    }
+}
     const user = onlineUsers.find(u => u.id === socket.id);
 
     // 特約教室裝置清理邏輯
