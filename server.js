@@ -74,6 +74,10 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 
+function generateSessionId() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
 // ==========================================
 // [新增功能] 產生 6 位數唯一且不可重複的代碼
 // ==========================================
@@ -648,7 +652,28 @@ app.post('/api/login', async (req, res) => {
             await supabase.from('users').update({ link_code: newLinkCode }).eq('username', user.username);
         }
 
-        res.json({ message: '登入成功！', username: user.username });
+        const sessionId = generateSessionId();
+
+const { error: sessionUpdateError } = await supabase
+    .from('users')
+    .update({
+        current_session_id: sessionId,
+        last_login_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString()
+    })
+    .eq('username', user.username);
+
+if (sessionUpdateError) {
+    console.error('更新 session 失敗:', sessionUpdateError);
+    return res.status(500).json({ error: '登入 session 建立失敗' });
+}
+
+res.json({
+    message: '登入成功！',
+    username: user.username,
+    role: user.role || 'student',
+    sessionId
+});
     } catch (err) {
         console.error("登入失敗:", err); // 保留你的 log
         res.status(500).json({ error: '系統登入失敗，請稍後再試。' });
@@ -1298,7 +1323,22 @@ app.get('/api/auth/google/callback', async (req, res) => {
             user.link_code = newLinkCode;
         }
 
-        res.redirect(`/?username=${encodeURIComponent(user.username)}&login_success=true`);
+        const sessionId = generateSessionId();
+
+const { error: sessionUpdateError } = await supabase
+    .from('users')
+    .update({
+        current_session_id: sessionId,
+        last_login_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString()
+    })
+    .eq('username', user.username);
+
+if (sessionUpdateError) {
+    console.error('Google 更新 session 失敗:', sessionUpdateError);
+}
+
+res.redirect(`/?username=${encodeURIComponent(user.username)}&role=${encodeURIComponent(user.role || 'student')}&sessionId=${encodeURIComponent(sessionId)}&login_success=true`);
 
     } catch (err) {
         console.error('Google Auth Error:', err);
@@ -1491,7 +1531,22 @@ if (state) {
         }
 
         // 步驟 E: 登入成功！把網頁導向回前端首頁，並帶上參數
-        res.redirect(`/?username=${encodeURIComponent(existingUser.username)}&login_success=true`);
+        const sessionId = generateSessionId();
+
+const { error: sessionUpdateError } = await supabase
+    .from('users')
+    .update({
+        current_session_id: sessionId,
+        last_login_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString()
+    })
+    .eq('username', existingUser.username);
+
+if (sessionUpdateError) {
+    console.error('LINE 更新 session 失敗:', sessionUpdateError);
+}
+
+res.redirect(`/?username=${encodeURIComponent(existingUser.username)}&role=${encodeURIComponent(existingUser.role || 'student')}&sessionId=${encodeURIComponent(sessionId)}&login_success=true`);
 
     } catch (error) {
         console.error('LINE 登入過程發生錯誤:', error.response?.data || error.message);
