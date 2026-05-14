@@ -350,6 +350,12 @@ if (typeof socket !== 'undefined') {
 
     if (typeof socket !== 'undefined') {
         socket.on('update_rank', (users) => {
+            const currentRoomCode = getTutorRoomCode();
+
+users = (users || []).filter(u => {
+    if (!currentRoomCode) return true;
+    return !u.roomId || u.roomId === currentRoomCode;
+});
             const standaloneUsers = users.filter(u => u.isStandalone).map(u => u.name);
             
             setTimeout(() => {

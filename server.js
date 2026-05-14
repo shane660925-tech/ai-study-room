@@ -1934,19 +1934,30 @@ async function broadcastUpdateRank() {
         };
     });
 
-    const roomModes = [...new Set(
+    const roomKeys = [...new Set(
         usersWithCaptain
-            .map(u => u.roomMode)
+            .map(u => {
+                if (u.roomMode === 'tutor' && u.roomId) {
+                    return u.roomId;
+                }
+
+                return u.roomMode;
+            })
             .filter(Boolean)
     )];
 
-    roomModes.forEach(roomMode => {
-        const usersInRoom = usersWithCaptain.filter(u => u.roomMode === roomMode);
+    roomKeys.forEach(roomKey => {
+        const usersInRoom = usersWithCaptain.filter(u => {
+            if (u.roomMode === 'tutor') {
+                return u.roomId === roomKey;
+            }
 
-        io.to(roomMode).emit('update_rank', usersInRoom);
+            return u.roomMode === roomKey;
+        });
+
+        io.to(roomKey).emit('update_rank', usersInRoom);
     });
 
-    // 沒有 roomMode 的管理端 / 老師端，才看全域
     const studentSocketIds = new Set(onlineUsers.map(u => u.id));
     const sockets = await io.fetchSockets();
 
@@ -2192,10 +2203,19 @@ socket.on('get_attendance', (data) => {
 
     /// 1. 全班大喇叭廣播
     socket.on('send_tutor_announcement', (data) => {
-    console.log('📢 收到老師廣播:', data.message); // 可以讓你在終端機看到有沒有成功接收
-    // 轉發給所有學生 (廣播頻道名稱為 receive_tutor_announcement)
-    io.emit('receive_tutor_announcement', data); 
-    })
+    console.log('📢 收到老師廣播:', data.message);
+
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId;
+
+    if (targetRoom) {
+        io.to(targetRoom).emit('receive_tutor_announcement', data);
+    } else {
+        socket.broadcast.emit('receive_tutor_announcement', data);
+    }
+});
 
     // 2. 黑板公告
     socket.on('update_blackboard', (data) => {
@@ -2544,6 +2564,13 @@ socket.on('get_attendance', (data) => {
                 user.leaveTime = null; 
                 user.integrity_score = dbUser ? (dbUser.integrity_score ?? 100) : user.integrity_score;
                 if (data.roomMode) user.roomMode = data.roomMode;
+                if (data.roomMode) user.roomMode = data.roomMode;
+
+if (data.roomId || data.room) {
+    user.roomId = data.roomId || data.room;
+}
+
+if (data.teamId) user.teamId = data.teamId;
                 if (data.teamId) user.teamId = data.teamId;
                 addTeacherLog(`🔄 ${username} 重新連線成功`,
     user.roomMode
