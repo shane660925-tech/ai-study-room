@@ -9,10 +9,17 @@ let myRole = localStorage.getItem('studyVerseRole') || 'student';
 
 const socket = io();
 
-socket.emit('auth_session', {
-    username: localStorage.getItem('studyVerseUser'),
-    sessionId: localStorage.getItem('studyVerseSessionId')
-});
+const existingUsername = localStorage.getItem('studyVerseUser');
+const existingSessionId = localStorage.getItem('studyVerseSessionId');
+
+if (existingUsername && existingSessionId) {
+
+    socket.emit('auth_session', {
+        username: existingUsername,
+        sessionId: existingSessionId
+    });
+
+}
 
 socket.on('force_logout', (data) => {
     alert(data.reason || '此帳號已在其他裝置登入，請重新登入');
