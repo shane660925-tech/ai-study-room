@@ -85,6 +85,7 @@ window.hideRegisterModal = function() {
 window.handleRealLogin = async function() {
     const acc = document.getElementById('loginAccount').value.trim();
     const pass = document.getElementById('loginPassword').value;
+
     if (!acc || !pass) return alert("請輸入帳號與密碼！");
 
     try {
@@ -93,14 +94,21 @@ window.handleRealLogin = async function() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ account: acc, password: pass })
         });
+
         const data = await res.json();
+
         if (res.ok) {
             localStorage.setItem('studyVerseUser', data.username);
-            location.reload(); 
+            localStorage.setItem('studyVerseSessionId', data.sessionId);
+            localStorage.setItem('studyVerseRole', data.role || 'student');
+
+            location.reload();
         } else {
             alert("登入失敗：" + data.error);
         }
+
     } catch(e) {
+        console.error("登入錯誤:", e);
         alert("網路連線錯誤，請稍後再試！");
     }
 };
@@ -125,9 +133,8 @@ window.handleRealRegister = async function() {
         const data = await response.json();
         
         if (response.ok) {
-            alert("註冊成功！系統將自動為您登入。");
-            localStorage.setItem('studyVerseUser', data.username);
-            location.reload(); 
+    alert("註冊成功！請使用帳號密碼登入。");
+    hideRegisterModal(); 
         } else {
             alert("註冊失敗：" + data.error);
         }
