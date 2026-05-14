@@ -467,6 +467,25 @@
 
     <shared-footer></shared-footer>
     
+    <script>
+(function saveOAuthSessionFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+
+    const username = params.get('username');
+    const sessionId = params.get('sessionId');
+    const role = params.get('role') || 'student';
+
+    if (username && sessionId) {
+        localStorage.setItem('studyVerseUser', username);
+        localStorage.setItem('studyVerseSessionId', sessionId);
+        localStorage.setItem('studyVerseRole', role);
+
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+})();
+</script>
+
     <script src="/js/lobby-core.js"></script>
     <script src="/js/lobby-main.js"></script>
 

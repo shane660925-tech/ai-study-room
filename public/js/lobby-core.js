@@ -4,6 +4,9 @@
  */
 
 let myUsername = localStorage.getItem('studyVerseUser');
+let mySessionId = localStorage.getItem('studyVerseSessionId');
+let myRole = localStorage.getItem('studyVerseRole') || 'student';
+
 const socket = io();
 
 // 確保變數掛在 window 下，讓所有 JS 檔案都能共用
@@ -49,6 +52,9 @@ function checkLogin() {
     // 【關鍵】：重新從 localStorage 抓取，確保能抓到 Google 登入或其它腳本寫入的最新名稱
     myUsername = localStorage.getItem('studyVerseUser');
 
+    mySessionId = localStorage.getItem('studyVerseSessionId');
+myRole = localStorage.getItem('studyVerseRole') || 'student';
+
     if (!myUsername) {
         const loginOverlay = document.getElementById('loginOverlay');
         if (loginOverlay) {
@@ -72,7 +78,7 @@ function checkLogin() {
         }
         
         // 3. 登入後向伺服器註冊身份
-        socket.emit('join', { name: myUsername, role: 'student' });
+        socket.emit('join', { name: myUsername, role: myRole });
         
         // 4. 讀取個人雲端數據
         fetchUserStats();
@@ -260,13 +266,48 @@ window.dismissAlert = function() {
 };
 
 // 儲存名稱並登入
-window.saveName = function() {
-    const name = document.getElementById('setupName').value.trim();
-    if (name) {
-        localStorage.setItem('studyVerseUser', name);
-        myUsername = name;
+window.saveName = async function() {
+    const accountInput = document.getElementById('loginAccount') || document.getElementById('setupAccount');
+    const passwordInput = document.getElementById('loginPassword') || document.getElementById('setupPassword');
+
+    const account = accountInput ? accountInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value.trim() : '';
+
+    if (!account || !password) {
+        alert('請輸入帳號與密碼');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ account, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            alert(data.error || '登入失敗');
+            return;
+        }
+
+        localStorage.setItem('studyVerseUser', data.username);
+        localStorage.setItem('studyVerseSessionId', data.sessionId);
+        localStorage.setItem('studyVerseRole', data.role || 'student');
+
+        myUsername = data.username;
+        mySessionId = data.sessionId;
+        myRole = data.role || 'student';
+
         document.getElementById('loginOverlay').classList.add('hidden');
         checkLogin();
+
+    } catch (err) {
+        console.error('登入失敗:', err);
+        alert('系統登入失敗，請稍後再試');
     }
 };
 
@@ -274,6 +315,14 @@ window.saveName = function() {
 window.logout = function() {
     if(confirm('確定要登出並切換指揮官身分嗎？')) {
         localStorage.removeItem('studyVerseUser');
+        localStorage.removeItem('studyVerseSessionId');
+        localStorage.removeItem('studyVerseRole');
+
+        localStorage.removeItem('username');
+        localStorage.removeItem('studyverse_username');
+        localStorage.removeItem('currentUser');
+
+        sessionStorage.clear();
         location.reload();
     }
 };

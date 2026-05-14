@@ -18,6 +18,9 @@ async function checkCurrentUserStatusOrLogout(username) {
 
         if (!res.ok || data.blocked) {
             localStorage.removeItem('studyVerseUser');
+localStorage.removeItem('studyVerseSessionId');
+localStorage.removeItem('studyVerseRole');
+
 localStorage.removeItem('username');
 localStorage.removeItem('studyverse_username');
 localStorage.removeItem('currentUser');
