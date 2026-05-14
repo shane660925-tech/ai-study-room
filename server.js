@@ -730,6 +730,68 @@ app.get('/api/auth/check-user', async (req, res) => {
     }
 });
 
+// --- 單裝置登入：session 驗證 API ---
+app.get('/api/auth/session-check', async (req, res) => {
+    const { username, sessionId } = req.query;
+
+    if (!username || !sessionId) {
+        return res.status(400).json({
+            ok: false,
+            message: '缺少 username 或 sessionId'
+        });
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, current_session_id, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                ok: false,
+                message: '此帳號已被平台停用'
+            });
+        }
+
+        if (user.current_session_id !== sessionId) {
+            return res.json({
+                ok: false,
+                forceLogout: true,
+                message: '此帳號已在其他裝置登入，請重新登入'
+            });
+        }
+
+        await supabase
+            .from('users')
+            .update({
+                last_active_at: new Date().toISOString()
+            })
+            .eq('username', username);
+
+        res.json({
+            ok: true
+        });
+
+    } catch (err) {
+        console.error('session 驗證失敗:', err);
+        res.status(500).json({
+            ok: false,
+            message: 'session 驗證失敗'
+        });
+    }
+});
+
 // --- 取得站內通知 API ---
 app.get('/api/notifications', async (req, res) => {
     const username = req.query.username;
