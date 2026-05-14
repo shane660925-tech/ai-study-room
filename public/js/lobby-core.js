@@ -9,6 +9,27 @@ let myRole = localStorage.getItem('studyVerseRole') || 'student';
 
 const socket = io();
 
+socket.emit('auth_session', {
+    username: localStorage.getItem('studyVerseUser'),
+    sessionId: localStorage.getItem('studyVerseSessionId')
+});
+
+socket.on('force_logout', (data) => {
+    alert(data.reason || '此帳號已在其他裝置登入，請重新登入');
+
+    localStorage.removeItem('studyVerseUser');
+    localStorage.removeItem('studyVerseSessionId');
+    localStorage.removeItem('studyVerseRole');
+
+    localStorage.removeItem('username');
+    localStorage.removeItem('studyverse_username');
+    localStorage.removeItem('currentUser');
+
+    sessionStorage.clear();
+
+    window.location.href = '/';
+});
+
 // ==========================================
 // 單裝置登入：Session 驗證
 // ==========================================

@@ -2332,6 +2332,50 @@ function updateTutorStatus(username, roomId) {
 }
 
 io.on('connection', (socket) => {
+    socket.on('auth_session', async ({ username, sessionId }) => {
+    if (!username || !sessionId) {
+        socket.emit('force_logout', {
+            reason: '登入狀態已失效，請重新登入'
+        });
+        socket.disconnect(true);
+        return;
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, current_session_id, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!user || user.is_blocked || user.current_session_id !== sessionId) {
+            socket.emit('force_logout', {
+                reason: '此帳號已在其他裝置登入，請重新登入'
+            });
+            socket.disconnect(true);
+            return;
+        }
+
+        socket.username = username;
+        socket.sessionId = sessionId;
+
+        await supabase
+            .from('users')
+            .update({
+                last_active_at: new Date().toISOString()
+            })
+            .eq('username', username);
+
+    } catch (err) {
+        console.error('Socket session 驗證失敗:', err);
+        socket.emit('force_logout', {
+            reason: '登入驗證失敗，請重新登入'
+        });
+        socket.disconnect(true);
+    }
+});
     console.log('🔌 指揮官已連線：', socket.id);
     socket.emit('update_rank', []);
     socket.emit('teacher_update', {
