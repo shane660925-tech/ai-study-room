@@ -896,6 +896,180 @@ app.post('/api/intro-complete', async (req, res) => {
     }
 });
 
+// ==========================================
+// Course MVP API - 一個課程一個 roomCode
+// ==========================================
+
+async function generateUniqueCourseRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code;
+    let isUnique = false;
+
+    while (!isUnique) {
+        code = 'SV-';
+
+        for (let i = 0; i < 5; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+
+        const { data, error } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('course_room_code', code)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) isUnique = true;
+    }
+
+    return code;
+}
+
+// 建立課程
+app.post('/api/courses/create', async (req, res) => {
+    const {
+        teacherUsername,
+        courseName,
+        subject,
+        intro,
+        weeklyDay,
+        startTime,
+        startDate,
+        endDate
+    } = req.body;
+
+    if (!teacherUsername || !courseName) {
+        return res.status(400).json({
+            error: '缺少 teacherUsername 或 courseName'
+        });
+    }
+
+    try {
+        const { data: teacher, error: teacherError } = await supabase
+            .from('users')
+            .select('username, role, is_blocked')
+            .eq('username', teacherUsername)
+            .maybeSingle();
+
+        if (teacherError) throw teacherError;
+
+        if (!teacher) {
+            return res.status(404).json({ error: '找不到教師帳號' });
+        }
+
+        if (teacher.is_blocked) {
+            return res.status(403).json({ error: '此帳號已被停用，無法建立課程' });
+        }
+
+        if (teacher.role !== 'teacher' && teacher.role !== 'admin') {
+            return res.status(403).json({ error: '只有教師可以建立課程' });
+        }
+
+        const courseRoomCode = await generateUniqueCourseRoomCode();
+
+        const { data: course, error } = await supabase
+            .from('courses')
+            .insert([{
+                teacher_username: teacherUsername,
+                course_name: courseName,
+                subject: subject || null,
+                intro: intro || null,
+                course_type: 'studyverse_room',
+                weekly_day: weeklyDay || null,
+                start_time: startTime || null,
+                start_date: startDate || null,
+                end_date: endDate || null,
+                course_room_code: courseRoomCode,
+                status: 'active',
+                is_public: false,
+                price: 0,
+                commission_rate: 0,
+                enrolled_count: 0
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({
+            message: '課程建立成功',
+            course
+        });
+
+    } catch (err) {
+        console.error('建立課程失敗:', err);
+        res.status(500).json({
+            error: '建立課程失敗',
+            detail: err.message
+        });
+    }
+});
+
+// 取得某位教師自己的課程
+app.get('/api/courses/my', async (req, res) => {
+    const teacherUsername = req.query.teacherUsername || req.query.username;
+
+    if (!teacherUsername) {
+        return res.status(400).json({ error: '缺少 teacherUsername' });
+    }
+
+    try {
+        const { data: courses, error } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('teacher_username', teacherUsername)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({
+            courses: courses || []
+        });
+
+    } catch (err) {
+        console.error('取得教師課程失敗:', err);
+        res.status(500).json({
+            error: '取得教師課程失敗',
+            detail: err.message
+        });
+    }
+});
+
+// 用課程代碼查課程
+app.get('/api/courses/by-code/:courseRoomCode', async (req, res) => {
+    const courseRoomCode = String(req.params.courseRoomCode || '').trim().toUpperCase();
+
+    if (!courseRoomCode) {
+        return res.status(400).json({ error: '缺少 courseRoomCode' });
+    }
+
+    try {
+        const { data: course, error } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('course_room_code', courseRoomCode)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!course) {
+            return res.status(404).json({ error: '找不到此課程代碼' });
+        }
+
+        res.json({
+            course
+        });
+
+    } catch (err) {
+        console.error('查詢課程代碼失敗:', err);
+        res.status(500).json({
+            error: '查詢課程代碼失敗',
+            detail: err.message
+        });
+    }
+});
+
 // --- 主題教室列表 API ---
 app.get('/api/theme-rooms', async (req, res) => {
     try {
