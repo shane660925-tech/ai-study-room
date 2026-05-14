@@ -9,6 +9,56 @@ let myRole = localStorage.getItem('studyVerseRole') || 'student';
 
 const socket = io();
 
+// ==========================================
+// 單裝置登入：Session 驗證
+// ==========================================
+window.checkCurrentSessionOrLogout = async function() {
+
+    const username = localStorage.getItem('studyVerseUser');
+    const sessionId = localStorage.getItem('studyVerseSessionId');
+
+    if (!username || !sessionId) {
+        return false;
+    }
+
+    try {
+
+        const res = await fetch(
+            `/api/auth/session-check?username=${encodeURIComponent(username)}&sessionId=${encodeURIComponent(sessionId)}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+
+            alert(data.message || '此帳號已在其他裝置登入，請重新登入');
+
+            // 清除登入資料
+            localStorage.removeItem('studyVerseUser');
+            localStorage.removeItem('studyVerseSessionId');
+            localStorage.removeItem('studyVerseRole');
+
+            localStorage.removeItem('username');
+            localStorage.removeItem('studyverse_username');
+            localStorage.removeItem('currentUser');
+
+            sessionStorage.clear();
+
+            window.location.href = '/';
+
+            return false;
+        }
+
+        return true;
+
+    } catch (err) {
+
+        console.error('Session 檢查失敗:', err);
+
+        return true;
+    }
+};
+
 // 確保變數掛在 window 下，讓所有 JS 檔案都能共用
 window.isMobileConnected = false; 
 window.isMobileFlipped = false;
@@ -54,6 +104,7 @@ function checkLogin() {
 
     mySessionId = localStorage.getItem('studyVerseSessionId');
 myRole = localStorage.getItem('studyVerseRole') || 'student';
+checkCurrentSessionOrLogout();
 
     if (!myUsername) {
         const loginOverlay = document.getElementById('loginOverlay');
@@ -455,3 +506,17 @@ async function fetchUserStats() {
 
 // 啟動應用程式
 document.addEventListener('DOMContentLoaded', checkLogin);
+
+// ==========================================
+// 每 30 秒檢查一次 session
+// ==========================================
+setInterval(() => {
+
+    const username = localStorage.getItem('studyVerseUser');
+    const sessionId = localStorage.getItem('studyVerseSessionId');
+
+    if (username && sessionId) {
+        checkCurrentSessionOrLogout();
+    }
+
+}, 30000);
