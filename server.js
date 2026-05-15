@@ -637,6 +637,126 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+// ==========================================
+// 教師註冊 / 教師申請
+// ==========================================
+app.post('/api/teacher/register', async (req, res) => {
+
+    try {
+
+        const {
+            username,
+            email,
+            account,
+            password,
+            teacherType,
+            classroomSize,
+            courseInfo,
+            courseSchedule
+        } = req.body;
+
+        // 基本檢查
+        if (
+            !username ||
+            !email ||
+            !account ||
+            !password ||
+            !teacherType ||
+            !courseInfo ||
+            !courseSchedule
+        ) {
+            return res.status(400).json({
+                error: '請完整填寫教師申請資料'
+            });
+        }
+
+        // 檢查帳號是否已存在
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('username')
+            .eq('account', account)
+            .maybeSingle();
+
+        if (existingUser) {
+            return res.status(400).json({
+                error: '此帳號已被使用'
+            });
+        }
+
+        // 產生 sessionId
+        const sessionId = crypto.randomUUID();
+
+        // 建立 users
+        const { error: userError } = await supabase
+            .from('users')
+            .insert({
+                username,
+                account,
+                password,
+                role: 'teacher_pending',
+
+                email,
+
+                teacher_application_status: 'pending',
+                teacher_type: teacherType,
+                classroom_size: classroomSize,
+
+                current_session_id: sessionId,
+                last_login_at: new Date().toISOString(),
+                last_active_at: new Date().toISOString()
+            });
+
+        if (userError) {
+            console.error('建立教師 users 失敗:', userError);
+
+            return res.status(500).json({
+                error: '建立教師帳號失敗'
+            });
+        }
+
+        // 建立 teacher_applications
+        const { error: applicationError } = await supabase
+            .from('teacher_applications')
+            .insert({
+                username,
+                email,
+
+                teacher_type: teacherType,
+                classroom_size: classroomSize,
+
+                course_info: courseInfo,
+                course_schedule: courseSchedule,
+
+                status: 'pending'
+            });
+
+        if (applicationError) {
+
+            console.error(
+                '建立 teacher_applications 失敗:',
+                applicationError
+            );
+
+            return res.status(500).json({
+                error: '建立教師申請失敗'
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: '教師申請已送出，請等待管理員審核'
+        });
+
+    } catch (err) {
+
+        console.error('教師註冊 API 錯誤:', err);
+
+        return res.status(500).json({
+            error: '伺服器錯誤'
+        });
+    }
+});
+
 // --- [新增] 登入 API ---
 app.post('/api/login', async (req, res) => {
     const { account, password } = req.body;

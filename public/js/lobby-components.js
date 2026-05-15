@@ -8,53 +8,291 @@
 class SharedModals extends HTMLElement {
     connectedCallback() {
         this.innerHTML = `
-        <div id="loginOverlay" class="fixed inset-0 bg-[#05070a] z-[9999] flex items-center justify-center hidden">
-            <div class="bg-[#111827] p-8 rounded-3xl border border-gray-800 shadow-2xl max-w-sm w-full text-center">
-                <div class="w-20 h-20 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i class="fas fa-user-shield text-blue-500 text-3xl"></i>
-                </div>
-                <h1 class="text-3xl font-black text-blue-500 mb-2">身分登錄</h1>
-                <p class="text-gray-500 text-xs mb-6">請輸入您的帳號密碼</p>
-                
-                <input id="loginAccount" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all" placeholder="帳號 (Email)">
-                <input id="loginPassword" type="password" onkeypress="if(event.key === 'Enter') handleRealLogin()" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all" placeholder="密碼">
-                
-                <button onclick="handleRealLogin()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-900/20 transition-all active:scale-95 mb-4">登入系統</button>
-                
-                <p class="text-sm text-gray-400 mb-4 hover:text-white cursor-pointer transition-colors" onclick="showRegisterModal()">尚未有帳號? 立即註冊!</p>
-                
-                <div class="flex items-center my-4">
-                    <hr class="flex-grow border-gray-700">
-                    <span class="px-3 text-xs text-gray-500">或使用以下方式登入</span>
-                    <hr class="flex-grow border-gray-700">
-                </div>
-                <div class="flex gap-4 justify-center">
-                    <button onclick="window.location.href='/api/auth/google'" class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
-                        <i class="fab fa-google text-red-500"></i> Gmail
-                    </button>
-                    <button onclick="window.location.href='/api/auth/line'" class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
-                        <i class="fab fa-line text-xl"></i> LINE
-                    </button>
-                </div>
-            </div>
+        <div id="loginOverlay" class="fixed inset-0 bg-[#05070a] z-[9999] flex items-center justify-center hidden p-4">
+    <div id="authBox" class="bg-[#111827] p-8 rounded-3xl border border-gray-800 shadow-2xl max-w-3xl w-full text-center max-h-[90vh] overflow-y-auto">
+
+        <div class="w-20 h-20 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i class="fas fa-user-shield text-blue-500 text-3xl"></i>
         </div>
 
-        <div id="registerOverlay" class="fixed inset-0 bg-[#05070a]/95 z-[10000] flex items-center justify-center hidden">
-            <div class="bg-[#111827] p-8 rounded-3xl border border-blue-500/50 shadow-2xl shadow-blue-900/20 max-w-sm w-full text-center">
-                <div class="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-user-plus text-green-500 text-2xl"></i>
+        <h1 class="text-3xl font-black text-blue-500 mb-2">STUDY VERSE</h1>
+        <p class="text-gray-500 text-xs mb-8">請先選擇您的身份</p>
+
+        <!-- 第一層：身份選擇 -->
+        <div id="authRoleStep" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+            <button onclick="chooseAuthRole('student')"
+                    class="p-6 rounded-3xl border border-blue-500/30 bg-blue-600/10 hover:bg-blue-600/20 transition-all text-left">
+                <div class="text-blue-400 text-3xl mb-3">
+                    <i class="fas fa-user-astronaut"></i>
                 </div>
-                <h1 class="text-3xl font-black text-white mb-2">建立新帳號</h1>
-                <p class="text-gray-500 text-xs mb-6">註冊您的專屬學習指揮官代號</p>
+                <h2 class="text-xl font-black text-white mb-2">我是學生</h2>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    自習、加入課程、使用主題教室與學習紀錄。
+                </p>
+            </button>
 
-                <input id="regUsername" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all" placeholder="顯示暱稱 (平台內的名字)">
-                <input id="regAccount" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all" placeholder="登入帳號 (Email)">
-                <input id="regPassword" type="password" class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 text-center focus:border-blue-500 outline-none transition-all" placeholder="設定密碼">
+            <button onclick="chooseAuthRole('teacher')"
+                    class="p-6 rounded-3xl border border-yellow-500/30 bg-yellow-600/10 hover:bg-yellow-600/20 transition-all text-left">
+                <div class="text-yellow-400 text-3xl mb-3">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <h2 class="text-xl font-black text-white mb-2">我是教師</h2>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    教師登入、開課申請、特約教室與課程管理。
+                </p>
+            </button>
 
-                <button onclick="handleRealRegister()" class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-green-900/20 transition-all active:scale-95 mb-4">確認註冊</button>
-                <button onclick="hideRegisterModal()" class="w-full bg-transparent border border-gray-700 text-gray-400 py-3 rounded-2xl hover:text-white transition-all">返回登入</button>
-            </div>
         </div>
+
+        <!-- 學生登入區 -->
+        <div id="studentAuthPanel" class="hidden">
+            <h2 class="text-xl font-black text-blue-400 mb-4">學生登入</h2>
+
+            <input id="loginAccount"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all"
+                   placeholder="學生帳號 Email">
+
+            <input id="loginPassword"
+                   type="password"
+                   onkeypress="if(event.key === 'Enter') handleRealLogin()"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-blue-500 outline-none transition-all"
+                   placeholder="密碼">
+
+            <button onclick="handleRealLogin()"
+                    class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-900/20 transition-all active:scale-95 mb-4">
+                學生登入
+            </button>
+
+            <button onclick="showStudentRegisterForm()"
+                    class="w-full bg-green-600/20 hover:bg-green-600 border border-green-500/30 text-green-400 hover:text-white py-3 rounded-2xl font-bold mb-4 transition-all">
+                建立學生帳號
+            </button>
+
+            <div class="flex items-center my-4">
+                <hr class="flex-grow border-gray-700">
+                <span class="px-3 text-xs text-gray-500">或使用快速登入</span>
+                <hr class="flex-grow border-gray-700">
+            </div>
+
+            <div class="flex gap-4 justify-center mb-4">
+                <button onclick="window.location.href='/api/auth/google?role=student'"
+                        class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fab fa-google text-red-500"></i> Gmail
+                </button>
+
+                <button onclick="window.location.href='/api/auth/line?role=student'"
+                        class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fab fa-line text-xl"></i> LINE
+                </button>
+            </div>
+
+            <button onclick="backToAuthRole()"
+                    class="text-gray-500 text-sm hover:text-white transition-all">
+                返回身份選擇
+            </button>
+        </div>
+
+        <!-- 教師登入區 -->
+        <div id="teacherAuthPanel" class="hidden">
+            <h2 class="text-xl font-black text-yellow-400 mb-4">教師登入</h2>
+
+            <input id="teacherLoginAccount"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-yellow-500 outline-none transition-all"
+                   placeholder="教師帳號 Email">
+
+            <input id="teacherLoginPassword"
+                   type="password"
+                   onkeypress="if(event.key === 'Enter') handleTeacherLogin()"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center text-lg font-bold focus:border-yellow-500 outline-none transition-all"
+                   placeholder="密碼">
+
+            <button onclick="handleTeacherLogin()"
+                    class="w-full bg-yellow-600 hover:bg-yellow-500 py-4 rounded-2xl font-bold text-black shadow-lg shadow-yellow-900/20 transition-all active:scale-95 mb-4">
+                教師登入
+            </button>
+
+            <button onclick="showTeacherRegisterFromLogin()"
+                    class="w-full bg-yellow-600/20 hover:bg-yellow-600 border border-yellow-500/30 text-yellow-400 hover:text-black py-3 rounded-2xl font-bold mb-4 transition-all">
+                申請成為教師 / 建立教師帳號
+            </button>
+
+            <button onclick="backToAuthRole()"
+                    class="text-gray-500 text-sm hover:text-white transition-all">
+                返回身份選擇
+            </button>
+        </div>
+
+    </div>
+</div>
+
+        <div id="registerOverlay" class="fixed inset-0 bg-[#05070a]/95 z-[10000] flex items-center justify-center hidden p-4">
+    <div id="registerBox" class="bg-[#111827] p-8 rounded-3xl border border-blue-500/50 shadow-2xl shadow-blue-900/20 max-w-3xl w-full text-center max-h-[90vh] overflow-y-auto">
+
+        <div class="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-user-plus text-green-500 text-2xl"></i>
+        </div>
+
+        <h1 class="text-3xl font-black text-white mb-2">建立新帳號</h1>
+        <p class="text-gray-500 text-xs mb-6">請先選擇您的註冊身份</p>
+
+        <!-- 身份選擇 -->
+        <div id="registerTypeStep" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <button onclick="chooseRegisterType('student')"
+                    class="p-6 rounded-3xl border border-blue-500/30 bg-blue-600/10 hover:bg-blue-600/20 transition-all text-left">
+                <div class="text-blue-400 text-3xl mb-3">
+                    <i class="fas fa-user-astronaut"></i>
+                </div>
+                <h2 class="text-xl font-black text-white mb-2">我是學生</h2>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    我要自習、加入課程、使用主題教室與學習紀錄。
+                </p>
+            </button>
+
+            <button onclick="chooseRegisterType('teacher')"
+                    class="p-6 rounded-3xl border border-yellow-500/30 bg-yellow-600/10 hover:bg-yellow-600/20 transition-all text-left">
+                <div class="text-yellow-400 text-3xl mb-3">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <h2 class="text-xl font-black text-white mb-2">我是教師</h2>
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    我要開課、申請特約教室、建立專屬課程空間。
+                </p>
+            </button>
+        </div>
+
+        <!-- 學生註冊表單 -->
+        <div id="studentRegisterForm" class="hidden">
+            <h2 class="text-xl font-black text-blue-400 mb-4">學生註冊</h2>
+
+            <input id="regUsername"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all"
+                   placeholder="顯示暱稱">
+
+            <input id="regAccount"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all"
+                   placeholder="登入帳號 Email">
+
+            <input id="regPassword"
+                   type="password"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all"
+                   placeholder="設定密碼">
+
+            <input id="studentDiscountCode"
+                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 text-center focus:border-blue-500 outline-none transition-all"
+                   placeholder="教室優惠碼，可留空">
+
+            <button onclick="handleRealRegister()"
+                    class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-green-900/20 transition-all active:scale-95 mb-4">
+                確認學生註冊
+            </button>
+
+            <button onclick="backToRegisterType()"
+                    class="w-full bg-transparent border border-gray-700 text-gray-400 py-3 rounded-2xl hover:text-white transition-all">
+                返回身份選擇
+            </button>
+        </div>
+
+        <!-- 教師註冊表單 -->
+        <div id="teacherRegisterForm" class="hidden">
+            <h2 class="text-xl font-black text-yellow-400 mb-4">教師註冊 / 開課申請</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">顯示名稱</label>
+                    <input id="teacherRegUsername"
+                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+                           placeholder="教師名稱">
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">Email（必填）</label>
+                    <input id="teacherEmail"
+                           type="email"
+                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+                           placeholder="審核通知用 Email">
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">登入帳號</label>
+                    <input id="teacherRegAccount"
+                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+                           placeholder="登入帳號 Email">
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">設定密碼</label>
+                    <input id="teacherRegPassword"
+                           type="password"
+                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+                           placeholder="設定密碼">
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">開課種類</label>
+                    <select id="teacherType"
+                            class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all">
+                        <option value="online">線上課程</option>
+                        <option value="special_room">特約教室</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">教室規模</label>
+                    <select id="classroomSize"
+                            class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all">
+                        <option value="10">10 人</option>
+                        <option value="20">20 人</option>
+                        <option value="30">30 人</option>
+                        <option value="large">更大請私訊</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">課程資訊</label>
+                    <textarea id="courseInfo"
+                              rows="3"
+                              class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all resize-none"
+                              placeholder="例如：高中數學段考衝刺、英文作文批改、多益聽力訓練"></textarea>
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="text-xs text-gray-400 font-bold mb-1 block">上課時間</label>
+                    <input id="courseSchedule"
+                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 focus:border-yellow-500 outline-none transition-all"
+                           placeholder="例如：每週六 19:00-21:00">
+                </div>
+            </div>
+
+            <button onclick="handleTeacherRegister('password')"
+        class="w-full bg-yellow-600 hover:bg-yellow-500 py-4 rounded-2xl font-bold text-black shadow-lg shadow-yellow-900/20 transition-all active:scale-95 mb-4">
+    使用帳密送出教師申請
+</button>
+
+<div class="flex gap-4 mb-4">
+    <button onclick="handleTeacherRegister('google')"
+            class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
+        <i class="fab fa-google text-red-500"></i> Google 送出申請
+    </button>
+
+    <button onclick="handleTeacherRegister('line')"
+            class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
+        <i class="fab fa-line text-xl"></i> LINE 送出申請
+    </button>
+</div>
+
+            <button onclick="backToRegisterType()"
+                    class="w-full bg-transparent border border-gray-700 text-gray-400 py-3 rounded-2xl hover:text-white transition-all">
+                返回身份選擇
+            </button>
+        </div>
+
+        <button onclick="hideRegisterModal()"
+                class="mt-4 text-gray-500 text-sm hover:text-white transition-all">
+            返回登入
+        </button>
+    </div>
+</div>
 
         <div id="violation-modal" class="fixed inset-0 z-[10000] animate-flash-red flex-col items-center justify-center p-6 text-white text-center hidden">
             <div class="max-w-md">
@@ -71,15 +309,202 @@ class SharedModals extends HTMLElement {
 }
 customElements.define('shared-modals', SharedModals);
 
+window.chooseAuthRole = function(role) {
+    const roleStep = document.getElementById('authRoleStep');
+    const studentPanel = document.getElementById('studentAuthPanel');
+    const teacherPanel = document.getElementById('teacherAuthPanel');
+
+    if (!roleStep || !studentPanel || !teacherPanel) return;
+
+    roleStep.classList.add('hidden');
+    studentPanel.classList.add('hidden');
+    teacherPanel.classList.add('hidden');
+
+    if (role === 'student') {
+        studentPanel.classList.remove('hidden');
+    }
+
+    if (role === 'teacher') {
+        teacherPanel.classList.remove('hidden');
+    }
+};
+
+window.backToAuthRole = function() {
+    const roleStep = document.getElementById('authRoleStep');
+    const studentPanel = document.getElementById('studentAuthPanel');
+    const teacherPanel = document.getElementById('teacherAuthPanel');
+
+    if (!roleStep || !studentPanel || !teacherPanel) return;
+
+    roleStep.classList.remove('hidden');
+    studentPanel.classList.add('hidden');
+    teacherPanel.classList.add('hidden');
+};
+
+window.handleTeacherLogin = async function() {
+    const acc = document.getElementById('teacherLoginAccount').value.trim();
+    const pass = document.getElementById('teacherLoginPassword').value;
+
+    document.getElementById('loginAccount').value = acc;
+    document.getElementById('loginPassword').value = pass;
+
+    await handleRealLogin();
+};
+
 // --- 以下為新增的註冊/登入前端邏輯 (附加到全域 window 上供點擊使用) ---
 window.showRegisterModal = function() {
     document.getElementById('loginOverlay').classList.add('hidden');
-    document.getElementById('registerOverlay').classList.remove('hidden');
+
+    const registerOverlay = document.getElementById('registerOverlay');
+    registerOverlay.classList.remove('hidden');
+    registerOverlay.classList.add('flex');
+
+    backToRegisterType();
+};
+
+window.showStudentRegisterForm = function() {
+    document.getElementById('loginOverlay').classList.add('hidden');
+
+    const registerOverlay = document.getElementById('registerOverlay');
+    registerOverlay.classList.remove('hidden');
+    registerOverlay.classList.add('flex');
+
+    chooseRegisterType('student');
+};
+
+window.showTeacherRegisterFromLogin = function() {
+    document.getElementById('loginOverlay').classList.add('hidden');
+
+    const registerOverlay = document.getElementById('registerOverlay');
+    registerOverlay.classList.remove('hidden');
+    registerOverlay.classList.add('flex');
+
+    chooseRegisterType('teacher');
 };
 
 window.hideRegisterModal = function() {
-    document.getElementById('registerOverlay').classList.add('hidden');
-    document.getElementById('loginOverlay').classList.remove('hidden');
+
+    const registerOverlay =
+        document.getElementById('registerOverlay');
+
+    registerOverlay.classList.add('hidden');
+    registerOverlay.classList.remove('flex');
+
+    document.getElementById('loginOverlay')
+        .classList.remove('hidden');
+};
+
+window.chooseRegisterType = function(type) {
+    const typeStep = document.getElementById('registerTypeStep');
+    const studentForm = document.getElementById('studentRegisterForm');
+    const teacherForm = document.getElementById('teacherRegisterForm');
+
+    if (!typeStep || !studentForm || !teacherForm) return;
+
+    typeStep.classList.add('hidden');
+    studentForm.classList.add('hidden');
+    teacherForm.classList.add('hidden');
+
+    if (type === 'student') {
+        studentForm.classList.remove('hidden');
+    }
+
+    if (type === 'teacher') {
+        teacherForm.classList.remove('hidden');
+    }
+};
+
+window.backToRegisterType = function() {
+    const typeStep = document.getElementById('registerTypeStep');
+    const studentForm = document.getElementById('studentRegisterForm');
+    const teacherForm = document.getElementById('teacherRegisterForm');
+
+    if (!typeStep || !studentForm || !teacherForm) return;
+
+    typeStep.classList.remove('hidden');
+    studentForm.classList.add('hidden');
+    teacherForm.classList.add('hidden');
+};
+
+window.handleTeacherRegister = async function(method = 'password') {
+    const username = document.getElementById('teacherRegUsername').value.trim();
+    const email = document.getElementById('teacherEmail').value.trim();
+    const account = document.getElementById('teacherRegAccount').value.trim();
+    const password = document.getElementById('teacherRegPassword').value;
+    const teacherType = document.getElementById('teacherType').value;
+    const classroomSize = document.getElementById('classroomSize').value;
+    const courseInfo = document.getElementById('courseInfo').value.trim();
+    const courseSchedule = document.getElementById('courseSchedule').value.trim();
+
+    if (!username || !email || !courseInfo || !courseSchedule || !teacherType) {
+        alert('請完整填寫教師名稱、Email、課程資訊與上課時間');
+        return;
+    }
+
+    if (method === 'password' && (!account || !password)) {
+        alert('使用帳密申請時，請填寫登入帳號與密碼');
+        return;
+    }
+
+    const teacherDraft = {
+        username,
+        email,
+        account,
+        teacherType,
+        classroomSize,
+        courseInfo,
+        courseSchedule,
+        method
+    };
+
+    sessionStorage.setItem('pendingTeacherApplication', JSON.stringify(teacherDraft));
+
+    if (method === 'google') {
+        window.location.href = '/api/auth/google?role=teacher_apply';
+        return;
+    }
+
+    if (method === 'line') {
+        window.location.href = '/api/auth/line?role=teacher_apply';
+        return;
+    }
+
+    try {
+
+    const response = await fetch('/api/teacher/register', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            username,
+            email,
+            account,
+            password,
+            teacherType,
+            classroomSize,
+            courseInfo,
+            courseSchedule
+        })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(data.error || '教師申請失敗');
+        return;
+    }
+
+    alert('教師申請已送出，請等待管理員審核');
+
+    hideRegisterModal();
+
+} catch (err) {
+
+    console.error('教師申請錯誤:', err);
+
+    alert('網路錯誤，請稍後再試');
+}
 };
 
 window.handleRealLogin = async function() {
@@ -225,26 +650,28 @@ class SharedFooter extends HTMLElement {
 }
 customElements.define('shared-footer', SharedFooter);
 
-// --- [核心修正] 自動處理 Google 登入回傳的參數 ---
+// --- 自動處理 Google / LINE 登入回傳的參數 ---
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
+
     const username = urlParams.get('username');
+    const sessionId = urlParams.get('sessionId');
+    const role = urlParams.get('role') || 'student';
     const isLoginSuccess = urlParams.get('login_success');
 
-    if (isLoginSuccess === 'true' && username) {
-        // 1. 立即寫入 localStorage
+    if (isLoginSuccess === 'true' && username && sessionId) {
         localStorage.setItem('studyVerseUser', username);
-        
-        // 2. 立即隱藏登入彈窗（避免閃爍）
+        localStorage.setItem('studyVerseSessionId', sessionId);
+        localStorage.setItem('studyVerseRole', role);
+
         const loginOverlay = document.getElementById('loginOverlay');
         if (loginOverlay) {
             loginOverlay.classList.add('hidden');
         }
 
-        // 3. 清理網址上的參數（加上 origin 確保跨平台相容性）
         const cleanUrl = window.location.origin + window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
-        
-        console.log("Google 登入攔截成功，已儲存用戶名：", username);
+
+        console.log("OAuth 登入成功，已儲存 session：", username);
     }
 })();

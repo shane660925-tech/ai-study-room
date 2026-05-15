@@ -274,27 +274,6 @@
                         游擊隊專屬
                     </div>
                 </a>
-
-                <div id="teacher-apply-card"
-     class="glass-panel p-6 rounded-3xl border border-blue-500/20 flex flex-col justify-between min-h-[170px] w-full">
-
-    <div>
-        <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-2xl mb-4">
-            <i class="fas fa-user-graduate"></i>
-        </div>
-
-        <h3 class="text-xl font-black text-white mb-2">申請成為教師</h3>
-
-        <p class="text-gray-500 text-xs leading-relaxed">
-            填寫教學科目與簡介，送出後由平台管理員審核。
-        </p>
-    </div>
-
-    <button onclick="openTeacherApplyModal()"
-            class="w-full mt-5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white py-3 rounded-xl text-xs font-bold transition-all border border-blue-500/30">
-        送出教師申請
-    </button>
-</div>
                 </div>
         </section>
     </main>
@@ -426,42 +405,6 @@
         <div class="flex gap-3">
             <button onclick="closeTeacherPasswordModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-xl transition-all">取消</button>
             <button onclick="verifyTeacherPassword()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)]">驗證身分</button>
-        </div>
-    </div>
-</div>
-
-<div id="teacher-apply-modal" class="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
-    <div class="bg-[#111827] border border-blue-500/30 p-8 rounded-3xl w-full max-w-md shadow-2xl">
-        <h2 class="text-2xl font-black text-blue-400 mb-2 text-center">申請成為教師</h2>
-        <p class="text-sm text-gray-400 mb-6 text-center">請填寫基本教學資料，送出後等待平台審核。</p>
-
-        <div class="space-y-4">
-            <div>
-                <label class="text-xs text-gray-400 font-bold mb-1 block">教學科目</label>
-                <input id="teacherApplySubject"
-                       type="text"
-                       class="w-full bg-black border border-blue-500/30 text-white rounded-xl p-3 text-sm outline-none focus:border-blue-500"
-                       placeholder="例：高中數學、英文作文、國中理化">
-            </div>
-
-            <div>
-                <label class="text-xs text-gray-400 font-bold mb-1 block">自我介紹 / 教學經驗</label>
-                <textarea id="teacherApplyIntro"
-                          rows="5"
-                          class="w-full bg-black border border-blue-500/30 text-white rounded-xl p-3 text-sm outline-none focus:border-blue-500 resize-none"
-                          placeholder="例：我擅長帶學生準備段考，曾協助同學提升數學成績..."></textarea>
-            </div>
-
-            <div class="flex gap-3 pt-2">
-                <button onclick="closeTeacherApplyModal()"
-                        class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-xl transition-all">
-                    取消
-                </button>
-                <button onclick="submitTeacherApply()"
-                        class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">
-                    送出申請
-                </button>
-            </div>
         </div>
     </div>
 </div>
