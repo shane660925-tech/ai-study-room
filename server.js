@@ -757,6 +757,75 @@ app.post('/api/teacher/register', async (req, res) => {
     }
 });
 
+app.post('/api/teacher/oauth-apply', async (req, res) => {
+    try {
+        const {
+            username,
+            email,
+            teacherType,
+            classroomSize,
+            courseInfo,
+            courseSchedule
+        } = req.body;
+
+        if (!username || !email || !teacherType || !courseInfo || !courseSchedule) {
+            return res.status(400).json({
+                error: '缺少教師申請資料'
+            });
+        }
+
+        const { data: user, error: findError } = await supabase
+            .from('users')
+            .select('username, role')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (findError) throw findError;
+
+        if (!user) {
+            return res.status(404).json({
+                error: '找不到 OAuth 登入使用者'
+            });
+        }
+
+        await supabase
+            .from('users')
+            .update({
+                email,
+                role: 'teacher_pending',
+                teacher_application_status: 'pending',
+                teacher_type: teacherType,
+                classroom_size: classroomSize
+            })
+            .eq('username', username);
+
+        const { error: applicationError } = await supabase
+            .from('teacher_applications')
+            .insert({
+                username,
+                email,
+                teacher_type: teacherType,
+                classroom_size: classroomSize,
+                course_info: courseInfo,
+                course_schedule: courseSchedule,
+                status: 'pending'
+            });
+
+        if (applicationError) throw applicationError;
+
+        res.json({
+            success: true,
+            message: '教師 OAuth 申請已送出'
+        });
+
+    } catch (err) {
+        console.error('教師 OAuth 申請失敗:', err);
+        res.status(500).json({
+            error: '教師 OAuth 申請失敗'
+        });
+    }
+});
+
 // --- [新增] 登入 API ---
 app.post('/api/login', async (req, res) => {
     const { account, password } = req.body;

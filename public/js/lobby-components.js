@@ -651,7 +651,7 @@ class SharedFooter extends HTMLElement {
 customElements.define('shared-footer', SharedFooter);
 
 // --- 自動處理 Google / LINE 登入回傳的參數 ---
-(function() {
+(async function() {
     const urlParams = new URLSearchParams(window.location.search);
 
     const username = urlParams.get('username');
@@ -663,6 +663,42 @@ customElements.define('shared-footer', SharedFooter);
         localStorage.setItem('studyVerseUser', username);
         localStorage.setItem('studyVerseSessionId', sessionId);
         localStorage.setItem('studyVerseRole', role);
+
+        const pendingRaw = sessionStorage.getItem('pendingTeacherApplication');
+
+        if (pendingRaw) {
+            try {
+                const draft = JSON.parse(pendingRaw);
+
+                const res = await fetch('/api/teacher/oauth-apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: draft.username || username,
+                        email: draft.email,
+                        teacherType: draft.teacherType,
+                        classroomSize: draft.classroomSize,
+                        courseInfo: draft.courseInfo,
+                        courseSchedule: draft.courseSchedule
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    alert(data.error || '教師申請送出失敗');
+                } else {
+                    alert('教師申請已送出，請等待管理員審核');
+                    sessionStorage.removeItem('pendingTeacherApplication');
+                }
+
+            } catch (err) {
+                console.error('教師 OAuth 申請處理失敗:', err);
+                alert('教師申請處理失敗，請稍後再試');
+            }
+        }
 
         const loginOverlay = document.getElementById('loginOverlay');
         if (loginOverlay) {
