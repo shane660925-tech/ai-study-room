@@ -156,22 +156,26 @@ window.showTeacherPasswordModal = async function() {
 
         const user = data.user;
 
-        if (user.role === 'teacher' && user.teacher_status === 'approved') {
-            if (typeof openTeacherSetupModal === 'function') {
-                openTeacherSetupModal();
-            }
-            return;
-        }
+        // 已通過教師
+if (user.role === 'teacher' || user.role === 'admin') {
 
-        if (user.teacher_status === 'pending') {
-            alert('你的教師申請目前審核中，請等待平台管理員審核。');
-            return;
-        }
+    if (typeof openTeacherSetupModal === 'function') {
+        openTeacherSetupModal();
+    }
 
-        if (user.teacher_status === 'rejected') {
-            alert('你的教師申請未通過，如需重新申請，請修改資料後再次送出。');
-            return;
-        }
+    return;
+}
+
+// 教師審核中
+if (user.role === 'teacher_pending') {
+
+    alert('你的教師申請目前審核中，請等待平台管理員審核。');
+
+    return;
+}
+
+// 一般學生
+alert('此功能限通過審核的教師使用。請先申請教師資格。');
 
         alert('此功能限通過審核的教師使用。請先在大廳送出教師申請。');
 

@@ -299,8 +299,9 @@ app.get('/api/admin/teacher-applications', verifyAdmin, async (req, res) => {
 
         const { data, error } = await supabase
             .from('teacher_applications')
-            .select('*')
-            .order('created_at', { ascending: false });
+.select('*')
+.eq('status', 'pending')
+.order('created_at', { ascending: false });
 
         if (error) {
             throw error;
@@ -340,14 +341,27 @@ app.post('/api/admin/approve-teacher', verifyAdmin, async (req, res) => {
             });
         }
 
-        // 更新 users
-        const { error: userError } = await supabase
-            .from('users')
-            .update({
-                role: 'teacher',
-                teacher_application_status: 'approved'
-            })
-            .eq('username', username);
+        // 先找申請資料
+const { data: applicationData, error: appFindError } = await supabase
+    .from('teacher_applications')
+    .select('*')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+if (appFindError || !applicationData) {
+    return res.status(404).json({
+        error: '找不到教師申請'
+    });
+}
+
+// 更新 users
+const { error: userError } = await supabase
+    .from('users')
+    .update({
+        role: 'teacher',
+        teacher_application_status: 'approved'
+    })
+    .eq('username', applicationData.username);
 
         if (userError) {
             throw userError;
@@ -409,13 +423,25 @@ app.post('/api/admin/reject-teacher', verifyAdmin, async (req, res) => {
             });
         }
 
-        // 更新 users
-        const { error: userError } = await supabase
-            .from('users')
-            .update({
-                teacher_application_status: 'rejected'
-            })
-            .eq('username', username);
+        // 先找申請資料
+const { data: applicationData, error: appFindError } = await supabase
+    .from('teacher_applications')
+    .select('*')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+if (appFindError || !applicationData) {
+    return res.status(404).json({
+        error: '找不到教師申請'
+    });
+}
+
+const { error: userError } = await supabase
+    .from('users')
+    .update({
+        teacher_application_status: 'rejected'
+    })
+    .eq('username', applicationData.username);
 
         if (userError) {
             throw userError;
