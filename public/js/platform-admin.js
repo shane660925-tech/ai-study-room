@@ -168,14 +168,13 @@ adminUsersCache.sort((a, b) => {
 
 async function loadTeacherReviews() {
   try {
-    const data = await apiFetch(`/api/admin/users?${getAdminQuery()}`);
-    adminUsersCache = data.users || [];
-
-    const pendingTeachers = adminUsersCache.filter(
-      user => user.teacher_status === 'pending'
+    const data = await apiFetch(
+      `/api/admin/teacher-applications?${getAdminQuery()}`
     );
 
-    if (pendingTeachers.length === 0) {
+    const applications = data.applications || [];
+
+    if (applications.length === 0) {
       document.getElementById('teacherReviewList').innerHTML = `
         <div class="empty-card">
           目前沒有等待審核的教師申請
@@ -184,27 +183,50 @@ async function loadTeacherReviews() {
       return;
     }
 
-    document.getElementById('teacherReviewList').innerHTML = pendingTeachers.map(user => `
+    document.getElementById('teacherReviewList').innerHTML = applications.map(app => `
       <div class="teacher-review-card">
         <div>
-          <h3>${escapeHtml(user.username)}</h3>
-          <p>${escapeHtml(user.account || '-')}</p>
+          <h3>${escapeHtml(app.username)}</h3>
+          <p>${escapeHtml(app.email || '-')}</p>
         </div>
 
         <div>
-          <strong>申請科目</strong>
-          <p>${escapeHtml(user.teacher_subject || '-')}</p>
+          <strong>開課種類</strong>
+          <p>${escapeHtml(app.teacher_type || '-')}</p>
+        </div>
+
+        <div>
+          <strong>教室規模</strong>
+          <p>${escapeHtml(app.classroom_size || '-')}</p>
+        </div>
+
+        <div>
+          <strong>申請狀態</strong>
+          <p>${escapeHtml(app.status || '-')}</p>
+        </div>
+
+        <div>
+          <strong>課程資訊</strong>
+          <p>${escapeHtml(app.course_info || '-')}</p>
+        </div>
+
+        <div>
+          <strong>上課時間</strong>
+          <p>${escapeHtml(app.course_schedule || '-')}</p>
         </div>
 
         <div>
           <strong>申請時間</strong>
-          <p>${user.teacher_apply_at ? new Date(user.teacher_apply_at).toLocaleString('zh-TW') : '-'}</p>
+          <p>${app.created_at ? new Date(app.created_at).toLocaleString('zh-TW') : '-'}</p>
         </div>
 
         <div class="teacher-review-actions">
-          <button onclick="openTeacherDetail('${escapeJs(user.username)}')">查看完整資料</button>
-          <button onclick="approveTeacher('${escapeJs(user.username)}')">批准</button>
-          <button onclick="rejectTeacher('${escapeJs(user.username)}')">拒絕</button>
+          <button onclick="approveTeacherApplication('${escapeJs(app.id)}', '${escapeJs(app.username)}')">
+            批准
+          </button>
+          <button onclick="rejectTeacherApplication('${escapeJs(app.id)}', '${escapeJs(app.username)}')">
+            拒絕
+          </button>
         </div>
       </div>
     `).join('');
@@ -478,4 +500,12 @@ function openTeacherDetail(username) {
 function closeTeacherDetail() {
   const modal = document.getElementById('teacherDetailModal');
   if (modal) modal.remove();
+}
+
+async function approveTeacherApplication(applicationId, username) {
+  alert(`下一步會串接批准 API：${username}`);
+}
+
+async function rejectTeacherApplication(applicationId, username) {
+  alert(`下一步會串接拒絕 API：${username}`);
 }
