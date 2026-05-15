@@ -290,6 +290,37 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
     }
 });
 
+// ==========================================
+// 取得待審核教師申請
+// ==========================================
+app.get('/api/admin/teacher-applications', verifyAdmin, async (req, res) => {
+
+    try {
+
+        const { data, error } = await supabase
+            .from('teacher_applications')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            throw error;
+        }
+
+        res.json({
+            success: true,
+            applications: data || []
+        });
+
+    } catch (err) {
+
+        console.error('取得教師申請失敗:', err);
+
+        res.status(500).json({
+            error: '取得教師申請失敗'
+        });
+    }
+});
+
 // 更新會員狀態 / role / 教師資格
 app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     const targetUsername = req.params.username;
