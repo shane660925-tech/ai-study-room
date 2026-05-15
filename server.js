@@ -359,7 +359,10 @@ const { error: userError } = await supabase
     .from('users')
     .update({
         role: 'teacher',
-        teacher_application_status: 'approved'
+teacher_application_status: 'approved',
+
+// 舊系統兼容
+teacher_status: 'approved'
     })
     .eq('username', applicationData.username);
 
@@ -439,7 +442,10 @@ if (appFindError || !applicationData) {
 const { error: userError } = await supabase
     .from('users')
     .update({
-        teacher_application_status: 'rejected'
+        teacher_application_status: 'rejected',
+
+// 舊系統兼容
+teacher_status: 'rejected'
     })
     .eq('username', applicationData.username);
 
@@ -888,6 +894,7 @@ app.post('/api/teacher/register', async (req, res) => {
                 account,
                 password,
                 role: 'teacher_pending',
+                teacher_status: 'pending',
 
                 email,
 
