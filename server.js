@@ -321,6 +321,143 @@ app.get('/api/admin/teacher-applications', verifyAdmin, async (req, res) => {
     }
 });
 
+// ==========================================
+// 批准教師申請
+// ==========================================
+app.post('/api/admin/approve-teacher', verifyAdmin, async (req, res) => {
+
+    try {
+
+        const {
+            applicationId,
+            username,
+            adminUsername
+        } = req.body;
+
+        if (!applicationId || !username) {
+            return res.status(400).json({
+                error: '缺少申請資料'
+            });
+        }
+
+        // 更新 users
+        const { error: userError } = await supabase
+            .from('users')
+            .update({
+                role: 'teacher',
+                teacher_application_status: 'approved'
+            })
+            .eq('username', username);
+
+        if (userError) {
+            throw userError;
+        }
+
+        // 更新 teacher_applications
+        const { error: appError } = await supabase
+            .from('teacher_applications')
+            .update({
+                status: 'approved',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: adminUsername || 'admin'
+            })
+            .eq('id', applicationId);
+
+        if (appError) {
+            throw appError;
+        }
+
+        // 發站內通知
+        await supabase
+            .from('notifications')
+            .insert({
+                username,
+                title: '教師申請已通過',
+                message: '恭喜！您的教師申請已通過，現在可以建立特約教室與課程。'
+            });
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+
+        console.error('批准教師失敗:', err);
+
+        res.status(500).json({
+            error: '批准教師失敗'
+        });
+    }
+});
+
+// ==========================================
+// 拒絕教師申請
+// ==========================================
+app.post('/api/admin/reject-teacher', verifyAdmin, async (req, res) => {
+
+    try {
+
+        const {
+            applicationId,
+            username,
+            adminUsername
+        } = req.body;
+
+        if (!applicationId || !username) {
+            return res.status(400).json({
+                error: '缺少申請資料'
+            });
+        }
+
+        // 更新 users
+        const { error: userError } = await supabase
+            .from('users')
+            .update({
+                teacher_application_status: 'rejected'
+            })
+            .eq('username', username);
+
+        if (userError) {
+            throw userError;
+        }
+
+        // 更新 teacher_applications
+        const { error: appError } = await supabase
+            .from('teacher_applications')
+            .update({
+                status: 'rejected',
+                reviewed_at: new Date().toISOString(),
+                reviewed_by: adminUsername || 'admin'
+            })
+            .eq('id', applicationId);
+
+        if (appError) {
+            throw appError;
+        }
+
+        // 發通知
+        await supabase
+            .from('notifications')
+            .insert({
+                username,
+                title: '教師申請未通過',
+                message: '很抱歉，您的教師申請未通過，請重新調整課程資訊後再次申請。'
+            });
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+
+        console.error('拒絕教師失敗:', err);
+
+        res.status(500).json({
+            error: '拒絕教師失敗'
+        });
+    }
+});
+
 // 更新會員狀態 / role / 教師資格
 app.patch('/api/admin/users/:username', verifyAdmin, async (req, res) => {
     const targetUsername = req.params.username;

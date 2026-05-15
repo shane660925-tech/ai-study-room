@@ -503,9 +503,71 @@ function closeTeacherDetail() {
 }
 
 async function approveTeacherApplication(applicationId, username) {
-  alert(`下一步會串接批准 API：${username}`);
+
+  try {
+
+    const res = await fetch('/api/admin/approve-teacher', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        applicationId,
+        username,
+        adminUsername
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || '批准失敗');
+      return;
+    }
+
+    alert('教師申請已批准');
+
+    loadTeacherReviews();
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert('批准失敗');
+  }
 }
 
 async function rejectTeacherApplication(applicationId, username) {
-  alert(`下一步會串接拒絕 API：${username}`);
+
+  try {
+
+    const res = await fetch('/api/admin/reject-teacher', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        applicationId,
+        username,
+        adminUsername
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || '拒絕失敗');
+      return;
+    }
+
+    alert('教師申請已拒絕');
+
+    loadTeacherReviews();
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert('拒絕失敗');
+  }
 }
