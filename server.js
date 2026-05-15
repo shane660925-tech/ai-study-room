@@ -789,14 +789,18 @@ app.post('/api/teacher/oauth-apply', async (req, res) => {
         }
 
         await supabase
-            .from('users')
-            .update({
-                email,
-                role: 'teacher_pending',
-                teacher_application_status: 'pending',
-                teacher_type: teacherType,
-                classroom_size: classroomSize
-            })
+    .from('users')
+    .update({
+
+        // 使用教師填寫名稱覆蓋 Google 名稱
+        username,
+
+        email,
+        role: 'teacher_pending',
+        teacher_application_status: 'pending',
+        teacher_type: teacherType,
+        classroom_size: classroomSize
+    })
             .eq('username', username);
 
         const { error: applicationError } = await supabase
@@ -1478,18 +1482,25 @@ app.get('/api/line/auto-bind', async (req, res) => {
 // [新增] Google OAuth 登入路由 (保持原有功能)
 // ==========================================
 app.get('/api/auth/google', (req, res) => {
-    // 明確傳入 redirect_uri 確保參數不會遺失
+
+    const role = req.query.role || 'student';
+
     const url = googleClient.generateAuthUrl({
         access_type: 'offline',
         scope: ['email', 'profile'],
-        redirect_uri: GOOGLE_CALLBACK_URL // 加入這行
+        redirect_uri: GOOGLE_CALLBACK_URL,
+
+        // 👇 關鍵
+        state: role
     });
-    console.log("🔗 生成的 Google 登入網址:", url); // 建議加上 log 檢查生成的網址
+
+    console.log('🔗 Google OAuth role:', role);
+
     res.redirect(url);
 });
 
 app.get('/api/auth/google/callback', async (req, res) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
     if (!code) return res.status(400).send('❌ 缺少授權碼');
 
     try {
@@ -1538,7 +1549,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
                     total_seconds: 0,
                     streak: 1,
                     last_login: new Date().toISOString().split('T')[0],
-                    role: 'student',
+                    role: state === 'teacher_apply'
+    ? 'teacher_pending'
+    : 'student',
                     integrity_score: 100,
                     link_code: newLinkCode
                 }])
@@ -1595,7 +1608,18 @@ if (sessionUpdateError) {
     console.error('Google 更新 session 失敗:', sessionUpdateError);
 }
 
-res.redirect(`/?username=${encodeURIComponent(user.username)}&role=${encodeURIComponent(user.role || 'student')}&sessionId=${encodeURIComponent(sessionId)}&login_success=true`);
+const redirectRole =
+    state === 'teacher_apply'
+        ? 'teacher_pending'
+        : (user.role || 'student');
+
+res.redirect(
+`/?username=${encodeURIComponent(user.username)}
+&role=${encodeURIComponent(redirectRole)}
+&sessionId=${encodeURIComponent(sessionId)}
+&login_success=true
+&oauth_role=${encodeURIComponent(state || 'student')}`
+);
 
     } catch (err) {
         console.error('Google Auth Error:', err);

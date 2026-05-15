@@ -664,9 +664,10 @@ customElements.define('shared-footer', SharedFooter);
         localStorage.setItem('studyVerseSessionId', sessionId);
         localStorage.setItem('studyVerseRole', role);
 
+        const oauthRole = urlParams.get('oauth_role');
         const pendingRaw = sessionStorage.getItem('pendingTeacherApplication');
 
-        if (pendingRaw) {
+        if (pendingRaw && oauthRole === 'teacher_apply') {
             try {
                 const draft = JSON.parse(pendingRaw);
 
