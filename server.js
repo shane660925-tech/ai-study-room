@@ -227,6 +227,57 @@ async function createNotification({
     return data;
 }
 
+function generateTeacherDiscountCode(username) {
+    const safeName = String(username || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 8);
+
+    const randomPart = Math.random()
+        .toString(36)
+        .substring(2, 6)
+        .toUpperCase();
+
+    return `TEACHER-${safeName}-${randomPart}`;
+}
+
+async function createTeacherDiscountCodeIfNotExists(username) {
+    if (!username) {
+        throw new Error('缺少 username，無法建立教師優惠碼');
+    }
+
+    const { data: existingCode, error: checkError } = await supabase
+        .from('discount_codes')
+        .select('*')
+        .eq('teacher_username', username)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (checkError) throw checkError;
+
+    if (existingCode) {
+        return existingCode;
+    }
+
+    const newCode = generateTeacherDiscountCode(username);
+
+    const { data: createdCode, error: insertError } = await supabase
+        .from('discount_codes')
+        .insert([{
+            code: newCode,
+            teacher_username: username,
+            discount_type: 'percent',
+            discount_value: 100,
+            is_active: true
+        }])
+        .select()
+        .single();
+
+    if (insertError) throw insertError;
+
+    return createdCode;
+}
+
 // 檢查目前登入者是否為 admin
 app.get('/api/admin/me', verifyAdmin, async (req, res) => {
     res.json({
@@ -358,12 +409,11 @@ if (appFindError || !applicationData) {
 const { error: userError } = await supabase
     .from('users')
     .update({
-        role: 'teacher',
-teacher_application_status: 'approved',
-
-// 舊系統兼容
-teacher_status: 'approved'
-    })
+    role: 'teacher',
+    teacher_application_status: 'approved',
+    teacher_status: 'approved',
+    teacher_reviewed_at: new Date().toISOString()
+})
     .eq('username', applicationData.username);
 
         if (userError) {
@@ -384,18 +434,21 @@ teacher_status: 'approved'
             throw appError;
         }
 
-        // 發站內通知
-        await supabase
-            .from('notifications')
-            .insert({
-                username,
-                title: '教師申請已通過',
-                message: '恭喜！您的教師申請已通過，現在可以建立特約教室與課程。'
-            });
+        // 建立教師封測優惠碼
+const discountCode = await createTeacherDiscountCodeIfNotExists(applicationData.username);
 
-        res.json({
-            success: true
-        });
+// 發站內通知
+await createNotification({
+    username: applicationData.username,
+    type: 'teacher_approved',
+    title: '教師申請已通過',
+    message: `恭喜！您的教師申請已通過，現在可以建立特約教室與課程。你的封測專屬優惠碼是：${discountCode.code}`
+});
+
+res.json({
+    success: true,
+    discountCode: discountCode.code
+});
 
     } catch (err) {
 
