@@ -268,19 +268,6 @@ class SharedModals extends HTMLElement {
         class="w-full bg-yellow-600 hover:bg-yellow-500 py-4 rounded-2xl font-bold text-black shadow-lg shadow-yellow-900/20 transition-all active:scale-95 mb-4">
     使用帳密送出教師申請
 </button>
-
-<div class="flex gap-4 mb-4">
-    <button onclick="handleTeacherRegister('google')"
-            class="flex-1 bg-white text-gray-800 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg">
-        <i class="fab fa-google text-red-500"></i> Google 送出申請
-    </button>
-
-    <button onclick="handleTeacherRegister('line')"
-            class="flex-1 bg-[#06C755] text-white py-3 rounded-xl font-bold hover:bg-[#05b34c] transition-all flex items-center justify-center gap-2 shadow-lg">
-        <i class="fab fa-line text-xl"></i> LINE 送出申請
-    </button>
-</div>
-
             <button onclick="backToRegisterType()"
                     class="w-full bg-transparent border border-gray-700 text-gray-400 py-3 rounded-2xl hover:text-white transition-all">
                 返回身份選擇
