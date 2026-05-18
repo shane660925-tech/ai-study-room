@@ -102,10 +102,24 @@ socket.on('connect', () => {
 });
 
     // 如果有讀取到排程，立即補發同步
-    if (window.currentScheduleData) {
-        socket.emit('sync_schedule_to_students', window.currentScheduleData); 
-        console.log("排程已同步給學生");
-    }
+    if (window.currentScheduleData && !window.hasSyncedTutorScheduleOnConnect) {
+    window.hasSyncedTutorScheduleOnConnect = true;
+
+    const roomCode = window.currentTutorRoomCode;
+
+    socket.emit('create_tutor_room_schedule', {
+        ...window.currentScheduleData,
+        roomId: roomCode,
+        room: roomCode,
+        roomCode: roomCode,
+        startTime: window.currentScheduleData.startTime || window.currentScheduleData.start_time,
+        classMinutes: Number(window.currentScheduleData.classMinutes || window.currentScheduleData.periodTime || 50),
+        restMinutes: Number(window.currentScheduleData.restMinutes || window.currentScheduleData.restTime || 10),
+        periods: Number(window.currentScheduleData.periods || 1)
+    });
+
+    console.log("排程已註冊到伺服器");
+}
 });
 
 socket.on('disconnect', () => {
@@ -119,10 +133,16 @@ let knownTutorNames = new Set();
 socket.on('update_rank', (users) => {
     const currentRoomCode = window.currentTutorRoomCode;
 
-    activeStudents = users.filter(s =>
-        s.roomMode === 'tutor' &&
-        s.roomId === currentRoomCode
+    activeStudents = (users || []).filter(s => {
+    const userRoom = s.roomId || s.room || s.roomCode;
+
+    return (
+        userRoom === currentRoomCode &&
+        s.role === 'student' &&
+        s.status !== 'OFFLINE' &&
+        !s.leaveTime
     );
+});
 
     activeStudents.forEach(s => knownTutorNames.add(s.name));
 

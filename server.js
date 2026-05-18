@@ -4013,6 +4013,21 @@ if (dbUser && dbUser.is_blocked) {
         leaveTime: null
     });
 
+    const currentAttendance = getTutorAttendance(roomId);
+
+io.to(roomId).emit('update_attendance', currentAttendance);
+
+io.to(roomId).emit(
+    'update_rank',
+    currentAttendance.filter(u =>
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
+    )
+);
+
+console.log(`[特約教室] 已同步 ${roomId} 名單，目前 ${currentAttendance.length} 人`);
+
     console.log(`[特約教室] 學生 ${username} 加入 ${roomId}`);
 
     broadcastTutorAttendance(roomId);

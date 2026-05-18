@@ -255,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomCode = urlParams.get('room') || urlParams.get('roomId'); 
 if (typeof socket !== 'undefined') {
     if (roomCode) {
-        socket.emit('join_room', roomCode);
 
         const tutorName =
             urlParams.get('username') ||
@@ -266,11 +265,9 @@ if (typeof socket !== 'undefined') {
         socket.emit('join_tutor_room', {
     username: tutorName,
     name: tutorName,
-
     roomId: roomCode,
     room: roomCode,
     roomCode: roomCode,
-
     deviceType: 'pc',
     role: 'student'
 });
