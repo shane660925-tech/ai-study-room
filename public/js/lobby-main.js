@@ -497,7 +497,7 @@ async function loadThemeRoomModalList() {
             const targetUrl = `${roomPage}?theme=${encodeURIComponent(slug)}`;
 
             return `
-                <button onclick="enterThemeRoom('${targetUrl}')"
+                <button onclick="enterThemeRoom('${targetUrl}', '${slug}', '${String(title).replace(/'/g, "\\'")}')"
                         class="w-full bg-white/5 hover:bg-blue-500/10 border border-white/10 hover:border-blue-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
 
                     <div class="flex items-start gap-4">
@@ -548,9 +548,37 @@ async function loadThemeRoomModalList() {
     }
 }
 
-window.enterThemeRoom = function(targetUrl) {
+window.enterThemeRoom = function(targetUrl, slug, name) {
     const modal = document.getElementById('themeRoomModal');
     if (modal) modal.remove();
+
+    // 加入主題教室小隊：選完主題後，再開手機連動 / 略過連動
+    if (window.pendingThemeTeamJoinData) {
+        const data = window.pendingThemeTeamJoinData;
+        window.pendingThemeTeamJoinData = null;
+
+        if (typeof window.joinSpecificTeam === 'function') {
+            window.joinSpecificTeam(
+                data.teamId,
+                data.teamName,
+                targetUrl,
+                'selected_theme_room'
+            );
+        }
+
+        return;
+    }
+
+    // 建立主題教室小隊：沿用前面已做的建立流程
+    if (window.pendingSquadCreateData) {
+        window.executeThemeRoomTeamCreation({
+            targetUrl,
+            slug,
+            name
+        });
+
+        return;
+    }
 
     handleRoomEntry(targetUrl);
 };
@@ -1315,14 +1343,18 @@ async function refreshCourseList() {
     if (!container) return;
 
     const dimmedCardHTML = `
-        <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden">
+        <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden min-h-[200px]">
             <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">尚未解鎖</div>
             <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 text-2xl mb-4">
                 <i class="fas fa-lock"></i>
             </div>
             <h3 class="text-xl font-black text-gray-400 mb-1">線上課程</h3>
-            <p class="text-gray-600 text-xs mb-4 flex-1">此專區僅限已購課程學員進入。請先至官網選購課程以開啟權限。</p>
-            <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">未獲得授權</div>
+            <p class="text-gray-600 text-xs mb-4 flex-1">
+                此專區僅限已購買課程的學生使用。請先至課程商店購買課程。
+            </p>
+            <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">
+                未獲得授權
+            </div>
         </div>
     `;
 
@@ -1332,33 +1364,56 @@ async function refreshCourseList() {
     }
 
     try {
-        const response = await fetch(`/api/my-courses?username=${encodeURIComponent(username)}`);
-        const courses = await response.json();
+        const response = await fetch(`/api/courses/enrolled?username=${encodeURIComponent(username)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '取得已購課程失敗');
+        }
+
+        const courses = data.courses || [];
 
         if (courses.length === 0) {
             container.innerHTML = dimmedCardHTML;
             return;
         }
 
-        // --- [修改] 不管有幾門課，大廳只顯示一個總入口卡片 ---
-        container.innerHTML = ''; 
+        container.innerHTML = '';
+
         const card = document.createElement('div');
-        card.className = "glass-panel p-6 rounded-3xl room-card flex flex-col border border-white/5 group cursor-pointer transition-all hover:border-cyan-500/50";
-        // 點擊後改為呼叫彈窗函式，並把課程資料傳進去
-        card.onclick = () => showCoursesModal(courses); 
+        card.className = `
+            glass-panel p-6 rounded-3xl room-card flex flex-col
+            border border-cyan-500/30 group cursor-pointer
+            transition-all hover:border-cyan-500/60 min-h-[200px]
+        `;
+
+        card.onclick = () => showPurchasedCoursesModal(courses);
+
         card.innerHTML = `
+            <div class="absolute top-2 right-4 text-[10px] font-bold text-cyan-400 tracking-widest">
+                已解鎖
+            </div>
+
             <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl mb-4 group-hover:bg-cyan-500 group-hover:text-white transition-all">
                 <i class="fas fa-layer-group"></i>
             </div>
+
             <h3 class="text-xl font-black text-white mb-1">線上課程</h3>
-            <p class="text-gray-500 text-xs mb-4 flex-1">您擁有 <span class="text-cyan-400 font-bold">${courses.length}</span> 門已解鎖課程。點擊開啟課程清單並進入教室。</p>
-            <div class="w-full text-center bg-white/5 group-hover:bg-cyan-600 py-2 rounded-lg text-xs font-bold text-white transition-all">選擇課程</div>
+
+            <p class="text-gray-500 text-xs mb-4 flex-1">
+                你目前擁有 <span class="text-cyan-400 font-bold">${courses.length}</span> 門已購買課程。點擊查看課程清單。
+            </p>
+
+            <div class="w-full text-center bg-white/5 group-hover:bg-cyan-600 py-2 rounded-lg text-xs font-bold text-white transition-all">
+                查看我的課程
+            </div>
         `;
+
         container.appendChild(card);
 
     } catch (err) {
-        console.error("載入課程失敗:", err);
-        container.innerHTML = dimmedCardHTML; 
+        console.error('載入已購課程失敗:', err);
+        container.innerHTML = dimmedCardHTML;
     }
 }
 
@@ -1984,3 +2039,319 @@ document.addEventListener('DOMContentLoaded', () => {
         loadNotifications();
     }, 1200);
 });
+
+window.showCourseStoreModal = async function() {
+    let oldModal = document.getElementById('courseStoreModal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'courseStoreModal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
+
+    modal.innerHTML = `
+        <div class="bg-[#111827] w-full max-w-lg rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
+
+            <button onclick="document.getElementById('courseStoreModal').remove()"
+                    class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <div class="p-6 border-b border-gray-800 bg-gradient-to-b from-cyan-900/30 to-transparent">
+                <h2 class="text-2xl font-black text-white flex items-center gap-2">
+                    <i class="fas fa-store text-cyan-400"></i>
+                    課程商店
+                </h2>
+                <p class="text-gray-400 text-xs mt-2">
+                    請選擇目前開放購買的線上課程，點擊後前往結帳頁。
+                </p>
+            </div>
+
+            <div id="courseStoreModalList" class="p-6 max-h-[65vh] overflow-y-auto">
+                <div class="flex flex-col items-center justify-center py-10 text-gray-500">
+                    <div class="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-xs tracking-widest uppercase">正在載入課程...</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    await loadCourseStoreModalList();
+};
+let courseStoreCache = [];
+async function loadCourseStoreModalList() {
+    const list = document.getElementById('courseStoreModalList');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/courses/store');
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '取得課程商店失敗');
+        }
+
+        const courses = data.courses || [];
+        courseStoreCache = courses;
+
+        if (courses.length === 0) {
+            list.innerHTML = `
+                <div class="text-center py-10">
+                    <div class="w-14 h-14 bg-gray-500/20 rounded-2xl flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
+                        <i class="fas fa-box-open"></i>
+                    </div>
+                    <h3 class="text-white font-black mb-2">目前沒有開放中的課程</h3>
+                    <p class="text-gray-500 text-xs">請等待教師或平台開放新的線上課程。</p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = courses.map(course => {
+            const title = escapeCourseStoreHtml(course.course_name || '未命名課程');
+            const teacher = escapeCourseStoreHtml(course.teacher_username || 'STUDY VERSE');
+            const subject = escapeCourseStoreHtml(course.subject || '線上課程');
+            const intro = escapeCourseStoreHtml(course.intro || '點擊前往結帳頁。');
+            const price = Number(course.price || 0);
+
+            return `
+                <button onclick="showCourseDetail('${course.id}')"
+                        class="w-full bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
+
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl group-hover:bg-cyan-500 group-hover:text-white transition-all">
+                            <i class="fas fa-book-open"></i>
+                        </div>
+
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <h3 class="text-white font-black text-lg">${title}</h3>
+                                <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded-full font-black whitespace-nowrap">
+                                    NT$${price}
+                                </span>
+                            </div>
+
+                            <p class="text-cyan-300 text-xs mb-2">
+                                ${subject}｜${teacher}
+                            </p>
+
+                            <p class="text-gray-500 text-xs leading-relaxed mb-3">
+                                ${intro}
+                            </p>
+
+                            <div class="text-right text-cyan-400 text-xs font-black group-hover:text-cyan-300">
+                                前往結帳 →
+                            </div>
+                        </div>
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('課程商店彈窗載入失敗:', err);
+
+        list.innerHTML = `
+            <div class="text-center py-10">
+                <div class="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center text-red-400 text-2xl mx-auto mb-4">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-red-300 font-black mb-2">課程載入失敗</h3>
+                <p class="text-gray-500 text-xs">請稍後重新整理頁面。</p>
+            </div>
+        `;
+    }
+}
+
+window.goToCourseCheckout = function(courseId) {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) {
+        alert('請先登入後再購買課程。');
+        return;
+    }
+
+    window.location.href =
+        `/checkout.html?username=${encodeURIComponent(username)}&courseId=${encodeURIComponent(courseId)}`;
+};
+
+function escapeCourseStoreHtml(str) {
+    return String(str || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+window.showCourseDetail = function(courseId) {
+    const list = document.getElementById('courseStoreModalList');
+    if (!list) return;
+
+    const course = courseStoreCache.find(c => c.id === courseId);
+
+    if (!course) {
+        alert('找不到課程資料，請重新開啟課程商店。');
+        return;
+    }
+
+    const title = escapeCourseStoreHtml(course.course_name || '未命名課程');
+    const teacher = escapeCourseStoreHtml(course.teacher_username || 'STUDY VERSE');
+    const subject = escapeCourseStoreHtml(course.subject || '線上課程');
+    const intro = escapeCourseStoreHtml(course.intro || '尚未提供課程介紹');
+    const price = Number(course.price || 0);
+    const maxStudents = Number(course.max_students || 0);
+    const enrolledCount = Number(course.enrolled_count || 0);
+
+    const startDate = course.start_date || '尚未設定';
+    const endDate = course.end_date || '尚未設定';
+    const weeklyDay = course.weekly_day || '尚未設定';
+    const startTime = course.start_time || '尚未設定';
+
+    const capacityText = maxStudents > 0
+        ? `${enrolledCount} / ${maxStudents}`
+        : `${enrolledCount} / 不限`;
+
+    list.innerHTML = `
+        <div class="space-y-4">
+            <button onclick="loadCourseStoreModalList()"
+                    class="text-xs text-cyan-400 hover:text-cyan-300 font-bold mb-2">
+                ← 返回課程列表
+            </button>
+
+            <div class="bg-white/5 border border-cyan-500/30 rounded-3xl p-6">
+                <div class="w-14 h-14 bg-cyan-500/20 rounded-2xl flex items-center justify-center text-cyan-400 text-2xl mb-4">
+                    <i class="fas fa-book-open"></i>
+                </div>
+
+                <h3 class="text-2xl font-black text-white mb-2">${title}</h3>
+
+                <p class="text-xs text-cyan-300 mb-4">
+                    ${subject}｜開課教師：${teacher}
+                </p>
+
+                <div class="grid grid-cols-1 gap-3 text-xs text-gray-300 mb-5">
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">課程資訊</span>
+                        <p class="text-white mt-1 leading-relaxed">${intro}</p>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">開課時間</span>
+                        <p class="text-white mt-1">
+                            ${startDate} ~ ${endDate}<br>
+                            每週：${weeklyDay}｜開始時間：${startTime}
+                        </p>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3 flex justify-between">
+                        <span class="text-gray-500">開課人數</span>
+                        <span class="text-white font-black">${capacityText}</span>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3 flex justify-between">
+                        <span class="text-gray-500">課程價格</span>
+                        <span class="text-green-400 font-black">NT$${price}</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="loadCourseStoreModalList()"
+                            class="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-3 rounded-xl transition-all">
+                        取消
+                    </button>
+
+                    <button onclick="goToCourseCheckout('${course.id}')"
+                            class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl transition-all">
+                        確認購買
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+window.showPurchasedCoursesModal = function(courses) {
+    let oldModal = document.getElementById('purchasedCoursesModal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'purchasedCoursesModal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
+
+    const courseButtonsHTML = courses.map(course => {
+        const title = escapeCourseStoreHtml(course.course_name || '未命名課程');
+        const teacher = escapeCourseStoreHtml(course.teacher_username || 'STUDY VERSE');
+        const subject = escapeCourseStoreHtml(course.subject || '線上課程');
+        const intro = escapeCourseStoreHtml(course.intro || '尚未提供課程介紹');
+
+        return `
+            <button onclick="enterPurchasedCourse('${course.id}', '${course.course_room_code || ''}', '${course.google_meet_url || ''}')"
+                    class="w-full bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
+
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl group-hover:bg-cyan-500 group-hover:text-white transition-all">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+
+                    <div class="flex-1">
+                        <h3 class="text-white font-black text-lg mb-1">${title}</h3>
+
+                        <p class="text-cyan-300 text-xs mb-2">
+                            ${subject}｜教師：${teacher}
+                        </p>
+
+                        <p class="text-gray-500 text-xs leading-relaxed mb-3">
+                            ${intro}
+                        </p>
+
+                        <div class="text-right text-cyan-400 text-xs font-black group-hover:text-cyan-300">
+                            進入課程 →
+                        </div>
+                    </div>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    modal.innerHTML = `
+        <div class="bg-[#111827] w-full max-w-lg rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
+
+            <button onclick="document.getElementById('purchasedCoursesModal').remove()"
+                    class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <div class="p-6 border-b border-gray-800 bg-gradient-to-b from-cyan-900/30 to-transparent">
+                <h2 class="text-2xl font-black text-white flex items-center gap-2">
+                    <i class="fas fa-layer-group text-cyan-400"></i>
+                    我的線上課程
+                </h2>
+                <p class="text-gray-400 text-xs mt-2">
+                    以下是你已購買並解鎖的課程。
+                </p>
+            </div>
+
+            <div class="p-6 max-h-[65vh] overflow-y-auto">
+                ${courseButtonsHTML}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+};
+
+window.enterPurchasedCourse = function(courseId, courseRoomCode, googleMeetUrl) {
+    if (googleMeetUrl && googleMeetUrl !== 'null') {
+        window.open(googleMeetUrl, '_blank');
+        return;
+    }
+
+    if (courseRoomCode && courseRoomCode !== 'null') {
+        window.location.href = `/tutor-room.html?roomCode=${encodeURIComponent(courseRoomCode)}&standalone=true`;
+        return;
+    }
+
+    alert('此課程尚未設定教室入口，請聯繫教師或平台管理員。');
+};

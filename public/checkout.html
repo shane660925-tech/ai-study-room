@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>課程結帳｜STUDY VERSE</title>
+  <style>
+    body {
+      margin: 0;
+      background: #05070a;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 40px;
+    }
+
+    .card {
+      max-width: 520px;
+      margin: auto;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 28px;
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #60a5fa;
+    }
+
+    .price-box {
+      margin-top: 20px;
+      padding: 16px;
+      background: #020617;
+      border-radius: 14px;
+      line-height: 1.8;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 22px;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .secondary {
+      background: #16a34a;
+    }
+
+    .secondary:hover {
+      background: #15803d;
+    }
+
+    .hint {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+
+    .success {
+      color: #4ade80;
+    }
+
+    .error {
+      color: #f87171;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>課程結帳</h1>
+
+    <div id="courseInfo">載入中...</div>
+
+    <div class="price-box" id="paymentInfo">
+      尚未建立課程訂單
+    </div>
+
+    <button onclick="createCourseOrder()">
+      建立課程訂單
+    </button>
+
+    <button id="mockPaidButton" class="secondary" onclick="mockCoursePaid()" style="display:none;">
+      模擬付款成功
+    </button>
+
+    <div class="hint">
+      此頁面已移除優惠碼。正式金流串接前，先使用「模擬付款成功」測試課程加入流程。
+    </div>
+
+    <p id="message"></p>
+  </div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+
+const username =
+  params.get('username') ||
+  localStorage.getItem('studyVerseUser') ||
+  localStorage.getItem('username');
+
+const courseId = params.get('courseId');
+
+let currentOrder = null;
+
+if (!username || !courseId) {
+  document.getElementById('courseInfo').innerHTML =
+    '<span class="error">缺少 username 或 courseId</span>';
+} else {
+  checkCourseAccessOnLoad();
+}
+
+async function checkCourseAccessOnLoad() {
+  const courseInfoEl = document.getElementById('courseInfo');
+  const messageEl = document.getElementById('message');
+
+  try {
+    const res = await fetch(
+      `/api/courses/can-enter?username=${encodeURIComponent(username)}&courseId=${encodeURIComponent(courseId)}`
+    );
+
+    const data = await res.json();
+
+    if (data.course) {
+      courseInfoEl.innerHTML = `
+        <p><strong>${data.course.course_name}</strong></p>
+      `;
+    }
+
+    if (data.canEnter) {
+      messageEl.innerHTML =
+        '<span class="success">你已經加入過這門課，可以直接進入課程。</span>';
+      return;
+    }
+
+    if (data.needCheckout) {
+      messageEl.innerHTML =
+        '<span class="hint">尚未加入此課程，請建立訂單後使用模擬付款完成測試。</span>';
+      return;
+    }
+
+    messageEl.innerHTML =
+      `<span class="error">${data.error || '無法檢查課程狀態'}</span>`;
+
+  } catch (err) {
+    courseInfoEl.innerHTML =
+      '<span class="error">課程資料載入失敗</span>';
+    messageEl.innerHTML =
+      `<span class="error">${err.message}</span>`;
+  }
+}
+
+async function createCourseOrder() {
+  const messageEl = document.getElementById('message');
+  const paymentInfoEl = document.getElementById('paymentInfo');
+  const mockPaidButton = document.getElementById('mockPaidButton');
+
+  messageEl.textContent = '';
+  mockPaidButton.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/checkout/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        courseId
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (data.needSubscription) {
+        window.location.href =
+          `/subscribe.html?username=${encodeURIComponent(username)}`;
+        return;
+      }
+
+      throw new Error(data.error || '建立課程訂單失敗');
+    }
+
+    currentOrder = data.order;
+
+    document.getElementById('courseInfo').innerHTML = `
+      <p><strong>${data.course.course_name}</strong></p>
+    `;
+
+    paymentInfoEl.innerHTML = `
+      課程原價：${data.payment.originalAmount} 元<br>
+      折扣：-${data.payment.discountAmount} 元<br>
+      <strong>應付金額：${data.payment.amount} 元</strong><br>
+      訂單狀態：${data.order.status}
+    `;
+
+    mockPaidButton.style.display = 'block';
+
+    messageEl.innerHTML =
+      '<span class="success">課程訂單已建立。封測期間可按「模擬付款成功」。</span>';
+
+  } catch (err) {
+    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+
+async function mockCoursePaid() {
+  const messageEl = document.getElementById('message');
+
+  if (!currentOrder) {
+    messageEl.innerHTML = '<span class="error">尚未建立課程訂單。</span>';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/checkout/mock-course-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        orderId: currentOrder.id
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '模擬付款失敗');
+    }
+
+    messageEl.innerHTML =
+  '<span class="success">模擬付款成功，已加入課程！正在返回大廳...</span>';
+
+document.getElementById('mockPaidButton').style.display = 'none';
+
+setTimeout(() => {
+  window.location.href = `/?username=${encodeURIComponent(username)}&course_paid=success`;
+}, 900);
+
+  } catch (err) {
+    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+</script>
+
+</body>
+</html>

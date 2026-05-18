@@ -122,17 +122,58 @@ socket.on('mobile_sync_update', (data) => {
     }
 });
 
+async function guardSubscriptionPaywall() {
+    const username = localStorage.getItem('studyVerseUser');
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (!username) {
+        return true;
+    }
+
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return true;
+    }
+
+    try {
+        const res = await fetch(
+            `/api/subscription/status?username=${encodeURIComponent(username)}`
+        );
+
+        const data = await res.json();
+
+        if (!data.is_subscribed) {
+            window.location.href =
+                `/subscribe.html?username=${encodeURIComponent(username)}`;
+            return false;
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error('訂閱狀態檢查失敗:', err);
+
+        window.location.href =
+            `/subscribe.html?username=${encodeURIComponent(username)}`;
+
+        return false;
+    }
+}
 
 // ==========================================
 // [核心修改] 初始化檢查登入狀態：確保 UI 與姓名同步
 // ==========================================
-function checkLogin() {
+async function checkLogin() {
     // 【關鍵】：重新從 localStorage 抓取，確保能抓到 Google 登入或其它腳本寫入的最新名稱
     myUsername = localStorage.getItem('studyVerseUser');
 
     mySessionId = localStorage.getItem('studyVerseSessionId');
 myRole = localStorage.getItem('studyVerseRole') || 'student';
 checkCurrentSessionOrLogout();
+const canPassPaywall = await guardSubscriptionPaywall();
+
+if (!canPassPaywall) {
+    return;
+}
 
     if (!myUsername) {
         const loginOverlay = document.getElementById('loginOverlay');

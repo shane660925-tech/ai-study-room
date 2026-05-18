@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>啟用訂閱｜STUDY VERSE</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #05070a;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 32px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 22px;
+      padding: 30px;
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #60a5fa;
+    }
+
+    .price {
+      font-size: 34px;
+      font-weight: bold;
+      margin: 18px 0;
+    }
+
+    .desc {
+      color: #cbd5e1;
+      line-height: 1.7;
+    }
+
+    label {
+      display: block;
+      margin-top: 20px;
+      color: #cbd5e1;
+    }
+
+    input {
+      width: 100%;
+      padding: 13px;
+      margin-top: 8px;
+      border-radius: 12px;
+      border: 1px solid #475569;
+      background: #020617;
+      color: white;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .paybox {
+      margin-top: 20px;
+      padding: 16px;
+      background: #020617;
+      border-radius: 14px;
+      line-height: 1.9;
+    }
+
+    .hint {
+      margin-top: 14px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .success {
+      color: #4ade80;
+    }
+
+    .error {
+      color: #f87171;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>啟用 STUDY VERSE 訂閱</h1>
+
+    <p class="desc">
+      完成訂閱後，你就可以解鎖大廳、主題教室、自習功能與後續課程購買入口。
+    </p>
+
+    <div class="price">NT$300 / 月</div>
+
+    <label>優惠碼</label>
+    <input id="discountCodeInput" placeholder="請輸入教師封測優惠碼" />
+
+    <button onclick="createSubscriptionOrder()">
+      套用優惠碼 / 建立訂閱訂單
+    </button>
+
+    <div class="paybox" id="paymentInfo">
+      尚未建立訂單
+    </div>
+
+    <button id="freeCompleteButton" onclick="completeFreeSubscription()" style="display:none;">
+      免費啟用訂閱
+    </button>
+
+    <p class="hint">
+      目前為封測流程。若優惠碼折抵後金額為 0，可直接啟用訂閱；正式金流將於之後串接。
+    </p>
+
+    <p id="message"></p>
+  </div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const username =
+  params.get('username') ||
+  localStorage.getItem('username');
+
+let currentOrder = null;
+
+if (!username) {
+  document.getElementById('message').innerHTML =
+    '<span class="error">缺少 username，請重新登入。</span>';
+}
+
+async function createSubscriptionOrder() {
+  const discountCode = document.getElementById('discountCodeInput').value.trim();
+  const paymentInfoEl = document.getElementById('paymentInfo');
+  const messageEl = document.getElementById('message');
+  const freeButton = document.getElementById('freeCompleteButton');
+
+  messageEl.textContent = '';
+  freeButton.style.display = 'none';
+
+  if (!username) {
+    messageEl.innerHTML = '<span class="error">缺少 username，請重新登入。</span>';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/subscription/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        discountCode
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '建立訂閱訂單失敗');
+    }
+
+    currentOrder = data.order;
+
+    paymentInfoEl.innerHTML = `
+      原價：${data.subscription.originalAmount} 元<br>
+      折扣：-${data.subscription.discountAmount} 元<br>
+      <strong>應付金額：${data.subscription.amount} 元</strong><br>
+      訂單狀態：${data.order.status}
+    `;
+
+    if (data.subscription.isFreeCheckout) {
+      freeButton.style.display = 'block';
+      messageEl.innerHTML =
+        '<span class="success">此訂閱可免費啟用。</span>';
+    } else {
+      messageEl.innerHTML =
+        '<span class="success">訂閱訂單已建立。正式金流會在之後串接。</span>';
+    }
+
+  } catch (err) {
+    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+
+async function completeFreeSubscription() {
+  const messageEl = document.getElementById('message');
+
+  if (!currentOrder) {
+    messageEl.innerHTML = '<span class="error">尚未建立訂閱訂單。</span>';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/subscription/free-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        orderId: currentOrder.id
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '免費啟用訂閱失敗');
+    }
+
+    messageEl.innerHTML =
+      '<span class="success">訂閱啟用成功，正在前往大廳...</span>';
+
+    setTimeout(() => {
+      window.location.href = `/?username=${encodeURIComponent(username)}&subscription=active`;
+    }, 800);
+
+  } catch (err) {
+    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+</script>
+
+</body>
+</html>

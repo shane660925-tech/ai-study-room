@@ -509,15 +509,35 @@ window.handleRealLogin = async function() {
 
         const data = await res.json();
 
-        if (res.ok) {
-            localStorage.setItem('studyVerseUser', data.username);
-            localStorage.setItem('studyVerseSessionId', data.sessionId);
-            localStorage.setItem('studyVerseRole', data.role || 'student');
-
-            location.reload();
-        } else {
+        if (!res.ok) {
             alert("登入失敗：" + data.error);
+            return;
         }
+
+        const role = data.role || 'student';
+
+        localStorage.setItem('studyVerseUser', data.username);
+        localStorage.setItem('studyVerseSessionId', data.sessionId);
+        localStorage.setItem('studyVerseRole', role);
+
+        if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+            location.reload();
+            return;
+        }
+
+        const statusRes = await fetch(
+            `/api/subscription/status?username=${encodeURIComponent(data.username)}`
+        );
+
+        const statusData = await statusRes.json();
+
+        if (!statusData.is_subscribed) {
+            window.location.href =
+                `/subscribe.html?username=${encodeURIComponent(data.username)}`;
+            return;
+        }
+
+        location.reload();
 
     } catch(e) {
         console.error("登入錯誤:", e);
