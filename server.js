@@ -3663,9 +3663,9 @@ async function broadcastUpdateRank() {
             teamLeaderStates[u.teamId].leader === u.name;
 
         return {
-            ...u,
-            isCaptain: !!isCap
-        };
+    ...u,
+    isCaptain: !!isCap
+};
     });
 
     const roomKeys = [...new Set(

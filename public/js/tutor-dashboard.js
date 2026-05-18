@@ -729,7 +729,7 @@ window.broadcastSchedule = function() {
     }
 
     const schedulePayload = {
-        ...window.currentScheduleData,
+    ...window.currentScheduleData,
         roomId: roomCode,
         room: roomCode,
         roomCode: roomCode,
