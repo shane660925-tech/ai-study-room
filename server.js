@@ -4039,7 +4039,7 @@ if (role === 'student' && tutorSchedules[roomId]) {
     socket.emit('receive_tutor_schedule', {
         room: roomId,
         roomId: roomId,
-        message: scheduleData.message || `本次課表為 ${scheduleData.startTime} 開始，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`
+        message: scheduleData.message || `本次課表為 ${String(scheduleData.startTime || '08:00').slice(0, 5)} 開始，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`
     });
 
     console.log(`[特約教室] 已補發 ${roomId} 課表給學生 ${username}`);

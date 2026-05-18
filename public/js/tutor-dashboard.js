@@ -765,7 +765,10 @@ window.broadcastSchedule = function() {
 
     socket.emit('create_tutor_room_schedule', schedulePayload);
 
-    socket.emit('sync_schedule_to_students', schedulePayload);
+    socket.emit('sync_schedule_to_students', {
+    ...schedulePayload,
+    message: window.currentScheduleText
+});
 
     if (window.currentScheduleText) {
         socket.emit('sync_tutor_schedule', {
