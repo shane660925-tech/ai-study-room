@@ -737,7 +737,18 @@ function updateTimerLogic() {
     const SESSION_CONFIG = getLiveScheduleConfig();
     const now = new Date().getTime();
     const elapsedSeconds = Math.floor((now - SESSION_CONFIG.startTime) / 1000);
-    
+    // 🚀 防呆：剛建立教室後 2 分鐘內，不允許直接判定課程結束
+if (!window.tutorRoomCreatedAt) {
+    window.tutorRoomCreatedAt = Date.now();
+}
+
+const roomAliveSeconds =
+    Math.floor((Date.now() - window.tutorRoomCreatedAt) / 1000);
+
+if (roomAliveSeconds < 120 && elapsedSeconds > 7200) {
+    updateTimerUI("00:00", "等待老師開始課程", "尚未開始", 0);
+    return;
+}
     if (elapsedSeconds < 0) {
         updateTimerUI("00:00", "準備上課", "未開始", 0);
         return;
