@@ -145,9 +145,20 @@ window.latestAttendanceData = [];
 socket.on('update_attendance', (users) => {
     const currentRoomCode = window.currentTutorRoomCode;
 
-    window.latestAttendanceData = (users || []).filter(u =>
-        !u.roomId || u.roomId === currentRoomCode
+    window.latestAttendanceData = (users || []).filter(u => {
+
+    const userRoom =
+        u.roomId ||
+        u.room ||
+        u.roomCode;
+
+    return (
+        userRoom === currentRoomCode &&
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
     );
+});
 
     activeStudents = window.latestAttendanceData;
     activeStudents.forEach(s => knownTutorNames.add(s.name));
@@ -685,11 +696,51 @@ function updateDashboardUI(data) {
 }
 
 window.broadcastSchedule = function() {
-    if (window.currentScheduleText && typeof socket !== 'undefined') {
-        socket.emit('sync_tutor_schedule', { message: window.currentScheduleText });
-        if (window.currentScheduleData) {
-            socket.emit('sync_schedule_to_students', window.currentScheduleData);
-        }
+    if (!window.currentScheduleData || typeof socket === 'undefined') return;
+
+    const roomCode =
+        window.currentTutorRoomCode ||
+        window.currentScheduleData.roomCode ||
+        window.currentScheduleData.room_code;
+
+    if (!roomCode) {
+        console.warn('缺少 roomCode，無法同步特約教室課表');
+        return;
+    }
+
+    const schedulePayload = {
+        ...window.currentScheduleData,
+        roomId: roomCode,
+        room: roomCode,
+        roomCode: roomCode,
+        startTime: window.currentScheduleData.startTime || window.currentScheduleData.start_time,
+        classMinutes: Number(
+            window.currentScheduleData.classMinutes ||
+            window.currentScheduleData.class_minutes ||
+            window.currentScheduleData.periodTime ||
+            50
+        ),
+        restMinutes: Number(
+            window.currentScheduleData.restMinutes ||
+            window.currentScheduleData.rest_minutes ||
+            window.currentScheduleData.restTime ||
+            10
+        ),
+        periods: Number(window.currentScheduleData.periods || 1)
+    };
+
+    // 讓後端記住這間教室的課表，供倒數計時使用
+    socket.emit('create_tutor_room_schedule', schedulePayload);
+
+    // 只同步給這間教室的學生
+    socket.emit('sync_schedule_to_students', schedulePayload);
+
+    if (window.currentScheduleText) {
+        socket.emit('sync_tutor_schedule', {
+            room: roomCode,
+            roomId: roomCode,
+            message: window.currentScheduleText
+        });
     }
 };
 

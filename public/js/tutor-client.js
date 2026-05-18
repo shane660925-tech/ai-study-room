@@ -264,11 +264,16 @@ if (typeof socket !== 'undefined') {
             '特約學員';
 
         socket.emit('join_tutor_room', {
-            username: tutorName,
-            roomId: roomCode,
-            deviceType: 'pc',
-            role: 'student'
-        });
+    username: tutorName,
+    name: tutorName,
+
+    roomId: roomCode,
+    room: roomCode,
+    roomCode: roomCode,
+
+    deviceType: 'pc',
+    role: 'student'
+});
 
         console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
     }
@@ -354,7 +359,13 @@ if (typeof socket !== 'undefined') {
 
 users = (users || []).filter(u => {
     if (!currentRoomCode) return true;
-    return !u.roomId || u.roomId === currentRoomCode;
+
+    const userRoom =
+        u.roomId ||
+        u.room ||
+        u.roomCode;
+
+    return userRoom === currentRoomCode;
 });
             const standaloneUsers = users.filter(u => u.isStandalone).map(u => u.name);
             

@@ -3889,8 +3889,41 @@ activeUserSockets.set(username, socket.id);
     
     // 新增轉發轉發邏輯
     socket.on('sync_tutor_schedule', (data) => {
-        io.emit('receive_tutor_schedule', data); // 廣播給所有學生
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId;
+
+    if (targetRoom) {
+        io.to(targetRoom).emit('receive_tutor_schedule', data);
+    } else {
+        socket.emit('receive_tutor_schedule', data);
+    }
+});
+
+socket.on('sync_schedule_to_students', (data) => {
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId;
+
+    if (!targetRoom) {
+        console.log('❌ sync_schedule_to_students 缺少 roomId');
+        return;
+    }
+
+    tutorSchedules[targetRoom] = data;
+
+    tutorRoomSettings.set(targetRoom, {
+        startTime: data.startTime || data.start_time,
+        classMinutes: Number(data.classMinutes || data.class_minutes || data.periodTime || 50),
+        restMinutes: Number(data.restMinutes || data.rest_minutes || data.restTime || 10),
+        periods: Number(data.periods || 1)
     });
+
+    io.to(targetRoom).emit('sync_schedule_to_students', data);
+    io.to(targetRoom).emit('sync_tutor_schedule', data);
+});
 
     // 接收大廳老師建立的課表並存起來
     socket.on('create_tutor_room_schedule', (data) => {
@@ -3934,6 +3967,9 @@ activeUserSockets.set(username, socket.id);
     socket.join(roomId);
     socket.roomId = roomId;
     socket.role = role;
+    socket.roomId = roomId;
+socket.currentRoom = roomId;
+socket.currentTutorRoom = roomId;
 
     if (role === 'teacher') {
         console.log(`[特約教室] 教師端加入 ${roomId}`);
