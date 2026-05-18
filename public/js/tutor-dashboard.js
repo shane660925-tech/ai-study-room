@@ -704,8 +704,9 @@ function updateDashboardUI(data) {
         const endMins = String(date.getMinutes()).padStart(2, '0');
         const endTime = `${endHours}:${endMins}`;
 
-        window.currentScheduleText = `本次課表為 ${data.startTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
-        
+        const displayStartTime = String(data.startTime || data.start_time || "08:00").slice(0, 5);
+
+window.currentScheduleText = `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
         const displayEl = document.getElementById('teacherScheduleDisplay');
         if (displayEl) displayEl.innerText = window.currentScheduleText;
 
@@ -728,12 +729,25 @@ window.broadcastSchedule = function() {
         return;
     }
 
+    if (window.hasBroadcastedTutorSchedule) {
+        return;
+    }
+
+    window.hasBroadcastedTutorSchedule = true;
+
+    const rawStartTime =
+        window.currentScheduleData.startTime ||
+        window.currentScheduleData.start_time ||
+        '08:00';
+
+    const normalizedStartTime = String(rawStartTime).slice(0, 5);
+
     const schedulePayload = {
-    ...window.currentScheduleData,
+        ...window.currentScheduleData,
         roomId: roomCode,
         room: roomCode,
         roomCode: roomCode,
-        startTime: window.currentScheduleData.startTime || window.currentScheduleData.start_time,
+        startTime: normalizedStartTime,
         classMinutes: Number(
             window.currentScheduleData.classMinutes ||
             window.currentScheduleData.class_minutes ||
@@ -749,10 +763,8 @@ window.broadcastSchedule = function() {
         periods: Number(window.currentScheduleData.periods || 1)
     };
 
-    // 讓後端記住這間教室的課表，供倒數計時使用
     socket.emit('create_tutor_room_schedule', schedulePayload);
 
-    // 只同步給這間教室的學生
     socket.emit('sync_schedule_to_students', schedulePayload);
 
     if (window.currentScheduleText) {
@@ -762,6 +774,8 @@ window.broadcastSchedule = function() {
             message: window.currentScheduleText
         });
     }
+
+    console.log("✅ 特約教室課表已註冊一次：", roomCode);
 };
 
 // ==========================================
@@ -1012,8 +1026,8 @@ window.toggleTutorReport = function(name) {
 };
 
 // 檔案末尾的初始化啟動
+// 檔案末尾的初始化啟動
 document.addEventListener('DOMContentLoaded', () => {
-    setInterval(broadcastSchedule, 10000);
     initAutoTimer(); 
     
     // 🚀 修正防呆定時器：改為每隔 2 秒重新檢查並渲染學員畫面，確保超時 (10秒) 後狀態能即時刷回「專注中」
