@@ -4030,6 +4030,21 @@ console.log(`[特約教室] 已同步 ${roomId} 名單，目前 ${currentAttenda
 
     console.log(`[特約教室] 學生 ${username} 加入 ${roomId}`);
 
+    // ✅ 學生加入後，如果這間教室已經有課表，立即補發給該學生
+if (role === 'student' && tutorSchedules[roomId]) {
+    const scheduleData = tutorSchedules[roomId];
+
+    socket.emit('sync_schedule_to_students', scheduleData);
+
+    socket.emit('receive_tutor_schedule', {
+        room: roomId,
+        roomId: roomId,
+        message: scheduleData.message || `本次課表為 ${scheduleData.startTime} 開始，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`
+    });
+
+    console.log(`[特約教室] 已補發 ${roomId} 課表給學生 ${username}`);
+}
+
     broadcastTutorAttendance(roomId);
 });
 
