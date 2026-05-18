@@ -65,7 +65,7 @@ class TeamModals extends HTMLElement {
                                 <div class="relative">
                                     <select id="teamRoomSelect" class="w-full bg-black/50 text-white p-4 rounded-xl border border-gray-700 focus:outline-none focus:border-blue-500 appearance-none font-bold">
                                         <option value="immersive-room.html">🟣 沉浸式自習室 (動漫旗艦版)</option>
-                                        <option value="managed-room.html">🔵 模擬線上教室 (專業控管版)</option>
+                                        <option value="theme_room">🔵 主題教室</option>
                                     </select>
                                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
                                         <i class="fas fa-chevron-down text-xs"></i>

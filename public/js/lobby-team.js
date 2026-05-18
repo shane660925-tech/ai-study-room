@@ -176,7 +176,10 @@ socket.on('mobile_sync_update', (data) => {
         }
 
         // PC 模式正常跳轉
-        window.location.href = `${targetRoom}?${teamParams.replace('&', '')}&name=${encodeURIComponent(typeof myUsername !== 'undefined' ? myUsername : '')}`;
+        const separator = targetRoom.includes('?') ? '&' : '?';
+
+window.location.href =
+    `${targetRoom}${separator}${teamParams.replace('&', '')}&name=${encodeURIComponent(typeof myUsername !== 'undefined' ? myUsername : '')}`;
     });
 
     socket.on('join_team_rejected', (data) => {
@@ -254,33 +257,37 @@ socket.on('mobile_sync_update', (data) => {
                 btnClass = "bg-orange-600 hover:bg-orange-500 text-white active:scale-95 transition-all shadow-md";
                 btnText = "加入小隊";
                 // 將 roomType 正確傳遞下去
-                btnAction = `onclick="joinSpecificTeam('${team.id}', '${team.name.replace(/'/g, "\\'")}', '${team.roomType || 'managed-room.html'}')"`;
+                const teamCategory =
+    team.room_type === 'theme_room' || (team.roomType && team.roomType.includes('theme='))
+        ? 'theme_room'
+        : 'study_room';
+
+btnAction = `onclick="joinSpecificTeam('${team.id}', '${team.name.replace(/'/g, "\\'")}', '${team.roomType || 'managed-room.html'}', '${teamCategory}')"`;
             }
 
             let roomLabel = '';
-            if (team.roomType === 'immersive-room.html' || team.roomType === 'immersive-room') {
-                roomLabel = `<span class="text-[10px] font-bold px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30"><i class="fas fa-vr-cardboard mr-1"></i>沈浸室自習</span>`;
-            } else if (team.roomType === 'managed-room.html' || team.roomType === 'managed-room') {
-                roomLabel = `<span class="text-[10px] font-bold px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30"><i class="fas fa-chalkboard-teacher mr-1"></i>模擬線上教室</span>`;
-            } else {
-                roomLabel = `<span class="text-[10px] font-bold px-2 py-1 rounded bg-gray-500/20 text-gray-400 border border-gray-500/30"><i class="fas fa-door-open mr-1"></i>一般教室</span>`;
-            }
+
+if (team.room_type === 'theme_room' || team.roomType?.includes('theme=')) {
+    roomLabel = '主題教室';
+} else if (team.roomType === 'immersive-room.html' || team.roomType?.includes('immersive-room.html')) {
+    roomLabel = '沉浸式自習室';
+} else {
+    roomLabel = '作戰教室';
+}
 
             return `
                 <div class="team-item bg-black/40 hover:bg-black/60 border border-gray-800 ${isMyTeam ? 'border-red-500/30 bg-red-900/10' : 'hover:border-orange-500/40'} rounded-xl p-3 flex flex-col md:flex-row justify-between items-center gap-3 transition-all">
                     <div class="flex-1 w-full">
                         <div class="flex items-center justify-between mb-1.5">
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] font-mono text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">${team.id}</span>
-                                <h4 class="text-white font-bold text-sm truncate max-w-[150px]">${team.name}</h4>
-                            </div>
                             <div class="text-[10px] text-gray-500 hidden md:block">
                                 🎯 ${team.goal || '專注衝刺'} | 🏆 ${team.totalHours || 0}H
                             </div>
                         </div>
-                        <div class="flex items-center gap-2 mb-2">
-                            ${roomLabel}
-                        </div>
+                        <div class="flex items-center gap-2">
+    <span class="text-[10px] font-mono text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">${team.id}</span>
+    ${roomLabel}
+</div>
+<h4 class="text-white font-black text-lg truncate max-w-[220px] mt-1">${team.name}</h4>
                         <div class="flex items-center gap-3 w-full">
                             <div class="flex-1 bg-gray-900 rounded-full h-1.5 overflow-hidden">
                                 <div class="bg-orange-500 h-1.5 rounded-full transition-all duration-500" style="width: ${(currentMem / maxMem) * 100}%"></div>
@@ -382,6 +389,7 @@ window.leaveSpecificTeam = function(teamId) {
 // 3. 雙步驟創建與手機連動邏輯
 // ==========================================
 let pendingTeamData = null;
+window.pendingSquadCreateData = null;
 
 window.goToCreateTeamStep2 = function() {
     const nameInput = document.getElementById('teamNameInput');
@@ -391,12 +399,12 @@ window.goToCreateTeamStep2 = function() {
 
     const name = nameInput ? nameInput.value.trim() : '';
     const size = sizeInput ? sizeInput.value : '4';
-    const roomUrl = roomTypeInput ? roomTypeInput.value : 'managed-room.html';
+    const roomUrl = roomTypeInput ? roomTypeInput.value : 'immersive-room.html';
     const audit = auditInput ? auditInput.value : 'none';
 
     if (!name) {
         alert("⚠️ 系統提示：請輸入小隊名稱！");
-        if(nameInput) nameInput.focus();
+        if (nameInput) nameInput.focus();
         return;
     }
 
@@ -407,7 +415,35 @@ window.goToCreateTeamStep2 = function() {
         return;
     }
 
-    pendingTeamData = { name, size, roomUrl, audit };
+    // ✅ 新增：如果選擇主題教室，先暫存，不進手機連動 Step2，也不建立小隊
+    if (roomUrl === 'theme_room') {
+        window.pendingSquadCreateData = {
+            name,
+            size,
+            roomUrl: 'managed-room.html',
+            room_type: 'theme_room',
+            audit
+        };
+
+        closeCreateTeamModal();
+
+        if (typeof window.showThemeRoomModal === 'function') {
+            window.showThemeRoomModal();
+        } else {
+            alert('找不到主題教室彈窗功能，請確認 lobby-main.js 是否有載入。');
+        }
+
+        return;
+    }
+
+    // ✅ 原本沉浸式自習室流程維持不變
+    pendingTeamData = {
+        name,
+        size,
+        roomUrl,
+        room_type: 'study_room',
+        audit
+    };
 
     document.getElementById('createTeamStep1').classList.add('hidden');
     document.getElementById('createTeamStep2').classList.remove('hidden');
@@ -506,28 +542,107 @@ window.executeTeamCreation = function() {
     window.location.href = `${roomUrl}?mode=team&teamId=${uniqueCode}&teamName=${encodeURIComponent(name)}&size=${size}&audit=${audit}`;
 };
 
+window.executeThemeRoomTeamCreation = function(themeRoomData) {
+    if (!window.pendingSquadCreateData) return;
+
+    const {
+        name,
+        size,
+        roomUrl,
+        audit
+    } = window.pendingSquadCreateData;
+
+    const uniqueCode = 'TEAM-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+
+    const finalRoomUrl =
+        themeRoomData.targetUrl ||
+        `${roomUrl}?theme=${encodeURIComponent(themeRoomData.slug)}`;
+
+    if (typeof socket !== 'undefined') {
+        socket.emit('create_team', {
+            id: uniqueCode,
+            name: name,
+            creator: typeof myUsername !== 'undefined' ? myUsername : '匿名使用者',
+            maxMembers: parseInt(size),
+            currentMembers: 1,
+
+            roomType: finalRoomUrl,
+            room_type: 'theme_room',
+            theme_room_slug: themeRoomData.slug,
+            theme_room_name: themeRoomData.name,
+
+            goal: '主題教室衝刺',
+            totalHours: 0,
+            auditMode: audit
+        });
+    }
+
+    window.pendingSquadCreateData = null;
+
+    alert(`🚀 主題小隊建立成功！\n\n主題教室：${themeRoomData.name}\n小隊代碼：【 ${uniqueCode} 】`);
+
+    window.location.href =
+        `${finalRoomUrl}&mode=team&teamId=${uniqueCode}&teamName=${encodeURIComponent(name)}&size=${size}&audit=${audit}`;
+};
+
 // ==========================================
 // 4. 加入隊伍手機連動邏輯
 // ==========================================
 let pendingJoinData = null;
 window.joinSyncInterval = null;
+window.pendingThemeTeamJoinData = null;
 
-window.joinSpecificTeam = function(teamId, teamName, roomType) {
-    pendingJoinData = { teamId, teamName, roomType };
+window.joinSpecificTeam = function(teamId, teamName, roomType, roomCategory) {
+    const isThemeTeam =
+        roomCategory === 'theme_room' ||
+        roomType === 'theme_room' ||
+        (roomType && roomType.includes('theme='));
+
+    /// 主題教室小隊：第一次點加入時，先選主題，不開手機連動
+// selected_theme_room 代表學生已經在主題彈窗選完自己的主題，才可以進入手機連動
+if (isThemeTeam && roomCategory !== 'selected_theme_room') {
+        window.pendingThemeTeamJoinData = {
+            teamId,
+            teamName,
+            roomCategory: 'theme_room'
+        };
+
+        const joinModal = document.getElementById('joinTeamModal');
+        if (joinModal) {
+            joinModal.classList.add('hidden');
+            joinModal.classList.remove('flex');
+        }
+
+        if (typeof window.showThemeRoomModal === 'function') {
+            window.showThemeRoomModal();
+        } else {
+            alert('找不到主題教室彈窗，請確認 lobby-main.js 是否已載入。');
+        }
+
+        return;
+    }
+
+    pendingJoinData = {
+        teamId,
+        teamName,
+        roomType,
+        roomCategory: isThemeTeam ? 'theme_room' : 'study_room'
+    };
     
     // 🎯 [修正點 1] 精準定義是否為單機模式
     const isStandalone = window.location.pathname.includes('flip-room.html');
 
     if (isStandalone) {
-        // 如果是單機模式：隱藏列表，直接執行加入，【徹底防堵 QR 彈窗出現】
         const jtm = document.getElementById('joinTeamModal');
-        if (jtm) { jtm.classList.remove('flex'); jtm.classList.add('hidden'); }
+        if (jtm) {
+            jtm.classList.remove('flex');
+            jtm.classList.add('hidden');
+        }
         
         executeJoinTeam();
         return;
     }
 
-    // 以下為 PC 電腦版才需要顯示的 QR Code 彈窗邏輯
     const modal = document.getElementById('joinTeamSyncModal');
     if (modal) {
         modal.classList.remove('hidden');
@@ -541,6 +656,7 @@ window.joinSpecificTeam = function(teamId, teamName, roomType) {
     if (qrContainer) {
         qrContainer.innerHTML = '';
         const mobileUrl = `${window.location.origin}/mobile.html`;
+
         new QRCode(qrContainer, {
             text: mobileUrl,
             width: 144,

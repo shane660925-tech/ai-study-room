@@ -204,77 +204,104 @@
                 </div>
 
                 <div id="intro-mission-logs" class="w-full">
-                    <div class="glass-panel rounded-3xl overflow-hidden flex flex-col border border-white/5">
-                        <div class="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
-                            <h3 class="text-sm font-bold text-white uppercase tracking-tighter"><i class="fas fa-history mr-2 text-blue-400"></i>Mission Logs</h3>
-                        </div>
-                        <div class="p-0 overflow-y-auto h-[200px] custom-scroll">
-                            <table class="w-full text-left border-collapse">
-                                <tbody id="recordsTableBody" class="text-xs text-gray-400 divide-y divide-white/5">
-                                    <tr><td colspan="3" class="p-8 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>連線中...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+    <div class="glass-panel rounded-3xl overflow-hidden flex flex-col border border-white/5">
+        <div class="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
+            <h3 class="text-sm font-bold text-white uppercase tracking-tighter">
+                <i class="fas fa-history mr-2 text-blue-400"></i>Mission Logs
+            </h3>
+        </div>
+        <div class="p-0 overflow-y-auto h-[200px] custom-scroll">
+            <table class="w-full text-left border-collapse">
+                <tbody id="recordsTableBody" class="text-xs text-gray-400 divide-y divide-white/5">
+                    <tr>
+                        <td colspan="3" class="p-8 text-center">
+                            <i class="fas fa-circle-notch fa-spin mr-2"></i>連線中...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+</div>
 
             </div>
 
             <div class="lg:col-span-1 flex flex-col gap-6">
-                <div>
-                    <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 italic">Device Sync</h2>
-                    <div id="syncModule" class="glass-panel p-6 rounded-3xl border border-blue-500/20 text-center flex flex-col items-center">
-                        <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2">
-                            <i class="fas fa-qrcode"></i> 手機連動 QR CODE
-                        </div>
-                        <div id="qrcode" class="p-2 bg-white rounded-xl shadow-2xl shadow-blue-500/20"></div>
-                        <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">請用手機掃描並完成翻轉<br>即可在 AI 教室中獲得誤判豁免</p>
-                        <button onclick="copyMobileUrl()" class="mt-4 text-[10px] text-blue-500 font-mono underline hover:text-blue-400 transition-colors">COPY MOBILE LINK</button>
-                    </div>
-                     <div>
-    <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 italic">Parent Link</h2>
+    <div>
+        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 italic">Device Sync</h2>
+        <div id="syncModule" class="glass-panel p-6 rounded-3xl border border-blue-500/20 text-center flex flex-col items-center">
+            <div class="text-blue-500 text-xs font-black mb-4 flex items-center gap-2">
+                <i class="fas fa-qrcode"></i> 手機連動 QR CODE
+            </div>
+            <div id="qrcode" class="p-2 bg-white rounded-xl shadow-2xl shadow-blue-500/20"></div>
+            <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">請用手機掃描並完成翻轉<br>即可在 AI 教室中獲得誤判豁免</p>
+            <button onclick="copyMobileUrl()" class="mt-4 text-[10px] text-blue-500 font-mono underline hover:text-blue-400 transition-colors">COPY MOBILE LINK</button>
+        </div>
+    </div>
 
-    <div id="lineBindModule"
-         class="glass-panel p-6 rounded-3xl border border-green-500/20 text-center flex flex-col items-center">
+    <div>
+        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 italic">Parent Link</h2>
+        <div id="lineBindModule"
+             class="glass-panel p-6 rounded-3xl border border-green-500/20 text-center flex flex-col items-center">
+            <div class="text-green-500 text-xs font-black mb-4 flex items-center gap-2">
+                <i class="fab fa-line"></i> LINE 學習紀錄綁定 QR CODE
+            </div>
+            <div id="lineBindQrcode"
+                 class="p-2 bg-white rounded-xl shadow-2xl shadow-green-500/20"></div>
+            <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">
+                掃描後即可綁定 LINE<br>之後將收到學習紀錄
+            </p>
+            <p id="lineBindStatus"
+               class="text-[10px] text-green-400 mt-3 font-bold">
+                載入中...
+            </p>
+        </div>
+    </div>
 
-        <div class="text-green-500 text-xs font-black mb-4 flex items-center gap-2">
-            <i class="fab fa-line"></i> LINE 學習紀錄綁定 QR CODE
+    <a id="intro-standalone-mode" href="flip-room.html"
+       class="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white font-black rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.6)] hover:shadow-[0_0_35px_rgba(59,130,246,0.9)] hover:-translate-y-1 transition-all duration-300 animate-pulse border border-blue-400/50 group w-full">
+
+        <div class="relative">
+            <i class="fas fa-mobile-alt text-2xl group-hover:rotate-12 transition-transform"></i>
+            <i class="fas fa-sync-alt absolute -bottom-2 -right-2 text-[10px] text-blue-200 animate-spin-slow"></i>
         </div>
 
-        <div id="lineBindQrcode"
-             class="p-2 bg-white rounded-xl shadow-2xl shadow-green-500/20"></div>
+        <div class="flex flex-col items-start text-left">
+            <span class="text-lg tracking-wider">單機翻轉模式</span>
+            <span class="text-[10px] text-blue-200 font-normal uppercase tracking-widest">無須電腦 ‧ 立即專注</span>
+        </div>
 
-        <p class="text-[10px] text-gray-500 mt-4 leading-relaxed">
-            掃描後即可綁定 LINE<br>
-之後將收到學習紀錄
+        <div class="ml-2 bg-white/20 text-white text-[10px] px-2 py-1 rounded-md backdrop-blur-sm">
+            游擊隊專屬
+        </div>
+    </a>
+
+    <div id="course-store-card"
+         onclick="showCourseStoreModal()"
+         class="glass-panel p-6 rounded-3xl room-card flex flex-col border border-cyan-500/30 group cursor-pointer relative overflow-hidden min-h-[200px]">
+
+        <div class="absolute top-0 right-0 bg-cyan-500 text-[8px] text-black px-3 py-1 font-black rounded-bl-xl uppercase">
+            Store
+        </div>
+
+        <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 text-2xl mb-4 group-hover:bg-cyan-500 group-hover:text-white transition-all">
+            <i class="fas fa-store"></i>
+        </div>
+
+        <h3 class="text-xl font-black text-white mb-1">課程商店</h3>
+
+        <p class="text-gray-500 text-xs mb-4 flex-1">
+            查看目前開放購買的線上課程。點擊後選擇課程並前往結帳。
         </p>
 
-        <p id="lineBindStatus"
-           class="text-[10px] text-green-400 mt-3 font-bold">
-            載入中...
-        </p>
+        <div class="w-full text-center bg-cyan-600/20 group-hover:bg-cyan-600 py-2 rounded-lg text-xs font-bold text-cyan-400 group-hover:text-white transition-all">
+            查看課程
+        </div>
     </div>
 </div>
-                </div>
-
-                <a id="intro-standalone-mode" href="flip-room.html" 
-                   class="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white font-black rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.6)] hover:shadow-[0_0_35px_rgba(59,130,246,0.9)] hover:-translate-y-1 transition-all duration-300 animate-pulse border border-blue-400/50 group w-full">
-                    
-                    <div class="relative">
-                        <i class="fas fa-mobile-alt text-2xl group-hover:rotate-12 transition-transform"></i>
-                        <i class="fas fa-sync-alt absolute -bottom-2 -right-2 text-[10px] text-blue-200 animate-spin-slow"></i>
-                    </div>
-                    
-                    <div class="flex flex-col items-start text-left">
-                        <span class="text-lg tracking-wider">單機翻轉模式</span>
-                        <span class="text-[10px] text-blue-200 font-normal uppercase tracking-widest">無須電腦 ‧ 立即專注</span>
-                    </div>
-                    
-                    <div class="ml-2 bg-white/20 text-white text-[10px] px-2 py-1 rounded-md backdrop-blur-sm">
-                        游擊隊專屬
-                    </div>
-                </a>
-                </div>
         </section>
     </main>
 

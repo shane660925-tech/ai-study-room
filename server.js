@@ -189,6 +189,184 @@ async function verifyAdmin(req, res, next) {
     }
 }
 
+// ==========================================
+// Tutor Schedules API - 特約教室多房間
+// ==========================================
+
+function generateTutorRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+
+    for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    return code;
+}
+
+async function generateUniqueTutorRoomCode() {
+    let code;
+    let isUnique = false;
+
+    while (!isUnique) {
+        code = generateTutorRoomCode();
+
+        const { data, error } = await supabase
+            .from('tutor_schedules')
+            .select('room_code')
+            .eq('room_code', code)
+            .maybeSingle();
+
+        if (error) {
+            throw error;
+        }
+
+        if (!data) {
+            isUnique = true;
+        }
+    }
+
+    return code;
+}
+
+// 建立一間新的特約教室
+app.post('/api/tutor-schedules', async (req, res) => {
+    try {
+        const {
+            teacherUsername,
+            roomTitle,
+            roomSize,
+            periods,
+            classMinutes,
+            restMinutes,
+            startTime
+        } = req.body;
+
+        if (!teacherUsername) {
+            return res.status(400).json({ error: '缺少 teacherUsername' });
+        }
+
+        if (!periods || !classMinutes || !restMinutes || !startTime) {
+            return res.status(400).json({ error: '排課資料不完整' });
+        }
+
+        const { data: teacher, error: teacherError } = await supabase
+            .from('users')
+            .select('username, role, teacher_status, is_blocked')
+            .eq('username', teacherUsername)
+            .maybeSingle();
+
+        if (teacherError) throw teacherError;
+
+        if (!teacher) {
+            return res.status(404).json({ error: '找不到教師帳號' });
+        }
+
+        if (teacher.is_blocked) {
+            return res.status(403).json({ error: '此教師帳號已被停用' });
+        }
+
+        if (teacher.role !== 'teacher' && teacher.role !== 'admin') {
+            return res.status(403).json({ error: '此帳號不是教師或管理員' });
+        }
+
+        if (teacher.role === 'teacher' && teacher.teacher_status !== 'approved') {
+            return res.status(403).json({ error: '教師資格尚未通過審核' });
+        }
+
+        const roomCode = await generateUniqueTutorRoomCode();
+
+        const { data: schedule, error: insertError } = await supabase
+            .from('tutor_schedules')
+            .insert([{
+                teacher_username: teacherUsername,
+                room_code: roomCode,
+                room_title: roomTitle || '特約教室',
+                room_size: roomSize || null,
+                periods: Number(periods),
+                class_minutes: Number(classMinutes),
+                rest_minutes: Number(restMinutes),
+                start_time: startTime,
+                status: 'live'
+            }])
+            .select()
+            .single();
+
+        if (insertError) throw insertError;
+
+        res.json({
+            success: true,
+            schedule
+        });
+
+    } catch (err) {
+        console.error('建立特約教室失敗:', err);
+        res.status(500).json({ error: '建立特約教室失敗' });
+    }
+});
+
+// 取得某位教師目前的特約教室
+app.get('/api/tutor-schedules', async (req, res) => {
+    try {
+        const teacherUsername = req.query.teacherUsername;
+
+        if (!teacherUsername) {
+            return res.status(400).json({ error: '缺少 teacherUsername' });
+        }
+
+        const { data: schedules, error } = await supabase
+            .from('tutor_schedules')
+            .select('*')
+            .eq('teacher_username', teacherUsername)
+            .in('status', ['scheduled', 'live'])
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            schedules: schedules || []
+        });
+
+    } catch (err) {
+        console.error('取得特約教室列表失敗:', err);
+        res.status(500).json({ error: '取得特約教室列表失敗' });
+    }
+});
+
+// 學生輸入代碼時，用 room_code 查教室
+app.get('/api/tutor-schedules/by-code/:roomCode', async (req, res) => {
+    try {
+        const roomCode = String(req.params.roomCode || '').trim().toUpperCase();
+
+        if (!roomCode) {
+            return res.status(400).json({ error: '缺少 roomCode' });
+        }
+
+        const { data: schedule, error } = await supabase
+            .from('tutor_schedules')
+            .select('*')
+            .eq('room_code', roomCode)
+            .in('status', ['scheduled', 'live'])
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!schedule) {
+            return res.status(404).json({ error: '找不到此特約教室，請確認代碼是否正確' });
+        }
+
+        res.json({
+            success: true,
+            schedule
+        });
+
+    } catch (err) {
+        console.error('查詢特約教室代碼失敗:', err);
+        res.status(500).json({ error: '查詢特約教室代碼失敗' });
+    }
+});
+
 async function createNotification({
     username,
     type,
@@ -1436,6 +1614,756 @@ app.post('/api/intro-complete', async (req, res) => {
     }
 });
 
+function generateOrderNo() {
+    const datePart = new Date()
+        .toISOString()
+        .replace(/[-:.TZ]/g, '')
+        .slice(0, 14);
+
+    const randomPart = Math.random()
+        .toString(36)
+        .substring(2, 8)
+        .toUpperCase();
+
+    return `SV${datePart}${randomPart}`;
+}
+
+function calculateDiscount(originalAmount, discountCode) {
+    if (!discountCode) {
+        return 0;
+    }
+
+    if (discountCode.discount_type === 'percent') {
+        return Math.floor(originalAmount * Number(discountCode.discount_value || 0) / 100);
+    }
+
+    if (discountCode.discount_type === 'fixed') {
+        return Number(discountCode.discount_value || 0);
+    }
+
+    return 0;
+}
+
+const SUBSCRIPTION_PRICE = 300;
+const SUBSCRIPTION_MONTHS = 1;
+
+app.get('/api/subscription/status', async (req, res) => {
+    try {
+        const username = req.query.username;
+
+        if (!username) {
+            return res.status(400).json({
+                is_subscribed: false,
+                error: '缺少 username'
+            });
+        }
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, is_subscribed, subscription_status, subscription_end_date')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!user) {
+            return res.status(404).json({
+                is_subscribed: false,
+                error: '找不到使用者'
+            });
+        }
+
+        const now = Date.now();
+        const endDate = user.subscription_end_date
+            ? new Date(user.subscription_end_date).getTime()
+            : 0;
+
+        const active =
+            user.is_subscribed === true &&
+            user.subscription_status === 'active' &&
+            endDate > now;
+
+        res.json({
+            username: user.username,
+            is_subscribed: active,
+            subscription_status: active ? 'active' : 'expired',
+            subscription_end_date: user.subscription_end_date
+        });
+
+    } catch (err) {
+        console.error('取得訂閱狀態失敗:', err);
+        res.status(500).json({
+            is_subscribed: false,
+            error: '取得訂閱狀態失敗',
+            detail: err.message
+        });
+    }
+});
+
+app.post('/api/subscription/create-order', async (req, res) => {
+    try {
+        const { username, discountCode } = req.body;
+
+        if (!username) {
+            return res.status(400).json({
+                error: '缺少 username'
+            });
+        }
+
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('username, is_subscribed, subscription_status, subscription_end_date, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (userError) throw userError;
+
+        if (!user) {
+            return res.status(404).json({
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                error: '此帳號已被停用，無法訂閱'
+            });
+        }
+
+        let validDiscountCode = null;
+
+        if (discountCode) {
+            const cleanCode = String(discountCode).trim().toUpperCase();
+
+            const { data: codeData, error: codeError } = await supabase
+                .from('discount_codes')
+                .select('*')
+                .eq('code', cleanCode)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (codeError) throw codeError;
+
+            if (!codeData) {
+                return res.status(400).json({
+                    error: '優惠碼不存在或已停用'
+                });
+            }
+
+            if (
+                codeData.expires_at &&
+                new Date(codeData.expires_at).getTime() < Date.now()
+            ) {
+                return res.status(400).json({
+                    error: '優惠碼已過期'
+                });
+            }
+
+            validDiscountCode = codeData;
+        }
+
+        const originalAmount = SUBSCRIPTION_PRICE;
+        let discountAmount = calculateDiscount(originalAmount, validDiscountCode);
+
+        if (discountAmount > originalAmount) {
+            discountAmount = originalAmount;
+        }
+
+        const amount = Math.max(originalAmount - discountAmount, 0);
+        const orderNo = generateOrderNo();
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert([{
+                order_no: orderNo,
+                username,
+                course_id: null,
+                discount_code_id: validDiscountCode ? validDiscountCode.id : null,
+                original_amount: originalAmount,
+                discount_amount: discountAmount,
+                amount,
+                status: 'pending',
+                order_type: 'subscription',
+                subscription_months: SUBSCRIPTION_MONTHS
+            }])
+            .select()
+            .single();
+
+        if (orderError) throw orderError;
+
+        res.json({
+            success: true,
+            order,
+            subscription: {
+                months: SUBSCRIPTION_MONTHS,
+                originalAmount,
+                discountAmount,
+                amount,
+                isFreeCheckout: amount === 0
+            }
+        });
+
+    } catch (err) {
+        console.error('建立訂閱訂單失敗:', err);
+        res.status(500).json({
+            error: '建立訂閱訂單失敗',
+            detail: err.message
+        });
+    }
+});
+
+async function activateSubscriptionByOrder(orderId) {
+    if (!orderId) {
+        throw new Error('缺少 orderId');
+    }
+
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+
+    if (orderError) throw orderError;
+
+    if (!order) {
+        throw new Error('找不到訂閱訂單');
+    }
+
+    if (order.order_type !== 'subscription') {
+        throw new Error('這不是訂閱訂單');
+    }
+
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setMonth(endDate.getMonth() + Number(order.subscription_months || 1));
+
+    const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+            status: 'paid',
+            updated_at: now.toISOString()
+        })
+        .eq('id', order.id);
+
+    if (orderUpdateError) throw orderUpdateError;
+
+    const { data: updatedUser, error: userUpdateError } = await supabase
+        .from('users')
+        .update({
+            is_subscribed: true,
+            subscription_status: 'active',
+            subscription_started_at: now.toISOString(),
+            subscription_end_date: endDate.toISOString()
+        })
+        .eq('username', order.username)
+        .select('username, is_subscribed, subscription_status, subscription_end_date')
+        .maybeSingle();
+
+    if (userUpdateError) throw userUpdateError;
+
+    return {
+        order: {
+            ...order,
+            status: 'paid'
+        },
+        user: updatedUser
+    };
+}
+
+app.post('/api/subscription/free-complete', async (req, res) => {
+    try {
+        const { username, orderId } = req.body;
+
+        if (!username || !orderId) {
+            return res.status(400).json({
+                error: '缺少 username 或 orderId'
+            });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .eq('username', username)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({
+                error: '找不到訂閱訂單'
+            });
+        }
+
+        if (order.order_type !== 'subscription') {
+            return res.status(400).json({
+                error: '這不是訂閱訂單'
+            });
+        }
+
+        if (Number(order.amount || 0) !== 0) {
+            return res.status(400).json({
+                error: '此訂單不是免費封測訂閱訂單'
+            });
+        }
+
+        const result = await activateSubscriptionByOrder(orderId);
+
+        res.json({
+            success: true,
+            message: '免費封測訂閱成功',
+            result
+        });
+
+    } catch (err) {
+        console.error('免費封測訂閱失敗:', err);
+
+        res.status(500).json({
+            error: '免費封測訂閱失敗',
+            detail: err.message
+        });
+    }
+});
+
+app.post('/api/checkout/create-order', async (req, res) => {
+    try {
+        const { username, courseId } = req.body;
+
+        if (!username || !courseId) {
+            return res.status(400).json({
+                error: '缺少 username 或 courseId'
+            });
+        }
+
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('username, is_blocked, is_subscribed, subscription_status, subscription_end_date')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (userError) throw userError;
+
+        if (!user) {
+            return res.status(404).json({ error: '找不到使用者' });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({ error: '此帳號已被停用，無法結帳' });
+        }
+
+        const now = Date.now();
+        const subEnd = user.subscription_end_date
+            ? new Date(user.subscription_end_date).getTime()
+            : 0;
+
+        const isSubscribed =
+            user.is_subscribed === true &&
+            user.subscription_status === 'active' &&
+            subEnd > now;
+
+        if (!isSubscribed) {
+            return res.status(403).json({
+                error: '請先完成全站訂閱，才能購買單堂課程',
+                needSubscription: true
+            });
+        }
+
+        const { data: course, error: courseError } = await supabase
+            .from('courses')
+            .select('id, course_name, price, status')
+            .eq('id', courseId)
+            .maybeSingle();
+
+        if (courseError) throw courseError;
+
+        if (!course) {
+            return res.status(404).json({ error: '找不到課程' });
+        }
+
+        if (course.status !== 'approved' && course.status !== 'active') {
+            return res.status(400).json({ error: '此課程尚未開放結帳' });
+        }
+
+        const { data: existingEnrollment, error: enrollCheckError } = await supabase
+            .from('course_enrollments')
+            .select('id')
+            .eq('username', username)
+            .eq('course_id', courseId)
+            .maybeSingle();
+
+        if (enrollCheckError) throw enrollCheckError;
+
+        if (existingEnrollment) {
+            return res.status(400).json({
+                error: '你已經加入過這門課'
+            });
+        }
+
+        const originalAmount = Number(course.price || 0);
+        const discountAmount = 0;
+        const amount = originalAmount;
+        const orderNo = generateOrderNo();
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert([{
+                order_no: orderNo,
+                username,
+                course_id: courseId,
+                discount_code_id: null,
+                original_amount: originalAmount,
+                discount_amount: discountAmount,
+                amount,
+                status: 'pending',
+                order_type: 'course',
+                subscription_months: null
+            }])
+            .select()
+            .single();
+
+        if (orderError) throw orderError;
+
+        res.json({
+            success: true,
+            course: {
+                id: course.id,
+                course_name: course.course_name,
+                price: originalAmount
+            },
+            order,
+            payment: {
+                originalAmount,
+                discountAmount,
+                amount,
+                isFreeCheckout: false
+            }
+        });
+
+    } catch (err) {
+        console.error('建立課程訂單失敗:', err);
+
+        res.status(500).json({
+            error: '建立課程訂單失敗',
+            detail: err.message
+        });
+    }
+});
+
+async function handlePaymentSuccess(orderId) {
+    if (!orderId) {
+        throw new Error('缺少 orderId');
+    }
+
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+
+    if (orderError) throw orderError;
+
+    if (!order) {
+        throw new Error('找不到訂單');
+    }
+
+    if (order.status === 'paid') {
+        const { data: enrollment } = await supabase
+            .from('course_enrollments')
+            .select('*')
+            .eq('username', order.username)
+            .eq('course_id', order.course_id)
+            .maybeSingle();
+
+        return {
+            alreadyPaid: true,
+            order,
+            enrollment
+        };
+    }
+
+    const { error: updateOrderError } = await supabase
+        .from('orders')
+        .update({
+            status: 'paid',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+    if (updateOrderError) throw updateOrderError;
+
+    const { data: existingEnrollment, error: enrollCheckError } = await supabase
+        .from('course_enrollments')
+        .select('*')
+        .eq('username', order.username)
+        .eq('course_id', order.course_id)
+        .maybeSingle();
+
+    if (enrollCheckError) throw enrollCheckError;
+
+    let enrollment = existingEnrollment;
+
+    if (!existingEnrollment) {
+        const { data: newEnrollment, error: enrollError } = await supabase
+            .from('course_enrollments')
+            .insert([{
+                username: order.username,
+                course_id: order.course_id,
+                order_id: order.id
+            }])
+            .select()
+            .single();
+
+        if (enrollError) throw enrollError;
+
+        enrollment = newEnrollment;
+    }
+
+    const { data: updatedOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+
+    return {
+        alreadyPaid: false,
+        order: updatedOrder || {
+            ...order,
+            status: 'paid'
+        },
+        enrollment
+    };
+}
+
+app.post('/api/checkout/mock-course-paid', async (req, res) => {
+    try {
+        const { username, orderId } = req.body;
+
+        if (!username || !orderId) {
+            return res.status(400).json({
+                error: '缺少 username 或 orderId'
+            });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .eq('username', username)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({
+                error: '找不到課程訂單'
+            });
+        }
+
+        if (order.order_type !== 'course') {
+            return res.status(400).json({
+                error: '這不是單堂課程訂單'
+            });
+        }
+
+        const result = await handlePaymentSuccess(orderId);
+
+        res.json({
+            success: true,
+            message: '模擬付款成功，已加入課程',
+            result
+        });
+
+    } catch (err) {
+        console.error('模擬課程付款失敗:', err);
+
+        res.status(500).json({
+            error: '模擬課程付款失敗',
+            detail: err.message
+        });
+    }
+});
+
+app.post('/api/checkout/free-complete', async (req, res) => {
+    try {
+        const { orderId, username } = req.body;
+
+        if (!orderId || !username) {
+            return res.status(400).json({
+                error: '缺少 orderId 或 username'
+            });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .eq('username', username)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({
+                error: '找不到訂單'
+            });
+        }
+
+        if (Number(order.amount || 0) !== 0) {
+            return res.status(400).json({
+                error: '此訂單不是免費封測訂單，不能直接完成'
+            });
+        }
+
+        const result = await handlePaymentSuccess(orderId);
+
+        res.json({
+            success: true,
+            message: '免費封測加入課程成功',
+            result
+        });
+
+    } catch (err) {
+        console.error('免費封測通關失敗:', err);
+
+        res.status(500).json({
+            error: '免費封測通關失敗',
+            detail: err.message
+        });
+    }
+});
+
+app.get('/api/courses/enrolled', async (req, res) => {
+    try {
+        const username = req.query.username;
+
+        if (!username) {
+            return res.status(400).json({
+                error: '缺少 username'
+            });
+        }
+
+        const { data, error } = await supabase
+            .from('course_enrollments')
+            .select(`
+                id,
+                joined_at,
+                course_id,
+                courses (
+                    id,
+                    teacher_username,
+                    course_name,
+                    subject,
+                    intro,
+                    course_type,
+                    google_meet_url,
+                    weekly_day,
+                    start_time,
+                    class_minutes,
+                    break_minutes,
+                    total_sessions,
+                    start_date,
+                    end_date,
+                    course_room_code,
+                    status,
+                    price
+                )
+            `)
+            .eq('username', username)
+            .order('joined_at', { ascending: false });
+
+        if (error) throw error;
+
+        const courses = (data || [])
+            .filter(row => row.courses)
+            .map(row => ({
+                enrollment_id: row.id,
+                joined_at: row.joined_at,
+                ...row.courses
+            }));
+
+        res.json({
+            success: true,
+            courses
+        });
+
+    } catch (err) {
+        console.error('取得已加入課程失敗:', err);
+
+        res.status(500).json({
+            error: '取得已加入課程失敗',
+            detail: err.message
+        });
+    }
+});
+
+app.get('/api/courses/can-enter', async (req, res) => {
+    try {
+        const { username, courseId } = req.query;
+
+        if (!username || !courseId) {
+            return res.status(400).json({
+                canEnter: false,
+                error: '缺少 username 或 courseId'
+            });
+        }
+
+        const { data: course, error: courseError } = await supabase
+            .from('courses')
+            .select('id, course_name, status, course_room_code')
+            .eq('id', courseId)
+            .maybeSingle();
+
+        if (courseError) throw courseError;
+
+        if (!course) {
+            return res.status(404).json({
+                canEnter: false,
+                error: '找不到課程'
+            });
+        }
+
+        if (course.status !== 'approved' && course.status !== 'active') {
+            return res.status(403).json({
+                canEnter: false,
+                error: '此課程尚未開放'
+            });
+        }
+
+        const { data: enrollment, error: enrollmentError } = await supabase
+            .from('course_enrollments')
+            .select('id')
+            .eq('username', username)
+            .eq('course_id', courseId)
+            .maybeSingle();
+
+        if (enrollmentError) throw enrollmentError;
+
+        if (!enrollment) {
+            return res.status(403).json({
+                canEnter: false,
+                needCheckout: true,
+                course,
+                error: '尚未加入此課程，請先完成結帳'
+            });
+        }
+
+        res.json({
+            canEnter: true,
+            needCheckout: false,
+            course
+        });
+
+    } catch (err) {
+        console.error('檢查課程進入權限失敗:', err);
+
+        res.status(500).json({
+            canEnter: false,
+            error: '檢查課程進入權限失敗',
+            detail: err.message
+        });
+    }
+});
+
 // ==========================================
 // Course MVP API - 一個課程一個 roomCode
 // ==========================================
@@ -1540,6 +2468,48 @@ app.post('/api/courses/create', async (req, res) => {
         console.error('建立課程失敗:', err);
         res.status(500).json({
             error: '建立課程失敗',
+            detail: err.message
+        });
+    }
+});
+
+// 課程商店：取得目前開放購買的線上課程
+app.get('/api/courses/store', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('courses')
+            .select(`
+    id,
+    teacher_username,
+    course_name,
+    subject,
+    intro,
+    course_type,
+    price,
+    status,
+    start_date,
+    end_date,
+    weekly_day,
+    start_time,
+    max_students,
+    enrolled_count,
+    created_at
+`)
+            .in('status', ['approved', 'active'])
+            .eq('is_public', true)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            courses: data || []
+        });
+
+    } catch (err) {
+        console.error('取得課程商店失敗:', err);
+        res.status(500).json({
+            error: '取得課程商店失敗',
             detail: err.message
         });
     }
