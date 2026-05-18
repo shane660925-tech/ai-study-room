@@ -1161,7 +1161,8 @@ window.openTeacherSetupModal = function() {
 };
 
 // 教師生成房間並跳轉
-window.generateTeacherRoom = function() {
+// 教師生成房間並跳轉
+window.generateTeacherRoom = async function() {
     const size = document.getElementById('teacherRoomSize').value;
     const periods = document.getElementById('teacherPeriods').value;
     const periodTime = document.getElementById('teacherPeriodTime').value;
@@ -1173,109 +1174,167 @@ window.generateTeacherRoom = function() {
         return;
     }
 
-    // 隨機生成一組 6 碼的教室代碼
     const username = localStorage.getItem('studyVerseUser');
 
-if (!username) {
-    alert('請先登入後再建立教師教室。');
-    return;
-}
-
-const roomCode = `teacher_${username}`;
-
-    // 【修正點】：將排程資料存入 localStorage，Key 使用動態 roomCode 以供同步
-    const scheduleData = {
-        roomCode,
-        size,
-        periods: parseInt(periods),
-        periodTime: parseInt(periodTime),
-        restTime: parseInt(restTime),
-        startTime
-    };
-    
-    // 使用具備房間代碼的 Key 進行存儲，解決 Dashboard 讀取問題
-    localStorage.setItem(`tutor_schedule_${roomCode}`, JSON.stringify(scheduleData));
-
-    // 發送給 Socket 建立獨立房間
-    if (typeof socket !== 'undefined') {
-        socket.emit('create_tutor_room', scheduleData);
+    if (!username) {
+        alert('請先登入後再建立教師教室。');
+        return;
     }
 
     try {
-        navigator.clipboard.writeText(roomCode);
-        alert(`建立成功！您的教室代碼為：${roomCode}\n(代碼已自動為您複製)\n請將此代碼分享給學生。`);
-    } catch(e) {
-        alert(`建立成功！您的教室代碼為：${roomCode}\n請將此代碼分享給學生。`);
+        const res = await fetch('/api/tutor-schedules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                teacherUsername: username,
+                roomTitle: '特約教室',
+                roomSize: size,
+                periods: parseInt(periods),
+                classMinutes: parseInt(periodTime),
+                restMinutes: parseInt(restTime),
+                startTime
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success || !data.schedule) {
+            alert(data.error || '建立特約教室失敗');
+            return;
+        }
+
+        const schedule = data.schedule;
+        const roomCode = schedule.room_code;
+
+        const scheduleData = {
+            roomCode,
+            room_code: roomCode,
+            teacherUsername: username,
+            teacher_username: username,
+            roomTitle: schedule.room_title || '特約教室',
+            roomSize: schedule.room_size || size,
+            size,
+            periods: Number(schedule.periods || periods),
+            periodTime: Number(schedule.class_minutes || periodTime),
+            classMinutes: Number(schedule.class_minutes || periodTime),
+            restTime: Number(schedule.rest_minutes || restTime),
+            restMinutes: Number(schedule.rest_minutes || restTime),
+            startTime: schedule.start_time || startTime,
+            status: schedule.status || 'live',
+            id: schedule.id
+        };
+
+        localStorage.setItem(`tutor_schedule_${roomCode}`, JSON.stringify(scheduleData));
+
+        if (typeof socket !== 'undefined') {
+            socket.emit('create_tutor_room', scheduleData);
+        }
+
+        try {
+            await navigator.clipboard.writeText(roomCode);
+            alert(`建立成功！您的教室代碼為：${roomCode}\n代碼已自動複製，請分享給學生。`);
+        } catch (e) {
+            alert(`建立成功！您的教室代碼為：${roomCode}\n請分享給學生。`);
+        }
+
+        window.location.href =
+            `/tutor-dashboard.html?room=${encodeURIComponent(roomCode)}&teacher=${encodeURIComponent(username)}`;
+
+    } catch (err) {
+        console.error('建立特約教室失敗:', err);
+        alert('建立特約教室失敗，請稍後再試。');
     }
-    
-    // 跳轉至教師控制台，並帶上代碼參數
-    window.location.href = `/tutor-dashboard.html?room=${roomCode}`;
 };
 
 // ================= 新增：VIP 特約教室代碼驗證與專屬跳轉 =================
-window.verifyAndEnterTutorRoom = function() {
+window.verifyAndEnterTutorRoom = async function() {
     const codeInput = document.getElementById('tutorRoomCode');
-    const roomCode = codeInput ? codeInput.value.trim() : '';
+    const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
 
     if (!roomCode) {
         alert("請先輸入教師提供的教室代碼！");
         return;
     }
 
-    // 驗證成功後，將代碼存入 sessionStorage
-    sessionStorage.setItem('currentTutorRoomCode', roomCode);
-    targetRoomUrl = `/tutor-room.html?room=${roomCode}`; 
-    
-    // 手機防呆檢查
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
         alert("⚠️ 特約教室需要使用「電腦」進入，並將手機作為翻轉輔助鏡頭。請改用電腦開啟此網頁！");
         return;
     }
 
-    // 1. 關閉普通教室彈窗 (避免重疊)
-    const normalModal = document.getElementById('device-modal');
-    if (normalModal) {
-        normalModal.classList.add('hidden');
-        normalModal.classList.remove('flex');
-    }
+    try {
+        const res = await fetch(`/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}`);
+        const data = await res.json();
 
-    // 2. 開啟特約專屬彈窗
-    const qrContainer = document.getElementById('tutor-qrcode-container');
-    const tutorModal = document.getElementById('tutor-auth-modal') || 
-                       document.getElementById('tutorModal') || 
-                       (qrContainer ? qrContainer.closest('.fixed') : null);
-
-    if (tutorModal) {
-        tutorModal.classList.remove('hidden');
-        tutorModal.classList.add('flex', 'z-[100]');
-        
-        // ====== 關鍵修復：手動生成通往 mobile.html 的 QR Code ======
-        if (qrContainer) {
-            qrContainer.innerHTML = ''; // 清空原本的預設圖示
-            
-            // 取得使用者名稱與 Socket ID 以產生專屬網址
-            const username = localStorage.getItem('studyVerseUser') || '學員';
-            const syncToken = typeof socket !== 'undefined' ? socket.id : '';
-            
-            // 組合正確的 mobile.html 網址
-            const mobileUrl = `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}`;
-            
-            // 繪製 QR Code (使用黑底白字符合您的 UI 風格，若掃描不易可對調顏色)
-            new QRCode(qrContainer, {
-                text: mobileUrl,
-                width: 160,
-                height: 160,
-                colorDark: "#ffffff", 
-                colorLight: "#000000" 
-            });
-        } else {
-            console.error("找不到用來放 QR Code 的容器 (tutor-qrcode-container)！");
+        if (!res.ok || !data.success || !data.schedule) {
+            alert(data.error || '找不到此特約教室，請確認代碼是否正確。');
+            return;
         }
-        
-        // 觸發連動監聽
-        if (typeof initMobileSync === 'function') initMobileSync();
-    } else {
-        alert("找不到特約專屬彈窗！請檢查 HTML 結構。");
+
+        const schedule = data.schedule;
+
+        const scheduleData = {
+            roomCode: schedule.room_code,
+            room_code: schedule.room_code,
+            teacherUsername: schedule.teacher_username,
+            teacher_username: schedule.teacher_username,
+            roomTitle: schedule.room_title || '特約教室',
+            roomSize: schedule.room_size,
+            periods: Number(schedule.periods || 1),
+            periodTime: Number(schedule.class_minutes || 50),
+            classMinutes: Number(schedule.class_minutes || 50),
+            restTime: Number(schedule.rest_minutes || 10),
+            restMinutes: Number(schedule.rest_minutes || 10),
+            startTime: schedule.start_time,
+            status: schedule.status,
+            id: schedule.id
+        };
+
+        sessionStorage.setItem('currentTutorRoomCode', schedule.room_code);
+        localStorage.setItem(`tutor_schedule_${schedule.room_code}`, JSON.stringify(scheduleData));
+
+        targetRoomUrl = `/tutor-room.html?room=${encodeURIComponent(schedule.room_code)}`;
+
+        const normalModal = document.getElementById('device-modal');
+        if (normalModal) {
+            normalModal.classList.add('hidden');
+            normalModal.classList.remove('flex');
+        }
+
+        const qrContainer = document.getElementById('tutor-qrcode-container');
+        const tutorModal = document.getElementById('tutor-auth-modal') ||
+                           document.getElementById('tutorModal') ||
+                           (qrContainer ? qrContainer.closest('.fixed') : null);
+
+        if (tutorModal) {
+            tutorModal.classList.remove('hidden');
+            tutorModal.classList.add('flex', 'z-[100]');
+
+            if (qrContainer) {
+                qrContainer.innerHTML = '';
+
+                const username = localStorage.getItem('studyVerseUser') || '學員';
+                const syncToken = typeof socket !== 'undefined' ? socket.id : '';
+
+                const mobileUrl =
+                    `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}`;
+
+                new QRCode(qrContainer, {
+                    text: mobileUrl,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#ffffff",
+                    colorLight: "#000000"
+                });
+            }
+        } else {
+            alert("找不到特約教室連動彈窗，請檢查 HTML 結構。");
+        }
+
+    } catch (err) {
+        console.error('驗證特約教室代碼失敗:', err);
+        alert('驗證特約教室代碼失敗，請稍後再試。');
     }
 };
 

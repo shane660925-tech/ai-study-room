@@ -189,6 +189,185 @@ async function verifyAdmin(req, res, next) {
     }
 }
 
+// ==========================================
+// Tutor Schedules API - 特約教室多房間
+// ==========================================
+
+
+function generateTutorRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+
+    for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    return code;
+}
+
+async function generateUniqueTutorRoomCode() {
+    let code;
+    let isUnique = false;
+
+    while (!isUnique) {
+        code = generateTutorRoomCode();
+
+        const { data, error } = await supabase
+            .from('tutor_schedules')
+            .select('room_code')
+            .eq('room_code', code)
+            .maybeSingle();
+
+        if (error) {
+            throw error;
+        }
+
+        if (!data) {
+            isUnique = true;
+        }
+    }
+
+    return code;
+}
+
+// 建立一間新的特約教室
+app.post('/api/tutor-schedules', async (req, res) => {
+    try {
+        const {
+            teacherUsername,
+            roomTitle,
+            roomSize,
+            periods,
+            classMinutes,
+            restMinutes,
+            startTime
+        } = req.body;
+
+        if (!teacherUsername) {
+            return res.status(400).json({ error: '缺少 teacherUsername' });
+        }
+
+        if (!periods || !classMinutes || !restMinutes || !startTime) {
+            return res.status(400).json({ error: '排課資料不完整' });
+        }
+
+        const { data: teacher, error: teacherError } = await supabase
+            .from('users')
+            .select('username, role, teacher_status, is_blocked')
+            .eq('username', teacherUsername)
+            .maybeSingle();
+
+        if (teacherError) throw teacherError;
+
+        if (!teacher) {
+            return res.status(404).json({ error: '找不到教師帳號' });
+        }
+
+        if (teacher.is_blocked) {
+            return res.status(403).json({ error: '此教師帳號已被停用' });
+        }
+
+        if (teacher.role !== 'teacher' && teacher.role !== 'admin') {
+            return res.status(403).json({ error: '此帳號不是教師或管理員' });
+        }
+
+        if (teacher.role === 'teacher' && teacher.teacher_status !== 'approved') {
+            return res.status(403).json({ error: '教師資格尚未通過審核' });
+        }
+
+        const roomCode = await generateUniqueTutorRoomCode();
+
+        const { data: schedule, error: insertError } = await supabase
+            .from('tutor_schedules')
+            .insert([{
+                teacher_username: teacherUsername,
+                room_code: roomCode,
+                room_title: roomTitle || '特約教室',
+                room_size: roomSize || null,
+                periods: Number(periods),
+                class_minutes: Number(classMinutes),
+                rest_minutes: Number(restMinutes),
+                start_time: startTime,
+                status: 'live'
+            }])
+            .select()
+            .single();
+
+        if (insertError) throw insertError;
+
+        res.json({
+            success: true,
+            schedule
+        });
+
+    } catch (err) {
+        console.error('建立特約教室失敗:', err);
+        res.status(500).json({ error: '建立特約教室失敗' });
+    }
+});
+
+// 取得某位教師目前的特約教室
+app.get('/api/tutor-schedules', async (req, res) => {
+    try {
+        const teacherUsername = req.query.teacherUsername;
+
+        if (!teacherUsername) {
+            return res.status(400).json({ error: '缺少 teacherUsername' });
+        }
+
+        const { data: schedules, error } = await supabase
+            .from('tutor_schedules')
+            .select('*')
+            .eq('teacher_username', teacherUsername)
+            .in('status', ['scheduled', 'live'])
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            schedules: schedules || []
+        });
+
+    } catch (err) {
+        console.error('取得特約教室列表失敗:', err);
+        res.status(500).json({ error: '取得特約教室列表失敗' });
+    }
+});
+
+// 學生輸入代碼時，用 room_code 查教室
+app.get('/api/tutor-schedules/by-code/:roomCode', async (req, res) => {
+    try {
+        const roomCode = String(req.params.roomCode || '').trim().toUpperCase();
+
+        if (!roomCode) {
+            return res.status(400).json({ error: '缺少 roomCode' });
+        }
+
+        const { data: schedule, error } = await supabase
+            .from('tutor_schedules')
+            .select('*')
+            .eq('room_code', roomCode)
+            .in('status', ['scheduled', 'live'])
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!schedule) {
+            return res.status(404).json({ error: '找不到此特約教室，請確認代碼是否正確' });
+        }
+
+        res.json({
+            success: true,
+            schedule
+        });
+
+    } catch (err) {
+        console.error('查詢特約教室代碼失敗:', err);
+        res.status(500).json({ error: '查詢特約教室代碼失敗' });
+    }
+});
+
 async function createNotification({
     username,
     type,
@@ -3485,9 +3664,9 @@ async function broadcastUpdateRank() {
             teamLeaderStates[u.teamId].leader === u.name;
 
         return {
-            ...u,
-            isCaptain: !!isCap
-        };
+    ...u,
+    isCaptain: !!isCap
+};
     });
 
     const roomKeys = [...new Set(
@@ -3711,8 +3890,41 @@ activeUserSockets.set(username, socket.id);
     
     // 新增轉發轉發邏輯
     socket.on('sync_tutor_schedule', (data) => {
-        io.emit('receive_tutor_schedule', data); // 廣播給所有學生
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId;
+
+    if (targetRoom) {
+        io.to(targetRoom).emit('receive_tutor_schedule', data);
+    } else {
+        socket.emit('receive_tutor_schedule', data);
+    }
+});
+
+socket.on('sync_schedule_to_students', (data) => {
+    const targetRoom =
+        data?.roomId ||
+        data?.room ||
+        socket.roomId;
+
+    if (!targetRoom) {
+        console.log('❌ sync_schedule_to_students 缺少 roomId');
+        return;
+    }
+
+    tutorSchedules[targetRoom] = data;
+
+    tutorRoomSettings.set(targetRoom, {
+        startTime: data.startTime || data.start_time,
+        classMinutes: Number(data.classMinutes || data.class_minutes || data.periodTime || 50),
+        restMinutes: Number(data.restMinutes || data.rest_minutes || data.restTime || 10),
+        periods: Number(data.periods || 1)
     });
+
+    io.to(targetRoom).emit('sync_schedule_to_students', data);
+    io.to(targetRoom).emit('sync_tutor_schedule', data);
+});
 
     // 接收大廳老師建立的課表並存起來
     socket.on('create_tutor_room_schedule', (data) => {
@@ -3756,6 +3968,9 @@ activeUserSockets.set(username, socket.id);
     socket.join(roomId);
     socket.roomId = roomId;
     socket.role = role;
+    socket.roomId = roomId;
+socket.currentRoom = roomId;
+socket.currentTutorRoom = roomId;
 
     if (role === 'teacher') {
         console.log(`[特約教室] 教師端加入 ${roomId}`);
@@ -3799,7 +4014,37 @@ if (dbUser && dbUser.is_blocked) {
         leaveTime: null
     });
 
+    const currentAttendance = getTutorAttendance(roomId);
+
+io.to(roomId).emit('update_attendance', currentAttendance);
+
+io.to(roomId).emit(
+    'update_rank',
+    currentAttendance.filter(u =>
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
+    )
+);
+
+console.log(`[特約教室] 已同步 ${roomId} 名單，目前 ${currentAttendance.length} 人`);
+
     console.log(`[特約教室] 學生 ${username} 加入 ${roomId}`);
+
+    // ✅ 學生加入後，如果這間教室已經有課表，立即補發給該學生
+if (role === 'student' && tutorSchedules[roomId]) {
+    const scheduleData = tutorSchedules[roomId];
+
+    socket.emit('sync_schedule_to_students', scheduleData);
+
+    socket.emit('receive_tutor_schedule', {
+        room: roomId,
+        roomId: roomId,
+        message: scheduleData.message || `本次課表為 ${String(scheduleData.startTime || '08:00').slice(0, 5)} 開始，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`
+    });
+
+    console.log(`[特約教室] 已補發 ${roomId} 課表給學生 ${username}`);
+}
 
     broadcastTutorAttendance(roomId);
 });

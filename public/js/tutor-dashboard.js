@@ -102,10 +102,24 @@ socket.on('connect', () => {
 });
 
     // 如果有讀取到排程，立即補發同步
-    if (window.currentScheduleData) {
-        socket.emit('sync_schedule_to_students', window.currentScheduleData); 
-        console.log("排程已同步給學生");
-    }
+    if (window.currentScheduleData && !window.hasSyncedTutorScheduleOnConnect) {
+    window.hasSyncedTutorScheduleOnConnect = true;
+
+    const roomCode = window.currentTutorRoomCode;
+
+    socket.emit('create_tutor_room_schedule', {
+        ...window.currentScheduleData,
+        roomId: roomCode,
+        room: roomCode,
+        roomCode: roomCode,
+        startTime: window.currentScheduleData.startTime || window.currentScheduleData.start_time,
+        classMinutes: Number(window.currentScheduleData.classMinutes || window.currentScheduleData.periodTime || 50),
+        restMinutes: Number(window.currentScheduleData.restMinutes || window.currentScheduleData.restTime || 10),
+        periods: Number(window.currentScheduleData.periods || 1)
+    });
+
+    console.log("排程已註冊到伺服器");
+}
 });
 
 socket.on('disconnect', () => {
@@ -119,10 +133,16 @@ let knownTutorNames = new Set();
 socket.on('update_rank', (users) => {
     const currentRoomCode = window.currentTutorRoomCode;
 
-    activeStudents = users.filter(s =>
-        s.roomMode === 'tutor' &&
-        s.roomId === currentRoomCode
+    activeStudents = (users || []).filter(s => {
+    const userRoom = s.roomId || s.room || s.roomCode;
+
+    return (
+        userRoom === currentRoomCode &&
+        s.role === 'student' &&
+        s.status !== 'OFFLINE' &&
+        !s.leaveTime
     );
+});
 
     activeStudents.forEach(s => knownTutorNames.add(s.name));
 
@@ -145,9 +165,20 @@ window.latestAttendanceData = [];
 socket.on('update_attendance', (users) => {
     const currentRoomCode = window.currentTutorRoomCode;
 
-    window.latestAttendanceData = (users || []).filter(u =>
-        !u.roomId || u.roomId === currentRoomCode
+    window.latestAttendanceData = (users || []).filter(u => {
+
+    const userRoom =
+        u.roomId ||
+        u.room ||
+        u.roomCode;
+
+    return (
+        userRoom === currentRoomCode &&
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
     );
+});
 
     activeStudents = window.latestAttendanceData;
     activeStudents.forEach(s => knownTutorNames.add(s.name));
@@ -673,8 +704,9 @@ function updateDashboardUI(data) {
         const endMins = String(date.getMinutes()).padStart(2, '0');
         const endTime = `${endHours}:${endMins}`;
 
-        window.currentScheduleText = `本次課表為 ${data.startTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
-        
+        const displayStartTime = String(data.startTime || data.start_time || "08:00").slice(0, 5);
+
+window.currentScheduleText = `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
         const displayEl = document.getElementById('teacherScheduleDisplay');
         if (displayEl) displayEl.innerText = window.currentScheduleText;
 
@@ -685,12 +717,68 @@ function updateDashboardUI(data) {
 }
 
 window.broadcastSchedule = function() {
-    if (window.currentScheduleText && typeof socket !== 'undefined') {
-        socket.emit('sync_tutor_schedule', { message: window.currentScheduleText });
-        if (window.currentScheduleData) {
-            socket.emit('sync_schedule_to_students', window.currentScheduleData);
-        }
+    if (!window.currentScheduleData || typeof socket === 'undefined') return;
+
+    const roomCode =
+        window.currentTutorRoomCode ||
+        window.currentScheduleData.roomCode ||
+        window.currentScheduleData.room_code;
+
+    if (!roomCode) {
+        console.warn('缺少 roomCode，無法同步特約教室課表');
+        return;
     }
+
+    if (window.hasBroadcastedTutorSchedule) {
+        return;
+    }
+
+    window.hasBroadcastedTutorSchedule = true;
+
+    const rawStartTime =
+        window.currentScheduleData.startTime ||
+        window.currentScheduleData.start_time ||
+        '08:00';
+
+    const normalizedStartTime = String(rawStartTime).slice(0, 5);
+
+    const schedulePayload = {
+        ...window.currentScheduleData,
+        roomId: roomCode,
+        room: roomCode,
+        roomCode: roomCode,
+        startTime: normalizedStartTime,
+        classMinutes: Number(
+            window.currentScheduleData.classMinutes ||
+            window.currentScheduleData.class_minutes ||
+            window.currentScheduleData.periodTime ||
+            50
+        ),
+        restMinutes: Number(
+            window.currentScheduleData.restMinutes ||
+            window.currentScheduleData.rest_minutes ||
+            window.currentScheduleData.restTime ||
+            10
+        ),
+        periods: Number(window.currentScheduleData.periods || 1)
+    };
+
+    socket.emit('create_tutor_room_schedule', schedulePayload);
+
+    socket.emit('sync_schedule_to_students', {
+    ...schedulePayload,
+    message: window.currentScheduleText
+});
+
+    if (window.currentScheduleText) {
+        socket.emit('sync_tutor_schedule', {
+            room: roomCode,
+            roomId: roomCode,
+            message: window.currentScheduleText
+        });
+    }
+
+    console.log("✅ 特約教室課表已註冊一次：", roomCode);
 };
 
 // ==========================================
@@ -737,7 +825,18 @@ function updateTimerLogic() {
     const SESSION_CONFIG = getLiveScheduleConfig();
     const now = new Date().getTime();
     const elapsedSeconds = Math.floor((now - SESSION_CONFIG.startTime) / 1000);
-    
+    // 🚀 防呆：剛建立教室後 2 分鐘內，不允許直接判定課程結束
+if (!window.tutorRoomCreatedAt) {
+    window.tutorRoomCreatedAt = Date.now();
+}
+
+const roomAliveSeconds =
+    Math.floor((Date.now() - window.tutorRoomCreatedAt) / 1000);
+
+if (roomAliveSeconds < 120 && elapsedSeconds > 7200) {
+    updateTimerUI("00:00", "等待老師開始課程", "尚未開始", 0);
+    return;
+}
     if (elapsedSeconds < 0) {
         updateTimerUI("00:00", "準備上課", "未開始", 0);
         return;
@@ -930,8 +1029,8 @@ window.toggleTutorReport = function(name) {
 };
 
 // 檔案末尾的初始化啟動
+// 檔案末尾的初始化啟動
 document.addEventListener('DOMContentLoaded', () => {
-    setInterval(broadcastSchedule, 10000);
     initAutoTimer(); 
     
     // 🚀 修正防呆定時器：改為每隔 2 秒重新檢查並渲染學員畫面，確保超時 (10秒) 後狀態能即時刷回「專注中」
