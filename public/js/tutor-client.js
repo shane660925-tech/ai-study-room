@@ -495,7 +495,6 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
         socket.on('receive_tutor_schedule', (data) => {
     const container = document.getElementById('studentScheduleContainer');
     const textEl = document.getElementById('studentScheduleText');
-    const sideTextEl = document.getElementById('studentScheduleDisplay');
 
     const message =
         data?.message ||
@@ -506,11 +505,6 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
     if (container && textEl && message) {
         textEl.innerText = message;
         container.classList.remove('hidden');
-    }
-
-    if (sideTextEl && message) {
-        sideTextEl.innerText = message;
-        sideTextEl.classList.remove('hidden');
     }
 });
 
@@ -938,29 +932,47 @@ const previousPhase = window.previousClassStatus;
         ? 0
         : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
 // 上課前 3 秒倒數音效
-if (
-    phase === 'WAITING' &&
+// 每一節上課前 3 秒播放一次倒數音效
+const shouldPlayCountdown =
+    (phase === 'WAITING' || phase === 'BREAK' || phase === 'REST') &&
     remaining > 0 &&
-    remaining <= 3 &&
-    window.lastTutorCountdownSecond !== remaining
-) {
-    window.lastTutorCountdownSecond = remaining;
+    remaining <= 3;
 
-    const audio = new Audio('/sounds/countdown.mp3');
-    audio.play().catch(e => console.log('countdown.mp3 播放被阻擋:', e));
+const countdownKey = `${phase}-${state.period || 1}`;
+
+if (shouldPlayCountdown && window.lastTutorCountdownKey !== countdownKey) {
+    window.lastTutorCountdownKey = countdownKey;
+
+    if (window.activeTutorCountdownAudio) {
+        window.activeTutorCountdownAudio.pause();
+        window.activeTutorCountdownAudio.currentTime = 0;
+    }
+
+    window.activeTutorCountdownAudio = new Audio('/sounds/countdown.mp3');
+    window.activeTutorCountdownAudio.play().catch(e =>
+        console.log('countdown.mp3 播放被阻擋:', e)
+    );
 }
 
 // 進入休息或課程結束時播放下課音效
-if (
-    (phase === 'BREAK' || phase === 'REST' || phase === 'ENDED') &&
-    previousPhase &&
-    previousPhase !== phase &&
-    !window.hasPlayedTutorClassEndAudio
-) {
-    window.hasPlayedTutorClassEndAudio = true;
+const classEndKey = `${previousPhase}->${phase}-${state.period || 1}`;
 
-    const audio = new Audio('/sounds/class_end.mp3');
-    audio.play().catch(e => console.log('class_end.mp3 播放被阻擋:', e));
+if (
+    previousPhase === 'CLASS' &&
+    (phase === 'BREAK' || phase === 'REST' || phase === 'ENDED') &&
+    window.lastTutorClassEndKey !== classEndKey
+) {
+    window.lastTutorClassEndKey = classEndKey;
+
+    if (window.activeTutorClassEndAudio) {
+        window.activeTutorClassEndAudio.pause();
+        window.activeTutorClassEndAudio.currentTime = 0;
+    }
+
+    window.activeTutorClassEndAudio = new Audio('/sounds/class_end.mp3');
+    window.activeTutorClassEndAudio.play().catch(e =>
+        console.log('class_end.mp3 播放被阻擋:', e)
+    );
 }
 
 // 下一節開始時重置下課音效鎖
