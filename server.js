@@ -4132,7 +4132,7 @@ if (role === 'student' && tutorSchedules[roomId]) {
     scheduleData.message ||
     scheduleData.scheduleText ||
     scheduleData.text ||
-    null;
+    `本次課表為 ${String(scheduleData.startTime || '08:00').slice(0, 5)}~${scheduleData.endTime || '--:--'}，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`;
 
 socket.emit('receive_tutor_schedule', {
     room: roomId,
