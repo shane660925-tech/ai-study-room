@@ -113,10 +113,9 @@ if (typeof window.socket === 'undefined') {
     window.socket = typeof io !== 'undefined' ? io() : null;
 }
 const socket = window.socket;
-
 function getTutorRoomCode() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('room') || params.get('roomId') || null;
+    return params.get('room') || params.get('roomId') || window.currentTutorRoomCode || null;
 }
 
 function emitTutorViolation(payload) {
@@ -295,11 +294,6 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
             }
         });
     }
-
-    function getTutorRoomCode() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('room') || params.get('roomId') || window.currentTutorRoomCode || null;
-}
 
     updateTutorStatus('normal', '連線穩定，AI 觀測中');
 
@@ -499,13 +493,26 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
         });
 
         socket.on('receive_tutor_schedule', (data) => {
-            const container = document.getElementById('studentScheduleContainer');
-            const textEl = document.getElementById('studentScheduleText');
-            if (container && textEl) {
-                textEl.innerText = data.message;
-                container.classList.remove('hidden'); 
-            }
-        });
+    const container = document.getElementById('studentScheduleContainer');
+    const textEl = document.getElementById('studentScheduleText');
+    const sideTextEl = document.getElementById('studentScheduleDisplay');
+
+    const message =
+        data?.message ||
+        data?.scheduleText ||
+        data?.text ||
+        '';
+
+    if (container && textEl && message) {
+        textEl.innerText = message;
+        container.classList.remove('hidden');
+    }
+
+    if (sideTextEl && message) {
+        sideTextEl.innerText = message;
+        sideTextEl.classList.remove('hidden');
+    }
+});
 
         socket.on('tutor_timer_sync', (state) => {
     console.log("✅ [TutorClient] 收到 tutor_timer_sync:", state);
@@ -892,6 +899,9 @@ function applyTutorTimerSyncToStudent(state) {
     const remaining = Number(state.remainingSeconds || 0);
     const total = Number(state.totalSeconds || 1);
 
+    const phase = state.phase;
+const previousPhase = window.previousClassStatus;
+
     const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
     const secs = (remaining % 60).toString().padStart(2, '0');
 
@@ -927,7 +937,39 @@ function applyTutorTimerSyncToStudent(state) {
     const progress = state.phase === 'WAITING'
         ? 0
         : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
+// 上課前 3 秒倒數音效
+if (
+    phase === 'WAITING' &&
+    remaining > 0 &&
+    remaining <= 3 &&
+    window.lastTutorCountdownSecond !== remaining
+) {
+    window.lastTutorCountdownSecond = remaining;
 
+    const audio = new Audio('/sounds/countdown.mp3');
+    audio.play().catch(e => console.log('countdown.mp3 播放被阻擋:', e));
+}
+
+// 進入休息或課程結束時播放下課音效
+if (
+    (phase === 'BREAK' || phase === 'REST' || phase === 'ENDED') &&
+    previousPhase &&
+    previousPhase !== phase &&
+    !window.hasPlayedTutorClassEndAudio
+) {
+    window.hasPlayedTutorClassEndAudio = true;
+
+    const audio = new Audio('/sounds/class_end.mp3');
+    audio.play().catch(e => console.log('class_end.mp3 播放被阻擋:', e));
+}
+
+// 下一節開始時重置下課音效鎖
+if (phase === 'CLASS') {
+    window.hasPlayedTutorClassEndAudio = false;
+}
+
+window.previousClassStatus = phase;
+    
     updateStudentTimerUI(`${mins}:${secs}`, label, status, progress);
 }
 
