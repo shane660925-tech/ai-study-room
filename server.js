@@ -4031,14 +4031,11 @@ socket.currentTutorRoom = roomId;
         !u.leaveTime
     );
 
-    // 原本點名資料
     socket.emit('update_attendance', currentAttendance);
-
-    // ✅ 補送專注榜 / 學生圖卡資料
     socket.emit('update_rank', activeTutorStudents);
-
-    // ✅ 補送 tutor 專用學生更新事件
     socket.emit('tutor_students_update', activeTutorStudents);
+
+    console.log(`[特約教室] 已補發 ${roomId} 教師端學生圖卡名單，目前 ${activeTutorStudents.length} 人`);
 
     return;
 }
