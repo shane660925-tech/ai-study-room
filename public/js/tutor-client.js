@@ -358,7 +358,6 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
             const currentRoomCode = getTutorRoomCode();
 
 users = (users || []).filter(u => {
-    renderTutorRankList(users);
     if (!currentRoomCode) return true;
 
     const userRoom =
@@ -368,6 +367,8 @@ users = (users || []).filter(u => {
 
     return userRoom === currentRoomCode;
 });
+
+renderTutorRankList(users);
             const standaloneUsers = users.filter(u => u.isStandalone).map(u => u.name);
             
             setTimeout(() => {
