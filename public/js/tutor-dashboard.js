@@ -118,8 +118,43 @@ socket.on('connect', () => {
         periods: Number(window.currentScheduleData.periods || 1)
     });
 
-    console.log("排程已註冊到伺服器");
+    socket.emit('request_tutor_timer_sync', roomCode);
+console.log("✅ [TutorDashboard] 排程已註冊到伺服器，並請求 timer sync:", roomCode);
 }
+});
+
+socket.on('tutor_timer_sync', (state) => {
+    console.log("✅ [TutorDashboard] 收到 tutor_timer_sync:", state);
+
+    if (!state) return;
+
+    const remaining = Number(state.remainingSeconds || 0);
+    const total = Number(state.totalSeconds || 1);
+    const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
+    const secs = (remaining % 60).toString().padStart(2, '0');
+
+    let label = '準備上課';
+    let status = '未開始';
+
+    if (state.phase === 'WAITING') {
+        label = '準備上課';
+        status = '尚未開始';
+    } else if (state.phase === 'CLASS') {
+        label = `第 ${state.period || 1} 節課`;
+        status = '進行中';
+   } else if (state.phase === 'BREAK' || state.phase === 'REST') {
+    label = '休息時間';
+    status = '休息中';
+    } else if (state.phase === 'ENDED') {
+        label = '課程結束';
+        status = '已完成';
+    }
+
+    const progress = state.phase === 'WAITING'
+        ? 0
+        : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
+
+    updateTimerUI(`${mins}:${secs}`, label, status, progress);
 });
 
 socket.on('disconnect', () => {
@@ -689,30 +724,66 @@ window.closeTutorImageModal = function() {
 // ==========================================
 function updateDashboardUI(data) {
     if (!data) return;
+
     try {
-        const periods = parseInt(data.periods) || 0;
-        const periodTime = parseInt(data.periodTime) || 0;
-        const restTime = parseInt(data.restTime) || 0;
-        
-        const totalMinutes = (periods * periodTime) + ((periods > 1) ? (periods - 1) * restTime : 0);
-        const [hours, minutes] = (data.startTime || "08:00").split(':').map(Number);
-        let date = new Date();
+        const periods = Number(data.periods || 1);
+
+        const periodTime = Number(
+            data.periodTime ||
+            data.period_time ||
+            data.classMinutes ||
+            data.class_minutes ||
+            50
+        );
+
+        const restTime = Number(
+            data.restTime ||
+            data.rest_time ||
+            data.restMinutes ||
+            data.rest_minutes ||
+            10
+        );
+
+        const displayStartTime = String(
+            data.startTime ||
+            data.start_time ||
+            "08:00"
+        ).slice(0, 5);
+
+        const totalMinutes =
+            (periods * periodTime) +
+            ((periods > 1) ? (periods - 1) * restTime : 0);
+
+        const [hours, minutes] = displayStartTime.split(':').map(Number);
+        const date = new Date();
         date.setHours(hours, minutes, 0, 0);
         date.setMinutes(date.getMinutes() + totalMinutes);
-        
+
         const endHours = String(date.getHours()).padStart(2, '0');
         const endMins = String(date.getMinutes()).padStart(2, '0');
         const endTime = `${endHours}:${endMins}`;
 
-        const displayStartTime = String(data.startTime || data.start_time || "08:00").slice(0, 5);
+        window.currentScheduleData = {
+            ...data,
+            periods,
+            periodTime,
+            restTime,
+            classMinutes: periodTime,
+            restMinutes: restTime,
+            startTime: displayStartTime
+        };
 
-window.currentScheduleText = `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
+        window.currentScheduleText =
+            `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
+
         const displayEl = document.getElementById('teacherScheduleDisplay');
         if (displayEl) displayEl.innerText = window.currentScheduleText;
 
+        console.log("✅ [TutorDashboard] updateDashboardUI normalized:", window.currentScheduleData);
+
         broadcastSchedule();
-    } catch(e) {
-        console.error("更新排程 UI 失敗", e);
+    } catch (e) {
+        console.error("更新排程 UI 失敗", e, data);
     }
 }
 
@@ -778,141 +849,61 @@ window.broadcastSchedule = function() {
         });
     }
 
-    console.log("✅ 特約教室課表已註冊一次：", roomCode);
+    console.log("✅ [TutorDashboard] 特約教室課表已註冊一次：", {
+    roomCode,
+    schedulePayload,
+    scheduleText: window.currentScheduleText
+});
 };
-
-// ==========================================
-// 🚀 自動排程計時系統 (動態讀取版)
-// ==========================================
-
-function getLiveScheduleConfig() {
-    const displayExt = document.getElementById('teacherScheduleDisplay')?.innerText || "";
-    
-    let config = {
-        totalPeriods: 3,
-        classDuration: 20 * 60,
-        breakDuration: 10 * 60,
-        startTime: new Date().getTime() 
-    };
-
-    const timeMatch = displayExt.match(/(\d{2}):(\d{2})~/);
-    if (timeMatch) {
-        const startDay = new Date();
-        startDay.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
-        config.startTime = startDay.getTime();
-    }
-
-    const periodMatch = displayExt.match(/分 (\d+) 節課/);
-    const durationMatch = displayExt.match(/每節課 (\d+) 分鐘/);
-    const breakMatch = displayExt.match(/休息 (\d+) 分鐘/);
-
-    if (periodMatch) config.totalPeriods = parseInt(periodMatch[1]);
-    if (durationMatch) config.classDuration = parseInt(durationMatch[1]) * 60;
-    if (breakMatch) config.breakDuration = parseInt(breakMatch[1]) * 60;
-
-    return config;
-}
-
-let timerInterval = null;
-
-function initAutoTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(updateTimerLogic, 1000);
-    updateTimerLogic();
-}
-
-function updateTimerLogic() {
-    const SESSION_CONFIG = getLiveScheduleConfig();
-    const now = new Date().getTime();
-    const elapsedSeconds = Math.floor((now - SESSION_CONFIG.startTime) / 1000);
-    // 🚀 防呆：剛建立教室後 2 分鐘內，不允許直接判定課程結束
-if (!window.tutorRoomCreatedAt) {
-    window.tutorRoomCreatedAt = Date.now();
-}
-
-const roomAliveSeconds =
-    Math.floor((Date.now() - window.tutorRoomCreatedAt) / 1000);
-
-if (roomAliveSeconds < 120 && elapsedSeconds > 7200) {
-    updateTimerUI("00:00", "等待老師開始課程", "尚未開始", 0);
-    return;
-}
-    if (elapsedSeconds < 0) {
-        updateTimerUI("00:00", "準備上課", "未開始", 0);
-        return;
-    }
-
-    const cycleDuration = SESSION_CONFIG.classDuration + SESSION_CONFIG.breakDuration;
-    const currentCycle = Math.floor(elapsedSeconds / cycleDuration);
-    const timeInCycle = elapsedSeconds % cycleDuration;
-    
-    let periodName = "";
-    let remainingTime = 0;
-    let isBreak = false;
-    let progress = 0;
-    let currentPeriod = currentCycle + 1;
-
-    // 🚀 新增：精準判定是否「所有課程都已結束」(最後一堂課的上課時間結束，直接跳過休息)
-    const isCourseEnded = currentPeriod > SESSION_CONFIG.totalPeriods || 
-                          (currentPeriod === SESSION_CONFIG.totalPeriods && timeInCycle >= SESSION_CONFIG.classDuration);
-
-    if (isCourseEnded) {
-        updateTimerUI("00:00", "課程結束", "已完成", 100);
-        
-        // 當所有課程結束時，自動發送下課指令給全班學生觸發 AI 結算
-        if (typeof socket !== 'undefined' && socket.connected && !window.courseEndedBroadcasted) {
-            window.courseEndedBroadcasted = true; // 加上防抖，確保只發送一次
-            socket.emit('tutor_command', { command: 'course_ended' });
-            addLog("🎉 所有課程已結束，已通知全體學員自動產生結算報告！", "text-green-400 font-bold");
-        }
-        return;
-    }
-
-    if (timeInCycle < SESSION_CONFIG.classDuration) {
-        isBreak = false;
-        periodName = `第 ${currentPeriod} 節課`;
-        remainingTime = SESSION_CONFIG.classDuration - timeInCycle;
-        progress = (timeInCycle / SESSION_CONFIG.classDuration) * 100;
-    } else {
-        isBreak = true;
-        periodName = `第 ${currentPeriod} 節休息`;
-        remainingTime = cycleDuration - timeInCycle;
-        progress = ((timeInCycle - SESSION_CONFIG.classDuration) / SESSION_CONFIG.breakDuration) * 100;
-    }
-
-    const mins = Math.floor(remainingTime / 60).toString().padStart(2, '0');
-    const secs = (remainingTime % 60).toString().padStart(2, '0');
-    const timeString = `${mins}:${secs}`;
-
-    updateTimerUI(timeString, periodName, isBreak ? "休息中" : "進行中", progress);
-
-    if (typeof socket !== 'undefined' && socket.connected) {
-        socket.emit('timer_sync', {
-            time: timeString,
-            label: periodName,
-            status: isBreak ? "break" : "class",
-            progress: progress
-        });
-    }
-}
 
 function updateTimerUI(time, label, status, progress) {
     const timerDisplay = document.getElementById('timerDisplay');
     const periodLabel = document.getElementById('currentPeriodLabel');
     const statusBadge = document.getElementById('timerStatusBadge');
     const progressBar = document.getElementById('timerProgressBar');
+    const timerContainer = document.getElementById('tutorTimerContainer');
 
     if (timerDisplay) timerDisplay.innerText = time;
     if (periodLabel) periodLabel.innerText = label;
+
+    let colorClass = {
+        badge: "text-[10px] bg-amber-900/30 text-amber-400 px-2 py-1 rounded-md border border-amber-500/30",
+        bar: "bg-amber-500 h-full transition-all duration-1000",
+        box: "bg-slate-900/80 border border-amber-500/30 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
+    };
+
+    if (status === "尚未開始" || status === "未開始") {
+        colorClass = {
+            badge: "text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded-md border border-red-500/30",
+            bar: "bg-red-500 h-full transition-all duration-1000",
+            box: "bg-slate-900/80 border border-red-500/40 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
+        };
+    } else if (status === "休息中") {
+        colorClass = {
+            badge: "text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-md border border-green-500/30",
+            bar: "bg-green-500 h-full transition-all duration-1000",
+            box: "bg-slate-900/80 border border-green-500/40 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
+        };
+    } else if (status === "已完成") {
+        colorClass = {
+            badge: "text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-600",
+            bar: "bg-slate-500 h-full transition-all duration-1000",
+            box: "bg-slate-900/80 border border-slate-600 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
+        };
+    }
+
     if (statusBadge) {
         statusBadge.innerText = status;
-        statusBadge.className = status === "休息中" 
-            ? "text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-md border border-green-500/30"
-            : "text-[10px] bg-amber-900/30 text-amber-400 px-2 py-1 rounded-md border border-amber-500/30";
+        statusBadge.className = colorClass.badge;
     }
+
     if (progressBar) {
         progressBar.style.width = `${progress}%`;
-        progressBar.className = status === "休息中" ? "bg-green-500 h-full transition-all duration-1000" : "bg-amber-500 h-full transition-all duration-1000";
+        progressBar.className = colorClass.bar;
+    }
+
+    if (timerContainer) {
+        timerContainer.className = colorClass.box;
     }
 }
 
@@ -1029,11 +1020,10 @@ window.toggleTutorReport = function(name) {
 };
 
 // 檔案末尾的初始化啟動
-// 檔案末尾的初始化啟動
 document.addEventListener('DOMContentLoaded', () => {
-    initAutoTimer(); 
-    
-    // 🚀 修正防呆定時器：改為每隔 2 秒重新檢查並渲染學員畫面，確保超時 (10秒) 後狀態能即時刷回「專注中」
+    // 教師端計時器統一由 server 的 tutor_timer_sync 控制
+    // 不再啟動本地 initAutoTimer，避免與 server 倒數互相覆蓋
+
     setInterval(() => {
         if (activeStudents && activeStudents.length > 0) {
             renderStudents();

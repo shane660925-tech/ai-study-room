@@ -140,7 +140,10 @@
 
         const isFaceDown = Math.abs(event.beta) > 130;
         const urlParams = new URLSearchParams(window.location.search);
-        const syncToken = urlParams.get('sync');
+        const syncToken =
+    urlParams.get('sync') ||
+    urlParams.get('syncToken') ||
+    urlParams.get('token');
 
         if (isFaceDown) {
             if (!hasFlipped) {
@@ -237,7 +240,10 @@
         const urlParams = new URLSearchParams(window.location.search);
         const isStandalone = urlParams.get('standalone') === 'true';
         const targetRoom = urlParams.get('targetRoom');
-        const syncToken = urlParams.get('sync'); 
+        const syncToken =
+    urlParams.get('sync') ||
+    urlParams.get('syncToken') ||
+    urlParams.get('token'); 
         const urlName = urlParams.get('name'); 
 
         if (urlName) {
@@ -276,7 +282,10 @@
     startBtn.addEventListener('click', () => {
         const name = document.getElementById('syncName').value.trim();
         const urlParams = new URLSearchParams(window.location.search);
-        const syncToken = urlParams.get('sync'); 
+        const syncToken =
+    urlParams.get('sync') ||
+    urlParams.get('syncToken') ||
+    urlParams.get('token'); 
 
         if(name) {
             studentName = name; 

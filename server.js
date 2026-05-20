@@ -3624,32 +3624,76 @@ function getTutorRoomTimeState(roomId) {
 
     const now = new Date();
     const start = new Date();
-    const [h, m] = schedule.startTime.split(':');
+    const [h, m] = String(schedule.startTime || '08:00').split(':');
     start.setHours(parseInt(h), parseInt(m), 0, 0);
 
     const elapsedSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
-    const classSecs = schedule.classMinutes * 60;
-    const restSecs = schedule.restMinutes * 60;
-    const periodSecs = classSecs + restSecs;
-    const totalSecs = schedule.periods * periodSecs;
+    const classSecs = Number(schedule.classMinutes || 50) * 60;
+    const restSecs = Number(schedule.restMinutes || 10) * 60;
+    const periods = Number(schedule.periods || 1);
 
-    // 還沒開始上課
+    // 總時間 = 所有上課時間 + 中間休息時間，不包含最後一次休息
+    const totalSecs = (periods * classSecs) + ((periods - 1) * restSecs);
+
     if (elapsedSeconds < 0) {
-        return { phase: 'WAITING', remainingSeconds: Math.abs(elapsedSeconds), totalSeconds: classSecs, period: 1 };
+        return {
+            phase: 'WAITING',
+            remainingSeconds: Math.abs(elapsedSeconds),
+            totalSeconds: classSecs,
+            period: 1
+        };
     }
-    // 課程已全部結束
+
     if (elapsedSeconds >= totalSecs) {
-        return { phase: 'ENDED', remainingSeconds: 0, totalSeconds: classSecs, period: schedule.periods };
+        return {
+            phase: 'ENDED',
+            remainingSeconds: 0,
+            totalSeconds: classSecs,
+            period: periods
+        };
     }
 
-    const currentPeriodElapsed = elapsedSeconds % periodSecs;
-    const currentPeriodIndex = Math.floor(elapsedSeconds / periodSecs) + 1;
+    let cursor = 0;
 
-    if (currentPeriodElapsed < classSecs) {
-        return { phase: 'CLASS', remainingSeconds: classSecs - currentPeriodElapsed, totalSeconds: classSecs, period: currentPeriodIndex };
-    } else {
-        return { phase: 'REST', remainingSeconds: periodSecs - currentPeriodElapsed, totalSeconds: restSecs, period: currentPeriodIndex };
+    for (let period = 1; period <= periods; period++) {
+        const classStart = cursor;
+        const classEnd = classStart + classSecs;
+
+        if (elapsedSeconds >= classStart && elapsedSeconds < classEnd) {
+            return {
+                phase: 'CLASS',
+                remainingSeconds: classEnd - elapsedSeconds,
+                totalSeconds: classSecs,
+                period
+            };
+        }
+
+        cursor = classEnd;
+
+        // 最後一堂課後不再進入休息
+        if (period < periods) {
+            const restStart = cursor;
+            const restEnd = restStart + restSecs;
+
+            if (elapsedSeconds >= restStart && elapsedSeconds < restEnd) {
+                return {
+                    phase: 'REST',
+                    remainingSeconds: restEnd - elapsedSeconds,
+                    totalSeconds: restSecs,
+                    period
+                };
+            }
+
+            cursor = restEnd;
+        }
     }
+
+    return {
+        phase: 'ENDED',
+        remainingSeconds: 0,
+        totalSeconds: classSecs,
+        period: periods
+    };
 }
 // ==========================================
 // 隊伍狀態與隊長機制管理
@@ -4175,12 +4219,28 @@ socket.on('get_attendance', (data) => {
     // ==========================================
 
     socket.on('request_link_device', (data) => {
-        console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
-        io.to(data.syncToken).emit('deviceLinked', { 
-            success: true, 
-            mobileName: data.studentName 
+    console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
+
+    const payload = {
+        success: true,
+        mobileName: data.studentName,
+        studentName: data.studentName,
+        username: data.studentName,
+        syncToken: data.syncToken,
+        isFlipped: data.isFlipped === true
+    };
+
+    if (data.syncToken) {
+        io.to(data.syncToken).emit('deviceLinked', payload);
+        io.to(data.syncToken).emit('mobile_sync_update', {
+            type: 'LINKED',
+            ...payload
         });
-    });
+    }
+
+    // 保底：也回傳給發送請求的手機端，避免手機端卡住
+    socket.emit('deviceLinked', payload);
+});
 
     socket.on('join_team', async (data) => {
         const { teamId, username, roomType } = data;
@@ -4537,6 +4597,9 @@ broadcastUpdateRank();
     });
 
     socket.on('mobile_sync_update', (data) => {
+
+    console.log('[mobile_sync_update]', data);
+
     // 手機 QR 連動：優先送回掃 QR 的那台電腦
     if (data?.syncToken) {
         io.to(data.syncToken).emit('mobile_sync_update', data);
@@ -4891,8 +4954,11 @@ async function broadcastWeeklyRank() {
 setInterval(broadcastWeeklyRank, 30000);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 StudyVerse 核心伺服器啟動！`);
     console.log(`👨‍🏫 管理後端已準備就緒，偵聽端口: ${PORT}`);
+    console.log(`📱 區網測試網址: http://你的IP:${PORT}`);
+
     setTimeout(broadcastWeeklyRank, 2000);
 });

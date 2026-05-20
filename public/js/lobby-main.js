@@ -793,9 +793,11 @@ function showPublicShamingToast(userName) {
 }
 
 socket.on('deviceLinked', (data) => {
+    console.log("✅ [Lobby] 收到 deviceLinked:", data);
+
     if (sessionStorage.getItem('mobileLinked') === 'true') return;
     window.isDeviceLinked = true;
-    closeAllEntryModals(); 
+    closeAllEntryModals();  
     
     const syncModule = document.getElementById('syncModule');
     if (syncModule) {
@@ -815,6 +817,7 @@ socket.on('deviceLinked', (data) => {
 });
 
 socket.on('mobile_sync_update', (data) => {
+    console.log("✅ [Lobby] 收到 mobile_sync_update:", data);
     if (data.type === 'FLIP_COMPLETED') {
         alert("✅ 連動成功！手機已確認朝下置放。"); 
         const syncModule = document.getElementById('syncModule');
@@ -1048,75 +1051,8 @@ function initTutorSpecificQRCode() {
  * 找到您原本 lobby-main.js 中的 socket.on('deviceLinked', ...) 和 socket.on('mobile_sync_update', ...)
  * 並用下方的代碼「覆蓋」或「整合」進去。
  */
-
-// A. 整合進 deviceLinked (手機掃描成功)
-const originalSocketOnDeviceLinked = socket.listeners('deviceLinked')[0]; 
-// 註：如果 originalSocketOnDeviceLinked 的獲取方式不適用您的環境，請直接在您原本的 socket.on('deviceLinked', ...) 函式體內最前面加入以下判斷邏輯。
-
-socket.on('deviceLinked', (data) => {
-    // 執行原本的邏輯 (sidebar 更新等)
-    if (originalSocketOnDeviceLinked) originalSocketOnDeviceLinked(data);
-
-    // --- 新增VIP入口邏輯 ---
-    if (isProcessingTutorEntry) {
-        // 更新彈窗 UI 到步驟 2
-        
-        // 1. 標記步驟 1 完成
-        document.getElementById('tutor-step-1').classList.add('border-green-500', 'bg-green-950/30');
-        document.getElementById('tutor-step-1-icon').classList.add('bg-green-600', 'text-white');
-        document.getElementById('tutor-step-1-status').innerText = '連動成功！';
-        document.getElementById('tutor-step-1-status').classList.add('text-green-400');
-        document.getElementById('tutor-step-1-check').classList.remove('hidden');
-
-        // 2. 啟用步驟 2 提示翻轉
-        document.getElementById('tutor-step-2').classList.remove('opacity-50');
-        document.getElementById('tutor-step-2').classList.add('border-yellow-500/50'); // 黃色邊框提示
-        document.getElementById('tutor-step-2-icon').classList.add('bg-yellow-600', 'text-white');
-        document.getElementById('tutor-step-2-status').innerText = '請將手機螢幕朝下放置在桌上';
-        document.getElementById('tutor-step-2-status').classList.add('text-yellow-400');
-    }
-});
-
-
 // B. 整合進 mobile_sync_update (狀態更新，含翻轉完成)
 // 請找到檔案中原本的此段落，將 VIP 入口邏輯加入到 data.type === 'FLIP_COMPLETED' 判斷中
-
-socket.on('mobile_sync_update', (data) => {
-    if (data.type === 'FLIP_COMPLETED') {
-        
-        // --- 新增 VIP 入口跳轉邏輯 ---
-        if (isProcessingTutorEntry) {
-            // 1. 更新步驟 2 UI 為完成
-            document.getElementById('tutor-step-2').classList.remove('border-yellow-500/50');
-            document.getElementById('tutor-step-2').classList.add('border-green-500', 'bg-green-950/30');
-            document.getElementById('tutor-step-2-icon').classList.remove('bg-yellow-600');
-            document.getElementById('tutor-step-2-icon').classList.add('bg-green-600');
-            document.getElementById('tutor-step-2-status').innerText = '翻轉檢測完成！即將進入教室';
-            document.getElementById('tutor-step-2-status').classList.remove('text-yellow-400');
-            document.getElementById('tutor-step-2-status').classList.add('text-green-400');
-            document.getElementById('tutor-step-2-check').classList.remove('hidden');
-
-            // 2. 隱藏 QR Code，顯示跳轉中
-            document.getElementById('tutor-qrcode-container').classList.add('hidden');
-            document.getElementById('tutor-redirect-notice').classList.remove('hidden');
-
-            // 3. 延遲一小段時間讓使用者看到成功狀態，然後跳轉
-            setTimeout(() => {
-                isProcessingTutorEntry = false; 
-                // 👇 改為使用 targetRoomUrl，這樣才會帶上 ?room=XXXX 參數
-                window.location.href = targetRoomUrl || '/tutor-room.html'; 
-            }, 1500);
-
-            return; // 攔截原本的邏輯，不執行下方的大廳彈窗或自動進入 targetRoomUrl
-        }
-        // --- VIP 邏輯結束 ---
-
-
-        // ... 以下是您檔案中原本就有的 FLIP_COMPLETED 邏輯 (alert, syncModule 更新, 隊伍彈窗點擊等) ...
-        alert("✅ 連動成功！手機已確認朝下置放。"); 
-        // ... (省略原本的代碼) ...
-    }
-});
 
 window.enterMyTutorDashboard = async function() {
     const username = localStorage.getItem('studyVerseUser');

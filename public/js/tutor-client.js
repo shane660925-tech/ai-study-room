@@ -273,6 +273,9 @@ if (typeof socket !== 'undefined') {
 });
 
         console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
+        socket.emit('request_tutor_schedule', roomCode);
+socket.emit('request_tutor_timer_sync', roomCode);
+console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
     }
 
         // 🚀 新增：攔截手機的即時狀態
@@ -493,6 +496,11 @@ users = (users || []).filter(u => {
                 container.classList.remove('hidden'); 
             }
         });
+
+        socket.on('tutor_timer_sync', (state) => {
+    console.log("✅ [TutorClient] 收到 tutor_timer_sync:", state);
+    applyTutorTimerSyncToStudent(state);
+});
 
         const handleTutorBroadcast = (data) => {
             const messageText = typeof data === 'string' ? data : data.message;
@@ -797,185 +805,49 @@ function forceHideBreakButton() {
     });
 }
 
-function getStudentLiveScheduleConfig() {
-    const displayExt = document.getElementById('studentScheduleText')?.innerText || "";
-    
-    let config = {
-        totalPeriods: 3,
-        classDuration: 20 * 60,
-        breakDuration: 10 * 60,
-        startTime: new Date().getTime(),
-        isValid: false 
-    };
+function applyTutorTimerSyncToStudent(state) {
+    if (!state) return;
 
-    const timeMatch = displayExt.match(/(\d{2}):(\d{2})~/);
-    if (timeMatch) {
-        const startDay = new Date();
-        startDay.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
-        config.startTime = startDay.getTime();
-        config.isValid = true; 
-    }
+    const remaining = Number(state.remainingSeconds || 0);
+    const total = Number(state.totalSeconds || 1);
 
-    const periodMatch = displayExt.match(/分 (\d+) 節課/);
-    const durationMatch = displayExt.match(/每節課 (\d+) 分鐘/);
-    const breakMatch = displayExt.match(/休息 (\d+) 分鐘/);
+    const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
+    const secs = (remaining % 60).toString().padStart(2, '0');
 
-    if (periodMatch) config.totalPeriods = parseInt(periodMatch[1]);
-    if (durationMatch) config.classDuration = parseInt(durationMatch[1]) * 60;
-    if (breakMatch) config.breakDuration = parseInt(breakMatch[1]) * 60;
+    let label = '準備上課';
+    let status = '未開始';
 
-    return config;
-}
+    if (state.phase === 'WAITING') {
+        label = '準備上課';
+        status = '未開始';
+        window.isAIPaused = true;
+    } else if (state.phase === 'CLASS') {
+        label = `第 ${state.period || 1} 節課`;
+        status = '進行中';
+        window.isAIPaused = false;
+    } else if (state.phase === 'REST' || state.phase === 'BREAK') {
+        label = '休息時間';
+        status = '休息中';
+        window.isAIPaused = true;
+    } else if (state.phase === 'ENDED') {
+        label = '課程結束';
+        status = '已結束';
+        window.isAIPaused = true;
 
-let studentAutoTimerInterval = null;
-
-function initStudentAutoTimer() {
-    if (studentAutoTimerInterval) clearInterval(studentAutoTimerInterval);
-    studentAutoTimerInterval = setInterval(updateStudentTimerLogic, 1000);
-    updateStudentTimerLogic();
-}
-
-function updateStudentTimerLogic() {
-    const SESSION_CONFIG = getStudentLiveScheduleConfig();
-    
-    if (!SESSION_CONFIG.isValid) {
-        window.isAIPaused = true; // 排程未開始前也豁免
-        updateStudentTimerUI("00:00", "等待排程", "未開始", 0);
-        return;
-    }
-
-    const now = new Date().getTime();
-    const elapsedSeconds = Math.floor((now - SESSION_CONFIG.startTime) / 1000);
-    
-    if (elapsedSeconds < 0) {
-        let currentStatus = "未開始";
-        window.isAIPaused = true; // 排程未開始前豁免
-        
-        if (!window.classStartAudio) window.classStartAudio = new Audio('/sounds/countdown.mp3');
-
-        if (elapsedSeconds === -3 && !window.hasPlayedStartAudio) {
-            window.classStartAudio.currentTime = 0;
-            window.classStartAudio.play().catch(e => console.warn("音效播放被阻擋:", e));
-            window.hasPlayedStartAudio = true;
-        }
-
-        if (window.previousClassStatus !== currentStatus) {
-            window.previousClassStatus = currentStatus;
-            if (elapsedSeconds < -3) window.hasPlayedStartAudio = false; 
-        }
-
-        updateStudentTimerUI("00:00", "準備上課", currentStatus, 0);
-        return;
-    }
-
-    const cycleDuration = SESSION_CONFIG.classDuration + SESSION_CONFIG.breakDuration;
-    const currentCycle = Math.floor(elapsedSeconds / cycleDuration);
-    const timeInCycle = elapsedSeconds % cycleDuration;
-    
-    let currentPeriod = currentCycle + 1;
-
-    const isCourseEnded = currentPeriod > SESSION_CONFIG.totalPeriods || 
-                          (currentPeriod === SESSION_CONFIG.totalPeriods && timeInCycle >= SESSION_CONFIG.classDuration);
-
-    if (isCourseEnded) {
-        window.isAIPaused = true; // 課程結束後豁免
-        updateStudentTimerUI("00:00", "課程結束", "已結束", 100);
-        
         if (!window.hasAutoEnded && typeof window.endSession === 'function') {
-            window.hasAutoEnded = true; 
-            
-            if (!window.classEndAudio) window.classEndAudio = new Audio('/sounds/class_end.mp3');
-            window.classEndAudio.currentTime = 0;
-            window.classEndAudio.play().catch(e => console.warn("音效播放被阻擋:", e));
-
+            window.hasAutoEnded = true;
             setTimeout(() => {
-                alert("🎉 本次特約教室的所有課程已結束！即將為您產生專注結算報告...");
-                window.endSession(); 
+                alert("🎉 本次特約教室的所有課程已結束！即將為您產生專注結算報告。");
+                window.endSession();
             }, 1000);
         }
-        return;
     }
 
-    let periodName = "";
-    let remainingTime = 0;
-    let isBreak = false;
-    let progress = 0;
+    const progress = state.phase === 'WAITING'
+        ? 0
+        : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
 
-    if (timeInCycle < SESSION_CONFIG.classDuration) {
-        isBreak = false;
-        periodName = `第 ${currentPeriod} 節課`;
-        remainingTime = SESSION_CONFIG.classDuration - timeInCycle;
-        progress = (timeInCycle / SESSION_CONFIG.classDuration) * 100;
-    } else {
-        isBreak = true;
-        periodName = `第 ${currentPeriod} 節休息`;
-        remainingTime = cycleDuration - timeInCycle;
-        progress = ((timeInCycle - SESSION_CONFIG.classDuration) / SESSION_CONFIG.breakDuration) * 100;
-    }
-
-    const mins = Math.floor(remainingTime / 60).toString().padStart(2, '0');
-    const secs = (remainingTime % 60).toString().padStart(2, '0');
-    const timeString = `${mins}:${secs}`;
-
-    let currentStatus = isBreak ? "休息中" : "進行中";
-
-    // 取得前一秒的休息狀態
-    const previousPauseState = window.isAIPaused;
-    // 🌟🌟🌟 核心豁免權開關：只有「進行中」才嚴格取締！
-    window.isAIPaused = (currentStatus === "休息中");
-
-    // 🚀 新增突擊檢查：如果從「休息」切換成「上課」的瞬間，手機還是朝上的！
-    if (previousPauseState === true && window.isAIPaused === false) {
-        if (!window.currentPhoneFlipped) {
-            // 無視手機端有沒有切回網頁，電腦端直接強制開始倒數！
-            if (typeof window.startDesktopCountdown === 'function') window.startDesktopCountdown();
-        }
-    }
-
-    // 🚀 新增：每秒同步 AI 暫停狀態給手機端，確保手機知道現在是不是休息時間
-    if (typeof socket !== 'undefined' && socket.connected) {
-        const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
-        socket.emit('mobile_sync_update', { 
-            type: 'PAUSE_STATE_CHANGED', 
-            studentName: myName, 
-            isPaused: window.isAIPaused 
-        });
-    }
-
-    // 貼心機制：如果上課時被「離座彈窗」擋住，打鐘下課時自動幫學生解除彈窗
-    if (window.isAIPaused && window.isLeaveSeatActive && typeof window.handleReturnSeat === 'function') {
-        window.handleReturnSeat();
-    }
-
-    if (!window.classStartAudio) window.classStartAudio = new Audio('/sounds/countdown.mp3');
-    if (!window.classEndAudio) window.classEndAudio = new Audio('/sounds/class_end.mp3');
-
-    if (currentStatus === "休息中" && remainingTime === 3 && !window.hasPlayedStartAudio) {
-        window.classStartAudio.currentTime = 0;
-        window.classStartAudio.play().catch(e => console.warn("音效播放被瀏覽器阻擋:", e));
-        window.hasPlayedStartAudio = true; 
-    }
-
-    if (window.previousClassStatus !== currentStatus) {
-        if (window.previousClassStatus === "進行中" && currentStatus === "休息中") {
-            window.classEndAudio.currentTime = 0;
-            window.classEndAudio.play().catch(e => console.warn("音效播放被瀏覽器阻擋:", e));
-            window.hasPlayedStartAudio = false; 
-        }
-        
-        if (currentStatus === "進行中") {
-            window.hasPlayedStartAudio = false;
-            
-            // 剛開始上課，主動檢查手機是否還沒蓋回去，並執行本地追殺倒數 (備用保險)
-            if (typeof window.triggerPendingMobileWarning === 'function') {
-                window.triggerPendingMobileWarning();
-            }
-        }
-        
-        window.previousClassStatus = currentStatus;
-    }
-
-    updateStudentTimerUI(timeString, periodName, currentStatus, progress);
+    updateStudentTimerUI(`${mins}:${secs}`, label, status, progress);
 }
 
 function updateStudentTimerUI(time, label, status, progress) {
@@ -1018,10 +890,6 @@ function updateStudentTimerUI(time, label, status, progress) {
             : "h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-1000 relative shadow-[0_0_10px_rgba(245,158,11,0.5)]";
     }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    initStudentAutoTimer();
-});
 
 // ==========================================
 // VIP 結算防重複鎖
