@@ -355,20 +355,28 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
 
     if (typeof socket !== 'undefined') {
         socket.on('update_rank', (users) => {
-            const currentRoomCode = getTutorRoomCode();
+    const currentRoomCode = getTutorRoomCode();
 
-users = (users || []).filter(u => {
-    if (!currentRoomCode) return true;
+    const rawUsers = users || [];
 
-    const userRoom =
-        u.roomId ||
-        u.room ||
-        u.roomCode;
+    // ✅ 如果是一般教室 update_rank，通常沒有 roomId / room / roomCode
+    // 不要拿它清空特約教室菁英榜
+    const hasTutorRoomData = rawUsers.some(u => {
+        const userRoom = u.roomId || u.room || u.roomCode;
+        return userRoom === currentRoomCode;
+    });
 
-    return userRoom === currentRoomCode;
-});
+    if (!hasTutorRoomData) {
+        console.log("⏭️ [TutorClient] 忽略非特約教室 update_rank:", rawUsers);
+        return;
+    }
 
-renderTutorRankList(users);
+    users = rawUsers.filter(u => {
+        const userRoom = u.roomId || u.room || u.roomCode;
+        return userRoom === currentRoomCode;
+    });
+
+    renderTutorRankList(users);
             const standaloneUsers = users.filter(u => u.isStandalone).map(u => u.name);
             
             setTimeout(() => {
@@ -656,10 +664,10 @@ function renderTutorRankList(users) {
     if (!rankEl) return;
 
     const students = (users || []).filter(u =>
-        u.role === 'student' &&
-        u.status !== 'OFFLINE' &&
-        !u.leaveTime
-    );
+    (u.role === 'student' || !u.role) &&
+    u.status !== 'OFFLINE' &&
+    !u.leaveTime
+);
 
     if (students.length === 0) {
         rankEl.innerHTML = `
