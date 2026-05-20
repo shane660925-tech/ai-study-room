@@ -678,6 +678,7 @@ function renderTutorRankList(users) {
         return;
     }
 
+    rankEl.className = "absolute inset-0 p-3 space-y-2 overflow-y-auto scroll-hide";
     rankEl.innerHTML = students.map((u, index) => {
     const name = u.name || u.username || '學員';
 
@@ -694,17 +695,17 @@ function renderTutorRankList(users) {
         status === 'STUDYING';
 
     return `
-        <div class="flex items-center justify-between bg-black/40 border border-amber-500/20 rounded-2xl p-3 mb-3">
+        <div class="flex items-center justify-between bg-black/40 border border-amber-500/20 rounded-xl px-3 py-2">
 
             <div class="flex items-center gap-3 min-w-0">
 
-                <div class="text-yellow-400 font-black text-2xl w-8">
+                <div class="text-yellow-400 font-black text-lg w-7">
                     #${index + 1}
                 </div>
 
                 <img
                     src="https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}"
-                    class="w-12 h-12 rounded-full border border-yellow-500/30 bg-gray-800"
+                    class="w-9 h-9 rounded-full border border-yellow-500/30 bg-gray-800"
                 >
 
                 <div class="min-w-0">
