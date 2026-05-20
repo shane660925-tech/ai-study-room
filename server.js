@@ -4128,11 +4128,50 @@ if (role === 'student' && tutorSchedules[roomId]) {
 
     socket.emit('sync_schedule_to_students', scheduleData);
 
-    const scheduleMessage =
+    const periods = Number(scheduleData.periods || 1);
+const classMinutes = Number(
+    scheduleData.classMinutes ||
+    scheduleData.class_minutes ||
+    scheduleData.periodTime ||
+    50
+);
+const restMinutes = Number(
+    scheduleData.restMinutes ||
+    scheduleData.rest_minutes ||
+    scheduleData.restTime ||
+    10
+);
+
+const startTime = String(
+    scheduleData.startTime ||
+    scheduleData.start_time ||
+    '08:00'
+).slice(0, 5);
+
+let endTime = scheduleData.endTime || scheduleData.end_time || '';
+
+if (!endTime) {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+
+    const totalMinutes =
+        periods * classMinutes +
+        (periods > 1 ? (periods - 1) * restMinutes : 0);
+
+    date.setMinutes(date.getMinutes() + totalMinutes);
+
+    endTime =
+        String(date.getHours()).padStart(2, '0') +
+        ':' +
+        String(date.getMinutes()).padStart(2, '0');
+}
+
+const scheduleMessage =
     scheduleData.message ||
     scheduleData.scheduleText ||
     scheduleData.text ||
-    `本次課表為 ${String(scheduleData.startTime || '08:00').slice(0, 5)}~${scheduleData.endTime || '--:--'}，分 ${scheduleData.periods} 節課，每節課 ${scheduleData.classMinutes} 分鐘，每次休息 ${scheduleData.restMinutes} 分鐘`;
+    `本次課表為 ${startTime}~${endTime}，分 ${periods} 節課，每節課 ${classMinutes} 分鐘，每次休息 ${restMinutes} 分鐘`;
 
 socket.emit('receive_tutor_schedule', {
     room: roomId,
