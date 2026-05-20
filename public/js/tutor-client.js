@@ -679,27 +679,54 @@ function renderTutorRankList(users) {
     }
 
     rankEl.innerHTML = students.map((u, index) => {
-        const name = u.name || u.username || '學員';
-        const status = u.status || 'FOCUSED';
+    const name = u.name || u.username || '學員';
 
-        return `
-            <div class="flex items-center gap-3 bg-black/40 border border-amber-500/20 rounded-xl p-3">
-                <div class="text-amber-400 font-black w-6 text-center">
+    const status = u.status || 'FOCUSED';
+
+    const focusMinutes =
+        u.focusMinutes ||
+        u.totalFocusMinutes ||
+        u.focusedMinutes ||
+        0;
+
+    const isFocused =
+        status === 'FOCUSED' ||
+        status === 'STUDYING';
+
+    return `
+        <div class="flex items-center justify-between bg-black/40 border border-amber-500/20 rounded-2xl p-3 mb-3">
+
+            <div class="flex items-center gap-3 min-w-0">
+
+                <div class="text-yellow-400 font-black text-2xl w-8">
                     #${index + 1}
                 </div>
 
-                <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}"
-                     class="w-10 h-10 rounded-full bg-gray-800 border border-amber-500/40">
+                <img
+                    src="https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}"
+                    class="w-12 h-12 rounded-full border border-yellow-500/30 bg-gray-800"
+                >
 
-                <div class="flex-1 min-w-0">
-                    <div class="text-white text-sm font-bold truncate">${name}</div>
-                    <div class="text-[10px] text-green-400 font-bold">
-                        ${status === 'FOCUSED' ? '專注中' : status}
+                <div class="min-w-0">
+                    <div class="text-white font-bold truncate">
+                        ${name}
+                    </div>
+
+                    <div class="text-cyan-400 text-xs font-bold">
+                        ${focusMinutes} min
                     </div>
                 </div>
             </div>
-        `;
-    }).join('');
+
+            <div class="flex items-center gap-2">
+                <div class="
+                    w-3 h-3 rounded-full
+                    ${isFocused ? 'bg-green-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]' : 'bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.8)]'}
+                "></div>
+            </div>
+        </div>
+    `;
+}).join('');
 }
 
 // 🚀 VIP 專屬：監聽來自 ai-core.js 的違規廣播
