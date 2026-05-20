@@ -3745,10 +3745,23 @@ async function broadcastUpdateRank() {
     const sockets = await io.fetchSockets();
 
     sockets.forEach(s => {
-        if (!studentSocketIds.has(s.id)) {
-            s.emit('update_rank', usersWithCaptain);
-        }
-    });
+    if (studentSocketIds.has(s.id)) return;
+
+    // ✅ 特約教師端不要吃 generic update_rank
+    // 避免把 tutorAttendance 的正確學生圖卡覆蓋成空
+    if (s.role === 'teacher' && s.currentTutorRoom) {
+        const tutorStudents = getTutorAttendance(s.currentTutorRoom).filter(u =>
+            u.role === 'student' &&
+            u.status !== 'OFFLINE' &&
+            !u.leaveTime
+        );
+
+        s.emit('update_rank', tutorStudents);
+        return;
+    }
+
+    s.emit('update_rank', usersWithCaptain);
+});
 }
 
 let activeTeams = [];
