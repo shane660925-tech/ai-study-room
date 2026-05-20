@@ -3623,11 +3623,15 @@ function getTutorRoomTimeState(roomId) {
     if (!schedule) return null;
 
     const now = new Date();
-    const start = new Date();
-    const [h, m] = String(schedule.startTime || '08:00').split(':');
-    start.setHours(parseInt(h), parseInt(m), 0, 0);
 
-    const elapsedSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+// Render 使用 UTC，這裡強制用台灣時間 UTC+8 來計算特約教室課表
+const taiwanNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+
+const start = new Date(taiwanNow);
+const [h, m] = String(schedule.startTime || '08:00').split(':');
+start.setHours(parseInt(h), parseInt(m), 0, 0);
+
+    const elapsedSeconds = Math.floor((taiwanNow.getTime() - start.getTime()) / 1000);
     const classSecs = Number(schedule.classMinutes || 50) * 60;
     const restSecs = Number(schedule.restMinutes || 10) * 60;
     const periods = Number(schedule.periods || 1);
