@@ -186,6 +186,59 @@ socket.on('update_rank', (users) => {
     }
 });
 
+socket.on('tutor_students_update', (students) => {
+    const currentRoomCode = window.currentTutorRoomCode;
+
+    activeStudents = (students || []).filter(s => {
+        const userRoom = s.roomId || s.room || s.roomCode;
+
+        return (
+            userRoom === currentRoomCode &&
+            s.role === 'student' &&
+            s.status !== 'OFFLINE' &&
+            !s.leaveTime
+        );
+    });
+
+    activeStudents.forEach(s => knownTutorNames.add(s.name));
+
+    if (typeof renderStudents === 'function') {
+        renderStudents();
+    }
+});
+
+socket.on('student_joined', (student) => {
+    if (!student) return;
+
+    const currentRoomCode = window.currentTutorRoomCode;
+    const userRoom = student.roomId || student.room || student.roomCode;
+
+    if (userRoom !== currentRoomCode) return;
+
+    const exists = activeStudents.some(s =>
+        s.name === student.name || s.username === student.username
+    );
+
+    if (!exists) {
+        activeStudents.push({
+            ...student,
+            name: student.name || student.username,
+            role: 'student',
+            status: student.status || 'FOCUSED',
+            roomId: currentRoomCode,
+            room: currentRoomCode,
+            roomCode: currentRoomCode,
+            leaveTime: null
+        });
+    }
+
+    knownTutorNames.add(student.name || student.username);
+
+    if (typeof renderStudents === 'function') {
+        renderStudents();
+    }
+});
+
 socket.on('receive_tutor_announcement', (data) => {
     const blackboardContent = document.getElementById('blackboardContent');
     if (blackboardContent) {

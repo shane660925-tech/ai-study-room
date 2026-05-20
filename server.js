@@ -4021,10 +4021,27 @@ socket.currentRoom = roomId;
 socket.currentTutorRoom = roomId;
 
     if (role === 'teacher') {
-        console.log(`[特約教室] 教師端加入 ${roomId}`);
-        socket.emit('update_attendance', getTutorAttendance(roomId));
-        return;
-    }
+    console.log(`[特約教室] 教師端加入 ${roomId}`);
+
+    const currentAttendance = getTutorAttendance(roomId);
+
+    const activeTutorStudents = currentAttendance.filter(u =>
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
+    );
+
+    // 原本點名資料
+    socket.emit('update_attendance', currentAttendance);
+
+    // ✅ 補送專注榜 / 學生圖卡資料
+    socket.emit('update_rank', activeTutorStudents);
+
+    // ✅ 補送 tutor 專用學生更新事件
+    socket.emit('tutor_students_update', activeTutorStudents);
+
+    return;
+}
 
     if (!username || username === 'undefined' || username === '神秘學員') {
         console.log("❌ 特約教室學生缺少 username");
@@ -4064,16 +4081,32 @@ if (dbUser && dbUser.is_blocked) {
 
     const currentAttendance = getTutorAttendance(roomId);
 
-io.to(roomId).emit('update_attendance', currentAttendance);
-
-io.to(roomId).emit(
-    'update_rank',
-    currentAttendance.filter(u =>
-        u.role === 'student' &&
-        u.status !== 'OFFLINE' &&
-        !u.leaveTime
-    )
+const activeTutorStudents = currentAttendance.filter(u =>
+    u.role === 'student' &&
+    u.status !== 'OFFLINE' &&
+    !u.leaveTime
 );
+
+io.to(roomId).emit('update_attendance', currentAttendance);
+io.to(roomId).emit('update_rank', activeTutorStudents);
+
+// ✅ 補事件別名，避免教師端只聽 tutor_students_update / student_joined 時收不到
+io.to(roomId).emit('tutor_students_update', activeTutorStudents);
+
+io.to(roomId).emit('student_joined', {
+    id: socket.id,
+    socketId: socket.id,
+    name: username,
+    username,
+    roomId,
+    room: roomId,
+    roomCode: roomId,
+    roomMode: 'tutor',
+    role: 'student',
+    status: 'FOCUSED',
+    joinTime: getTaiwanTimeString(),
+    leaveTime: null
+});
 
 console.log(`[特約教室] 已同步 ${roomId} 名單，目前 ${currentAttendance.length} 人`);
 
