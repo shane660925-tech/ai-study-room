@@ -856,38 +856,74 @@ function updateStudentTimerUI(time, label, status, progress) {
     const statusBadge = document.getElementById('studentStatusBadge');
     const progressBar = document.getElementById('studentProgressBar');
 
-    if (timerDisplay) {
-        timerDisplay.innerText = time;
-        if (status === "進行中") {
-            timerDisplay.classList.add('text-red-400');
-            timerDisplay.classList.remove('text-emerald-400', 'text-white');
-        } else if (status === "休息中") {
-            timerDisplay.classList.add('text-emerald-400');
-            timerDisplay.classList.remove('text-red-400', 'text-white');
-        } else {
-            timerDisplay.classList.add('text-white');
-            timerDisplay.classList.remove('text-red-400', 'text-emerald-400');
-        }
-    }
-    
+    const timerContainer =
+        document.getElementById('studentTimerContainer') ||
+        document.getElementById('studentTimerBox') ||
+        timerDisplay?.closest('.rounded-xl') ||
+        timerDisplay?.closest('.rounded-2xl');
+
+    if (timerDisplay) timerDisplay.innerText = time;
     if (periodLabel) periodLabel.innerText = label;
-    
+
+    let colorClass = {
+        time: "text-amber-400",
+        badge: "text-[10px] bg-amber-900/30 text-amber-400 px-2.5 py-1 rounded-md border border-amber-500/30 font-bold uppercase tracking-widest shadow-sm",
+        bar: "h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-1000 relative shadow-[0_0_10px_rgba(245,158,11,0.5)]",
+        box: "border-amber-500/40"
+    };
+
+    if (status === "尚未開始" || status === "未開始") {
+        colorClass = {
+            time: "text-red-400",
+            badge: "text-[10px] bg-red-900/30 text-red-400 px-2.5 py-1 rounded-md border border-red-500/30 font-bold uppercase tracking-widest shadow-sm",
+            bar: "h-full bg-red-500 transition-all duration-1000 relative shadow-[0_0_10px_rgba(239,68,68,0.5)]",
+            box: "border-red-500/40"
+        };
+    } else if (status === "休息中") {
+        colorClass = {
+            time: "text-emerald-400",
+            badge: "text-[10px] bg-emerald-900/30 text-emerald-400 px-2.5 py-1 rounded-md border border-emerald-500/30 font-bold uppercase tracking-widest shadow-sm",
+            bar: "h-full bg-emerald-500 transition-all duration-1000 relative shadow-[0_0_10px_rgba(16,185,129,0.5)]",
+            box: "border-emerald-500/40"
+        };
+    } else if (status === "已結束" || status === "已完成") {
+        colorClass = {
+            time: "text-slate-300",
+            badge: "text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md border border-slate-600 font-bold uppercase tracking-widest shadow-sm",
+            bar: "h-full bg-slate-500 transition-all duration-1000 relative",
+            box: "border-slate-600"
+        };
+    }
+
+    if (timerDisplay) {
+        timerDisplay.classList.remove(
+            'text-red-400',
+            'text-emerald-400',
+            'text-white',
+            'text-amber-400',
+            'text-slate-300'
+        );
+        timerDisplay.classList.add(colorClass.time);
+    }
+
     if (statusBadge) {
         statusBadge.innerText = status;
-        if (status === "休息中") {
-            statusBadge.className = "text-[10px] bg-emerald-900/30 text-emerald-400 px-2.5 py-1 rounded-md border border-emerald-500/30 font-bold uppercase tracking-widest shadow-sm";
-        } else if (status === "進行中") {
-            statusBadge.className = "text-[10px] bg-red-900/30 text-red-400 px-2.5 py-1 rounded-md border border-red-500/30 font-bold uppercase tracking-widest shadow-sm";
-        } else {
-            statusBadge.className = "text-[10px] bg-gray-800/80 text-gray-400 px-2.5 py-1 rounded-md border border-gray-700 font-bold uppercase tracking-widest shadow-sm";
-        }
+        statusBadge.className = colorClass.badge;
     }
-    
+
     if (progressBar) {
         progressBar.style.width = `${progress}%`;
-        progressBar.className = status === "休息中" 
-            ? "h-full bg-emerald-500 transition-all duration-1000 relative shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
-            : "h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-1000 relative shadow-[0_0_10px_rgba(245,158,11,0.5)]";
+        progressBar.className = colorClass.bar;
+    }
+
+    if (timerContainer) {
+        timerContainer.classList.remove(
+            'border-red-500/40',
+            'border-amber-500/40',
+            'border-emerald-500/40',
+            'border-slate-600'
+        );
+        timerContainer.classList.add(colorClass.box);
     }
 }
 
