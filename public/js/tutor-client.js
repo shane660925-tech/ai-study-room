@@ -358,6 +358,7 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
             const currentRoomCode = getTutorRoomCode();
 
 users = (users || []).filter(u => {
+    renderTutorRankList(users);
     if (!currentRoomCode) return true;
 
     const userRoom =
@@ -648,6 +649,49 @@ users = (users || []).filter(u => {
         }
     }, 1500);
 });
+
+function renderTutorRankList(users) {
+    const rankEl = document.getElementById('tab-rank');
+    if (!rankEl) return;
+
+    const students = (users || []).filter(u =>
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
+    );
+
+    if (students.length === 0) {
+        rankEl.innerHTML = `
+            <div class="text-center text-gray-500 text-xs py-8">
+                目前尚無學員在線
+            </div>
+        `;
+        return;
+    }
+
+    rankEl.innerHTML = students.map((u, index) => {
+        const name = u.name || u.username || '學員';
+        const status = u.status || 'FOCUSED';
+
+        return `
+            <div class="flex items-center gap-3 bg-black/40 border border-amber-500/20 rounded-xl p-3">
+                <div class="text-amber-400 font-black w-6 text-center">
+                    #${index + 1}
+                </div>
+
+                <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}"
+                     class="w-10 h-10 rounded-full bg-gray-800 border border-amber-500/40">
+
+                <div class="flex-1 min-w-0">
+                    <div class="text-white text-sm font-bold truncate">${name}</div>
+                    <div class="text-[10px] text-green-400 font-bold">
+                        ${status === 'FOCUSED' ? '專注中' : status}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
 // 🚀 VIP 專屬：監聽來自 ai-core.js 的違規廣播
 window.isLeaveSeatActive = false; // 離座鎖定狀態
