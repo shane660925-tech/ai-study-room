@@ -946,7 +946,7 @@ const countdownSessionKey =
 
 const shouldStartCountdown =
     countdownPhase &&
-    remaining <= 3 &&
+    remaining <= 4 &&
     remaining > 0;
 
 // 新的一輪倒數開始
