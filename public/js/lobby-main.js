@@ -1536,13 +1536,45 @@ const introSteps = [
 let currentIntroStep = 0;
 let currentIntroTarget = null;
 
-function startIntroTutorial() {
-    const introCompleted =
-    localStorage.getItem('studyVerseIntroCompleted');
+async function startIntroTutorial() {
+    const username = localStorage.getItem('studyVerseUser');
 
-if (introCompleted === 'true') {
-    return;
-}
+    if (!username) return;
+
+    const loginOverlay = document.getElementById('loginOverlay');
+    const registerOverlay = document.getElementById('registerOverlay');
+
+    if (
+        loginOverlay &&
+        !loginOverlay.classList.contains('hidden')
+    ) {
+        return;
+    }
+
+    if (
+        registerOverlay &&
+        !registerOverlay.classList.contains('hidden')
+    ) {
+        return;
+    }
+
+    const introKey = `studyVerseIntroCompleted:${username}`;
+
+    if (localStorage.getItem(introKey) === 'true') {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (data.user && data.user.has_seen_intro === true) {
+            localStorage.setItem(introKey, 'true');
+            return;
+        }
+    } catch (err) {
+        console.warn('新手導覽狀態檢查失敗，改用本機判斷:', err);
+    }
 
     injectIntroStyle();
     showIntroStep(0);
@@ -1734,10 +1766,11 @@ window.skipIntroTutorial = function() {
 
 async function finishIntroTutorial() {
 
-    localStorage.setItem(
-        'studyVerseIntroCompleted',
-        'true'
-    );
+    const introKey = username
+    ? `studyVerseIntroCompleted:${username}`
+    : 'studyVerseIntroCompleted';
+
+localStorage.setItem(introKey, 'true');
 
     const username =
         localStorage.getItem('studyVerseUser');
