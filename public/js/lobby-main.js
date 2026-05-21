@@ -1046,14 +1046,6 @@ function initTutorSpecificQRCode() {
     });
 }
 
-/**
- * 核心邏輯整合：修改原本的套接字監聽器
- * 找到您原本 lobby-main.js 中的 socket.on('deviceLinked', ...) 和 socket.on('mobile_sync_update', ...)
- * 並用下方的代碼「覆蓋」或「整合」進去。
- */
-// B. 整合進 mobile_sync_update (狀態更新，含翻轉完成)
-// 請找到檔案中原本的此段落，將 VIP 入口邏輯加入到 data.type === 'FLIP_COMPLETED' 判斷中
-
 window.enterMyTutorDashboard = async function() {
     const username = localStorage.getItem('studyVerseUser');
 
@@ -1063,25 +1055,55 @@ window.enterMyTutorDashboard = async function() {
     }
 
     try {
-        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
-        const data = await res.json();
+        const userRes = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const userData = await userRes.json();
 
-        if (!res.ok || !data.user) {
-            alert(data.error || '無法確認教師資格。');
+        if (!userRes.ok || !userData.user) {
+            alert(userData.error || '無法確認教師資格。');
             return;
         }
 
-        const user = data.user;
+        const user = userData.user;
 
-        if (user.role !== 'teacher' || user.teacher_status !== 'approved') {
+        if (
+            user.role !== 'teacher' &&
+            user.role !== 'admin'
+        ) {
             alert('此功能限通過審核的教師使用。');
             return;
         }
 
-        const teacherRoomCode = `teacher_${username}`;
+        if (
+            user.role === 'teacher' &&
+            user.teacher_status !== 'approved'
+        ) {
+            alert('你的教師資格尚未通過審核。');
+            return;
+        }
+
+        const scheduleRes = await fetch(`/api/tutor-schedules?teacherUsername=${encodeURIComponent(username)}`);
+        const scheduleData = await scheduleRes.json();
+
+        if (
+            !scheduleRes.ok ||
+            !scheduleData.success ||
+            !Array.isArray(scheduleData.schedules) ||
+            scheduleData.schedules.length === 0
+        ) {
+            alert('目前找不到你的特約教室排程，請先設定教室排程。');
+            return;
+        }
+
+        const latestSchedule = scheduleData.schedules[0];
+        const roomCode = latestSchedule.room_code;
+
+        if (!roomCode) {
+            alert('排程資料缺少教室代碼，請重新建立排程。');
+            return;
+        }
 
         window.location.href =
-            `/tutor-dashboard.html?room=${encodeURIComponent(teacherRoomCode)}&teacher=${encodeURIComponent(username)}`;
+            `/tutor-dashboard.html?room=${encodeURIComponent(roomCode)}&teacher=${encodeURIComponent(username)}`;
 
     } catch (err) {
         console.error('進入教師端失敗:', err);
