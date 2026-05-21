@@ -1844,10 +1844,11 @@ async function loadUnreadNotifications() {
 
         if (!res.ok) return;
 
-        const notifications = data.notifications || [];
-        if (notifications.length === 0) return;
+        const unreadNotifications = (data.notifications || []).filter(n => !n.is_read);
 
-        showNotificationModal(notifications);
+if (unreadNotifications.length === 0) return;
+
+showNotificationModal(unreadNotifications);
 
     } catch (err) {
         console.error('讀取站內通知失敗:', err);
@@ -1895,13 +1896,31 @@ function showNotificationModal(notifications) {
 
 async function markNotificationsRead(ids) {
     try {
-        await fetch('/api/notifications/read', {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ ids })
+        await Promise.all(
+            ids.map(id =>
+                fetch('/api/notifications/read', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        notificationId: id
+                    })
+                })
+            )
+        );
+
+        notifications = notifications.map(n => {
+            if (ids.includes(n.id)) {
+                n.is_read = true;
+            }
+            return n;
         });
+
+        if (typeof renderNotifications === 'function') {
+            renderNotifications();
+        }
+
     } catch (err) {
         console.error('通知已讀失敗:', err);
     }
