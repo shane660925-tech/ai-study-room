@@ -2069,11 +2069,25 @@ async function markNotificationRead(notificationId) {
     }
 }
 
-// 頁面載入後讀取通知
+// 頁面載入後讀取通知，並監聽即時通知
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         loadNotifications();
     }, 1200);
+
+    if (typeof socket !== 'undefined') {
+        socket.on('new_notification', (notification) => {
+            if (!notification || !notification.id) return;
+
+            const exists = notifications.some(n => n.id === notification.id);
+            if (exists) return;
+
+            notifications.unshift(notification);
+            renderNotifications();
+
+            showNotificationModal([notification]);
+        });
+    }
 });
 
 window.showCourseStoreModal = async function() {

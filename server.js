@@ -403,7 +403,15 @@ async function createNotification({
     }
 
     console.log('✅ 通知已寫入:', data);
-    return data;
+
+const targetSocketId = activeUserSockets.get(username);
+
+if (targetSocketId) {
+    io.to(targetSocketId).emit('new_notification', data);
+    console.log(`🔔 已即時推送通知給 ${username}`);
+}
+
+return data;
 }
 
 function generateTeacherDiscountCode(username) {
