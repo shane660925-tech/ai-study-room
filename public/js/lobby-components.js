@@ -178,10 +178,6 @@ class SharedModals extends HTMLElement {
                    class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 text-center focus:border-blue-500 outline-none transition-all"
                    placeholder="設定密碼">
 
-            <input id="studentDiscountCode"
-                   class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 text-center focus:border-blue-500 outline-none transition-all"
-                   placeholder="教室優惠碼，可留空">
-
             <button onclick="handleRealRegister()"
                     class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-bold text-white shadow-lg shadow-green-900/20 transition-all active:scale-95 mb-4">
                 確認學生註冊
