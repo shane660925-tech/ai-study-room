@@ -5,6 +5,13 @@
  */
 
 const socket = io();
+socket.on('connect', () => {
+    socket.emit('join_room', '2');          // 沉浸式自習室
+    socket.emit('join_room', 'simulated');  // 主題教室舊版/預設模式
+    socket.emit('join_room', '1');          // 線上課程專區
+
+    console.log('✅ 一般教師端已加入普通教室監控 rooms');
+});
 let students = [];
 let notifiedMilestones = new Set();
 let violationStorage = {}; 
