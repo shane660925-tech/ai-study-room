@@ -93,12 +93,9 @@ socket.on('update_rank', (data) => {
 
     // 🚀 修復問題1：呼叫正確的渲染函數，讓教師一進畫面就立刻看到學生！
     renderStudentGrid(); 
-renderViolations();
 
-if (typeof renderSummary === 'function') renderSummary();
-
-if (typeof renderSummaryReports === 'function') {
-    renderSummaryReports();
+if (typeof renderSummary === 'function') {
+    renderSummary();
 }
 });
 
