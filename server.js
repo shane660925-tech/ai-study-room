@@ -3974,36 +3974,82 @@ socket.on('sync_schedule_to_students', (data) => {
         return;
     }
 
-    tutorSchedules[targetRoom] = data;
+    const scheduleMessage =
+    data.message ||
+    data.scheduleText ||
+    data.text ||
+    '';
 
-    tutorRoomSettings.set(targetRoom, {
-        startTime: data.startTime || data.start_time,
-        classMinutes: Number(data.classMinutes || data.class_minutes || data.periodTime || 50),
-        restMinutes: Number(data.restMinutes || data.rest_minutes || data.restTime || 10),
-        periods: Number(data.periods || 1)
-    });
+const normalizedScheduleData = {
+    ...data,
+    room: targetRoom,
+    roomId: targetRoom,
+    roomCode: targetRoom,
+    message: scheduleMessage,
+    scheduleText: scheduleMessage
+};
 
-    io.to(targetRoom).emit('sync_schedule_to_students', data);
-    io.to(targetRoom).emit('sync_tutor_schedule', data);
+tutorSchedules[targetRoom] = normalizedScheduleData;
+
+io.to(targetRoom).emit('sync_schedule_to_students', normalizedScheduleData);
+io.to(targetRoom).emit('sync_tutor_schedule', normalizedScheduleData);
+io.to(targetRoom).emit('receive_tutor_schedule', normalizedScheduleData);
 });
 
     // 接收大廳老師建立的課表並存起來
     socket.on('create_tutor_room_schedule', (data) => {
-        tutorSchedules[data.roomId] = data;
-        
-        // 同時寫入 tutorRoomSettings 供計時器每秒計算使用
-        const { roomId, startTime, classMinutes, restMinutes, periods } = data;
-        tutorRoomSettings.set(roomId, { startTime, classMinutes, restMinutes, periods });
-        
-        console.log(`[系統] 已儲存特約教室 ${roomId} 的課表設定，首節 ${startTime}, ${classMinutes}分/節`);
+    const roomId = data.roomId || data.room || data.roomCode;
+
+    if (!roomId) {
+        console.log('❌ create_tutor_room_schedule 缺少 roomId');
+        return;
+    }
+
+    const scheduleMessage =
+        data.message ||
+        data.scheduleText ||
+        data.text ||
+        '';
+
+    const normalizedScheduleData = {
+        ...data,
+        roomId,
+        room: roomId,
+        roomCode: roomId,
+        message: scheduleMessage,
+        scheduleText: scheduleMessage
+    };
+
+    tutorSchedules[roomId] = normalizedScheduleData;
+
+    const startTime = data.startTime || data.start_time;
+    const classMinutes = Number(data.classMinutes || data.class_minutes || data.periodTime || 50);
+    const restMinutes = Number(data.restMinutes || data.rest_minutes || data.restTime || 10);
+    const periods = Number(data.periods || 1);
+
+    tutorRoomSettings.set(roomId, {
+        startTime,
+        classMinutes,
+        restMinutes,
+        periods
     });
+
+    io.to(roomId).emit('receive_tutor_schedule', normalizedScheduleData);
+    io.to(roomId).emit('sync_schedule_to_students', normalizedScheduleData);
+
+    console.log(`[系統] 已儲存特約教室 ${roomId} 的課表設定：${scheduleMessage}`);
+});
 
     // 當特約學生進入教室時，發送該教室的課表給他
     socket.on('request_tutor_schedule', (roomId) => {
-        if (tutorSchedules[roomId]) {
-            socket.emit('sync_tutor_schedule', tutorSchedules[roomId]);
-        }
-    });
+    if (tutorSchedules[roomId]) {
+        const scheduleData = tutorSchedules[roomId];
+
+        socket.emit('sync_tutor_schedule', scheduleData);
+        socket.emit('sync_schedule_to_students', scheduleData);
+        socket.emit('receive_tutor_schedule', scheduleData);
+    }
+});
 
     // 學生請求當下課表時間
     socket.on('request_tutor_timer_sync', (roomId) => {
@@ -4127,57 +4173,8 @@ if (role === 'student' && tutorSchedules[roomId]) {
     const scheduleData = tutorSchedules[roomId];
 
     socket.emit('sync_schedule_to_students', scheduleData);
-
-    const periods = Number(scheduleData.periods || 1);
-const classMinutes = Number(
-    scheduleData.classMinutes ||
-    scheduleData.class_minutes ||
-    scheduleData.periodTime ||
-    50
-);
-const restMinutes = Number(
-    scheduleData.restMinutes ||
-    scheduleData.rest_minutes ||
-    scheduleData.restTime ||
-    10
-);
-
-const startTime = String(
-    scheduleData.startTime ||
-    scheduleData.start_time ||
-    '08:00'
-).slice(0, 5);
-
-let endTime = scheduleData.endTime || scheduleData.end_time || '';
-
-if (!endTime) {
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
-
-    const totalMinutes =
-        periods * classMinutes +
-        (periods > 1 ? (periods - 1) * restMinutes : 0);
-
-    date.setMinutes(date.getMinutes() + totalMinutes);
-
-    endTime =
-        String(date.getHours()).padStart(2, '0') +
-        ':' +
-        String(date.getMinutes()).padStart(2, '0');
-}
-
-const scheduleMessage =
-    scheduleData.message ||
-    scheduleData.scheduleText ||
-    scheduleData.text ||
-    `本次課表為 ${startTime}~${endTime}，分 ${periods} 節課，每節課 ${classMinutes} 分鐘，每次休息 ${restMinutes} 分鐘`;
-
-socket.emit('receive_tutor_schedule', {
-    room: roomId,
-    roomId: roomId,
-    message: scheduleMessage
-});
+    socket.emit('sync_tutor_schedule', scheduleData);
+    socket.emit('receive_tutor_schedule', scheduleData);
 
     console.log(`[特約教室] 已補發 ${roomId} 課表給學生 ${username}`);
 }

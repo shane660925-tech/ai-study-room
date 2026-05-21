@@ -816,18 +816,21 @@ function updateDashboardUI(data) {
         const endMins = String(date.getMinutes()).padStart(2, '0');
         const endTime = `${endHours}:${endMins}`;
 
-        window.currentScheduleData = {
-            ...data,
-            periods,
-            periodTime,
-            restTime,
-            classMinutes: periodTime,
-            restMinutes: restTime,
-            startTime: displayStartTime
-        };
-
         window.currentScheduleText =
-            `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
+    `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
+
+window.currentScheduleData = {
+    ...data,
+    periods,
+    periodTime,
+    restTime,
+    classMinutes: periodTime,
+    restMinutes: restTime,
+    startTime: displayStartTime,
+    endTime: endTime,
+    scheduleText: window.currentScheduleText,
+    message: window.currentScheduleText
+};
 
         const displayEl = document.getElementById('teacherScheduleDisplay');
         if (displayEl) displayEl.innerText = window.currentScheduleText;
@@ -867,32 +870,32 @@ window.broadcastSchedule = function() {
     const normalizedStartTime = String(rawStartTime).slice(0, 5);
 
     const schedulePayload = {
-        ...window.currentScheduleData,
-        roomId: roomCode,
-        room: roomCode,
-        roomCode: roomCode,
-        startTime: normalizedStartTime,
-        classMinutes: Number(
-            window.currentScheduleData.classMinutes ||
-            window.currentScheduleData.class_minutes ||
-            window.currentScheduleData.periodTime ||
-            50
-        ),
-        restMinutes: Number(
-            window.currentScheduleData.restMinutes ||
-            window.currentScheduleData.rest_minutes ||
-            window.currentScheduleData.restTime ||
-            10
-        ),
-        periods: Number(window.currentScheduleData.periods || 1)
-    };
+    ...window.currentScheduleData,
+    roomId: roomCode,
+    room: roomCode,
+    roomCode: roomCode,
+    startTime: normalizedStartTime,
+    classMinutes: Number(
+        window.currentScheduleData.classMinutes ||
+        window.currentScheduleData.class_minutes ||
+        window.currentScheduleData.periodTime ||
+        50
+    ),
+    restMinutes: Number(
+        window.currentScheduleData.restMinutes ||
+        window.currentScheduleData.rest_minutes ||
+        window.currentScheduleData.restTime ||
+        10
+    ),
+    periods: Number(window.currentScheduleData.periods || 1),
+    endTime: window.currentScheduleData.endTime,
+    scheduleText: window.currentScheduleText,
+    message: window.currentScheduleText
+};
 
     socket.emit('create_tutor_room_schedule', schedulePayload);
 
-    socket.emit('sync_schedule_to_students', {
-    ...schedulePayload,
-    message: window.currentScheduleText
-});
+    socket.emit('sync_schedule_to_students', schedulePayload);
 
     if (window.currentScheduleText) {
         socket.emit('sync_tutor_schedule', {
