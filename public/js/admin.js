@@ -40,6 +40,26 @@ function getRoomCategory(roomMode) {
     return roomMode || 'unknown';
 }
 
+function isStudentInCurrentFilter(name) {
+    const student = students.find(s => s.name === name);
+
+    if (!student) {
+        return currentRoomFilter === 'ALL';
+    }
+
+    if (currentRoomFilter === 'ALL') return true;
+
+    return getRoomCategory(student.roomMode) === currentRoomFilter;
+}
+
+function getFilteredStudents() {
+    if (currentRoomFilter === 'ALL') return students;
+
+    return students.filter(s => {
+        return getRoomCategory(s.roomMode) === currentRoomFilter;
+    });
+}
+
 // --- 1. 初始化系統時鐘 ---
 function initClock() {
     const clockEl = document.getElementById('systemClock');
@@ -73,7 +93,13 @@ socket.on('update_rank', (data) => {
 
     // 🚀 修復問題1：呼叫正確的渲染函數，讓教師一進畫面就立刻看到學生！
     renderStudentGrid(); 
-    if (typeof renderSummary === 'function') renderSummary();
+renderViolations();
+
+if (typeof renderSummary === 'function') renderSummary();
+
+if (typeof renderSummaryReports === 'function') {
+    renderSummaryReports();
+}
 });
 
 socket.on('teacher_update', (data) => {
@@ -181,6 +207,12 @@ window.setRoomFilter = function(mode) {
     
     // 重新渲染畫面
     renderStudentGrid();
+renderViolations();
+renderSummary();
+
+if (typeof renderSummaryReports === 'function') {
+    renderSummaryReports();
+}
 };
 
 // --- 4. 畫面渲染函數 ---
@@ -265,7 +297,9 @@ function renderStudentGrid() {
 function renderViolations() {
     const container = document.getElementById('tab-violations');
     if(!container) return;
-    const names = Object.keys(violationStorage);
+    const names = Object.keys(violationStorage).filter(name => {
+    return isStudentInCurrentFilter(name);
+});
     
     if (names.length === 0) {
         container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-20 italic">目前無異常行為紀錄</p>`;
@@ -329,9 +363,16 @@ function renderViolations() {
 function renderSummaryReports() {
     const list = document.getElementById('summaryReportsList');
     if (!list) return;
-    if (sessionSummaries.length === 0) return;
+    const filteredSummaries = sessionSummaries.filter(r => {
+    return isStudentInCurrentFilter(r.name);
+});
 
-    list.innerHTML = sessionSummaries.map((r) => {
+if (filteredSummaries.length === 0) {
+    list.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-20 italic">目前此分類下尚無結算報告</p>`;
+    return;
+}
+
+list.innerHTML = filteredSummaries.map((r) => {
         let detailsHtml = "";
         if (r.details) {
             for (const [key, val] of Object.entries(r.details)) {
@@ -378,15 +419,20 @@ function renderLogs(logs) {
 function renderSummary() {
     const summaryContainer = document.getElementById('summaryStats');
     if(!summaryContainer) return;
-    if (students.length === 0) {
-        summaryContainer.innerHTML = '<p class="text-xs text-slate-500 italic">等待數據中...</p>';
+
+    const filteredStudents = getFilteredStudents();
+
+    if (filteredStudents.length === 0) {
+        summaryContainer.innerHTML = '<p class="text-xs text-slate-500 italic">目前此分類下無學生數據。</p>';
         return;
     }
-    const focusCount = students.filter(s => s.status === 'FOCUSED').length;
-    const focusRate = ((focusCount / students.length) * 100).toFixed(0);
+
+    const focusCount = filteredStudents.filter(s => s.status === 'FOCUSED').length;
+    const focusRate = ((focusCount / filteredStudents.length) * 100).toFixed(0);
+
     summaryContainer.innerHTML = `
         <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
-            <p class="text-[10px] text-slate-400 mb-2 font-black uppercase tracking-widest">班級專注率</p>
+            <p class="text-[10px] text-slate-400 mb-2 font-black uppercase tracking-widest">目前視角專注率</p>
             <div class="flex items-end gap-3">
                 <p class="text-3xl font-black text-green-400">${focusRate}%</p>
                 <span class="text-[10px] text-slate-500 pb-1 italic">Real-time monitoring</span>
