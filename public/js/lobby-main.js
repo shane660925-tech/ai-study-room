@@ -1765,36 +1765,29 @@ window.skipIntroTutorial = function() {
 };
 
 async function finishIntroTutorial() {
-
-    const introKey = username
-    ? `studyVerseIntroCompleted:${username}`
-    : 'studyVerseIntroCompleted';
-
-localStorage.setItem(introKey, 'true');
-
-    const username =
-        localStorage.getItem('studyVerseUser');
+    const username = localStorage.getItem('studyVerseUser');
 
     if (username) {
+        const introKey = `studyVerseIntroCompleted:${username}`;
+        localStorage.setItem(introKey, 'true');
 
         try {
-
-            await fetch('/api/intro-complete', {
+            const res = await fetch('/api/intro-complete', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    username
-                })
+                body: JSON.stringify({ username })
             });
 
-        } catch (err) {
+            const data = await res.json();
 
-            console.error(
-                '新手導覽完成同步失敗:',
-                err
-            );
+            if (!res.ok) {
+                console.error('新手導覽完成同步失敗:', data);
+            }
+
+        } catch (err) {
+            console.error('新手導覽完成同步失敗:', err);
         }
     }
 
