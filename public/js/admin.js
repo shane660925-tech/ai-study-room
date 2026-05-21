@@ -5,18 +5,40 @@
  */
 
 const socket = io();
-socket.on('connect', () => {
-    socket.emit('join_room', '2');          // 沉浸式自習室
-    socket.emit('join_room', 'simulated');  // 主題教室舊版/預設模式
-    socket.emit('join_room', '1');          // 線上課程專區
+socket.on('connect', async () => {
+    socket.emit('join_room', '2');
+    socket.emit('join_room', 'simulated');
+    socket.emit('join_room', '1');
 
-    console.log('✅ 一般教師端已加入普通教室監控 rooms');
+    try {
+        const res = await fetch('/api/theme-rooms');
+        const data = await res.json();
+
+        const rooms = data.rooms || [];
+
+        rooms.forEach(room => {
+            if (room.slug) {
+                socket.emit('join_room', `theme:${room.slug}`);
+            }
+        });
+
+        console.log('✅ 一般教師端已加入普通教室與主題教室 rooms');
+    } catch (err) {
+        console.warn('⚠️ 主題教室 rooms 加入失敗:', err);
+    }
 });
 let students = [];
 let notifiedMilestones = new Set();
 let violationStorage = {}; 
 let sessionSummaries = []; // 儲存學生結算報告
 let currentRoomFilter = 'ALL'; // 記錄目前觀看的教室模式
+function getRoomCategory(roomMode) {
+    if (roomMode === '2') return '2';
+    if (roomMode === '1') return '1';
+    if (roomMode === 'simulated') return 'simulated';
+    if (String(roomMode || '').startsWith('theme:')) return 'simulated';
+    return roomMode || 'unknown';
+}
 
 // --- 1. 初始化系統時鐘 ---
 function initClock() {
@@ -168,7 +190,10 @@ function renderStudentGrid() {
     if (!grid) return;
 
     // [核心] 根據選中的頁籤過濾學生名單
-    const filteredStudents = students.filter(s => currentRoomFilter === 'ALL' || s.roomMode === currentRoomFilter);
+    const filteredStudents = students.filter(s => {
+    if (currentRoomFilter === 'ALL') return true;
+    return getRoomCategory(s.roomMode) === currentRoomFilter;
+});
 
     if (filteredStudents.length === 0) {
         grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-500 italic font-bold">目前此分類下無學生在線</div>`;
@@ -183,7 +208,9 @@ function renderStudentGrid() {
         // 判斷該學生所屬教室的標籤顏色
         let roomBadge = "";
         if (s.roomMode === '2') roomBadge = `<span class="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] px-2 py-0.5 rounded font-bold">沉浸式</span>`;
-        else if (s.roomMode === 'simulated') roomBadge = `<span class="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[9px] px-2 py-0.5 rounded font-bold">模擬教室</span>`;
+        else if (s.roomMode === 'simulated' || String(s.roomMode || '').startsWith('theme:')) {
+    roomBadge = `<span class="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[9px] px-2 py-0.5 rounded font-bold">主題教室</span>`;
+}
         else if (s.roomMode === '1') roomBadge = `<span class="bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[9px] px-2 py-0.5 rounded font-bold">線上課程</span>`;
         else roomBadge = `<span class="bg-gray-500/20 text-gray-400 border border-gray-500/30 text-[9px] px-2 py-0.5 rounded font-bold">一般</span>`;
 
