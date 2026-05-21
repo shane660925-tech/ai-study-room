@@ -931,27 +931,49 @@ const previousPhase = window.previousClassStatus;
     const progress = state.phase === 'WAITING'
         ? 0
         : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
-// 上課前 3 秒倒數音效
-// 每一節上課前 3 秒播放一次倒數音效
-const shouldPlayCountdown =
-    (phase === 'WAITING' || phase === 'BREAK' || phase === 'REST') &&
-    remaining > 0 &&
-    remaining <= 3;
 
-const countdownKey = `${phase}-${state.period || 1}`;
+    // ==========================================
+// 上課前倒數音效（避免疊音 / 漏播）
+// ==========================================
 
-if (shouldPlayCountdown && window.lastTutorCountdownKey !== countdownKey) {
-    window.lastTutorCountdownKey = countdownKey;
+const countdownPhase =
+    phase === 'WAITING' ||
+    phase === 'BREAK' ||
+    phase === 'REST';
 
+const countdownSessionKey =
+    `${phase}-${state.period || 1}`;
+
+const shouldStartCountdown =
+    countdownPhase &&
+    remaining <= 3 &&
+    remaining > 0;
+
+// 新的一輪倒數開始
+if (
+    shouldStartCountdown &&
+    window.currentCountdownSession !== countdownSessionKey
+) {
+    window.currentCountdownSession = countdownSessionKey;
+
+    // 停掉舊音效
     if (window.activeTutorCountdownAudio) {
         window.activeTutorCountdownAudio.pause();
         window.activeTutorCountdownAudio.currentTime = 0;
     }
 
-    window.activeTutorCountdownAudio = new Audio('/sounds/countdown.mp3');
-    window.activeTutorCountdownAudio.play().catch(e =>
-        console.log('countdown.mp3 播放被阻擋:', e)
-    );
+    const audio = new Audio('/sounds/countdown.mp3');
+
+    window.activeTutorCountdownAudio = audio;
+
+    audio.play().catch(e => {
+        console.log('countdown.mp3 播放失敗:', e);
+    });
+}
+
+// 離開倒數階段後重置
+if (!countdownPhase || remaining > 4) {
+    window.currentCountdownSession = null;
 }
 
 // 進入休息或課程結束時播放下課音效
@@ -973,11 +995,6 @@ if (
     window.activeTutorClassEndAudio.play().catch(e =>
         console.log('class_end.mp3 播放被阻擋:', e)
     );
-}
-
-// 下一節開始時重置下課音效鎖
-if (phase === 'CLASS') {
-    window.hasPlayedTutorClassEndAudio = false;
 }
 
 window.previousClassStatus = phase;
