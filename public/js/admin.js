@@ -16,11 +16,13 @@ socket.on('connect', async () => {
 
         const rooms = data.rooms || [];
 
-        rooms.forEach(room => {
+                rooms.forEach(room => {
             if (room.slug) {
                 socket.emit('join_room', `theme:${room.slug}`);
             }
         });
+
+        await loadThemeRoomFilters();
 
         console.log('✅ 一般教師端已加入普通教室與主題教室 rooms');
     } catch (err) {
@@ -32,12 +34,18 @@ let notifiedMilestones = new Set();
 let violationStorage = {}; 
 let sessionSummaries = []; // 儲存學生結算報告
 let currentRoomFilter = 'ALL'; // 記錄目前觀看的教室模式
+let themeRoomsCache = [];
 function getRoomCategory(roomMode) {
-    if (roomMode === '2') return '2';
-    if (roomMode === '1') return '1';
-    if (roomMode === 'simulated') return 'simulated';
-    if (String(roomMode || '').startsWith('theme:')) return 'simulated';
-    return roomMode || 'unknown';
+    const mode = String(roomMode || '');
+
+    if (mode === '2') return '2';
+    if (mode === '1') return '1';
+    if (mode === 'simulated') return 'simulated';
+
+    // 新版主題教室：theme:slug 要可以被單獨篩選
+    if (mode.startsWith('theme:')) return mode;
+
+    return mode || 'unknown';
 }
 
 function isStudentInCurrentFilter(name) {
@@ -58,6 +66,34 @@ function getFilteredStudents() {
     return students.filter(s => {
         return getRoomCategory(s.roomMode) === currentRoomFilter;
     });
+}
+
+async function loadThemeRoomFilters() {
+    try {
+        const res = await fetch('/api/theme-rooms');
+        const data = await res.json();
+
+        themeRoomsCache = (data.rooms || []).filter(room => room.slug);
+
+        const container = document.getElementById('themeRoomFilterContainer');
+        if (!container) return;
+
+        container.innerHTML = themeRoomsCache.map(room => {
+            const mode = `theme:${room.slug}`;
+            return `
+                <button
+                    onclick="setRoomFilter('${mode}')"
+                    id="filter-${mode}"
+                    class="filter-btn px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-all border border-slate-700"
+                >
+                    ${room.name}
+                </button>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.warn('⚠️ 載入主題教室篩選按鈕失敗:', err);
+    }
 }
 
 // --- 1. 初始化系統時鐘 ---
