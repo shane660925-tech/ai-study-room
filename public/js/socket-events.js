@@ -160,14 +160,33 @@ socket.emit("update_status", {
     });
 
     // 8. 更新排行榜與遠端用戶
-    socket.on("update_rank", (users) => {
+    let lastRankRenderSignature = '';
+
+socket.on("update_rank", (users) => {
     window.remoteUsers = users;
 
     // ✅ 特約教室排行榜交給 tutor-client.js 處理
-    // 避免一般教室 renderRankAndUsers 覆蓋 #tab-rank
     if (window.currentRoomMode === 'tutor') {
         return;
     }
+
+    const rankSignature = JSON.stringify(
+        (users || []).map(u => ({
+            name: u.name,
+            status: u.status,
+            focusMinutes: u.focusMinutes,
+            isFlipped: u.isFlipped,
+            isCaptain: u.isCaptain,
+            teamId: u.teamId,
+            roomMode: u.roomMode
+        }))
+    );
+
+    if (rankSignature === lastRankRenderSignature) {
+        return;
+    }
+
+    lastRankRenderSignature = rankSignature;
 
     if (window.renderRankAndUsers) {
         window.renderRankAndUsers(users, myUsername, window.currentTeamLeader);
