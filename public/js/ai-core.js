@@ -73,15 +73,21 @@ if (typeof io !== 'undefined') {
 document.addEventListener('DOMContentLoaded', async () => {
     const currentPath = window.location.pathname;
     
-    if (currentPath.includes('immersive-room.html')) currentRoomMode = '2'; 
-    else if (currentPath.includes('managed-room.html')) currentRoomMode = 'simulated'; 
-    else if (currentPath.includes('tutor-room.html')) currentRoomMode = 'tutor'; 
-    else if (currentPath.includes('course-room.html')) currentRoomMode = '1'; 
-    else {
-        const urlParams = new URLSearchParams(window.location.search);
-        const mode = urlParams.get('mode');
-        if (mode) currentRoomMode = mode;
-    }
+    const urlParams = new URLSearchParams(window.location.search);
+const themeSlug = urlParams.get('theme');
+const mode = urlParams.get('mode');
+
+if (currentPath.includes('immersive-room.html')) {
+    currentRoomMode = '2';
+} else if (currentPath.includes('managed-room.html')) {
+    currentRoomMode = themeSlug ? `theme:${themeSlug}` : 'simulated';
+} else if (currentPath.includes('tutor-room.html')) {
+    currentRoomMode = 'tutor';
+} else if (currentPath.includes('course-room.html')) {
+    currentRoomMode = '1';
+} else if (mode) {
+    currentRoomMode = mode;
+}
 
     if (window.updateUIMode) window.updateUIMode(currentRoomMode, isAuditMode);
 
