@@ -3933,9 +3933,9 @@ activeUserSockets.set(username, socket.id);
     console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${roomKey}`);
 
     socket.emit('teacher_update', {
-        logs: teacherLogsByRoom[roomKey] || [],
-        snaps: violationSnaps.filter(snap => snap.roomMode === roomKey)
-    });
+    logs: teacherLogsByRoom[roomKey] || teacherLogs || [],
+    snaps: violationSnaps.filter(snap => snap.roomMode === roomKey)
+});
 
     socket.emit('update_rank', onlineUsers.filter(u => u.roomMode !== 'tutor'));
 });
