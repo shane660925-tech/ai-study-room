@@ -293,6 +293,23 @@ if (modal) modal.remove();
 if (window.pendingThemeTeamJoinData) {
 const data = window.pendingThemeTeamJoinData;
 window.pendingThemeTeamJoinData = null;
+const needsApproval =
+data.is_approval_required === true ||
+data.is_approval_required === 'true' ||
+data.requiresApproval === true ||
+data.requiresApproval === 'true';
+if (needsApproval) {
+socket.emit('request_join_team', {
+teamName: data.teamId,
+username: username,
+realTeamName: data.teamName,
+roomType: targetUrl
+});
+if (window.showWaitingModal) {
+window.showWaitingModal(data.teamName);
+}
+return;
+}
 const teamParams = `&mode=team&teamId=${data.teamId}&teamName=${encodeURIComponent(data.teamName)}`;
 window.tempTeamParams = teamParams;
 openStandaloneModal(targetUrl);
