@@ -228,6 +228,15 @@ function triggerAISocial(name, type) {
 // --- [V2.2.5 新增] 教室篩選邏輯 ---
 window.setRoomFilter = function(mode) {
     currentRoomFilter = mode;
+    const themeContainer = document.getElementById('themeRoomFilterContainer');
+
+if (themeContainer) {
+    if (mode === 'simulated' || String(mode).startsWith('theme:')) {
+        themeContainer.classList.remove('hidden');
+    } else {
+        themeContainer.classList.add('hidden');
+    }
+}
     
     // 更新按鈕的視覺樣式
     document.querySelectorAll('.filter-btn').forEach(btn => {
