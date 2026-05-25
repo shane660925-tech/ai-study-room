@@ -139,13 +139,16 @@ socket.on('teacher_update', (data) => {
     if (data.logs) renderLogs(data.logs);
     if (data.snaps) {
         data.snaps.forEach(snap => {
-            // 🚀 核心隔離：如果違規學生的名字「不在」普通學生名單內 (代表他是特約學生)，直接無視！
-            if (!students.some(s => s.name === snap.name)) return;
+    const studentExists = students.some(s => s.name === snap.name);
 
-            if (!violationStorage[snap.name]) violationStorage[snap.name] = [];
-            const exists = violationStorage[snap.name].some(v => v.time === snap.time && v.reason === snap.reason);
-            if (!exists) violationStorage[snap.name].unshift(snap);
-        });
+    // 如果 students 還沒載入完成，不要丟掉 snap
+    // 只有在 students 已經有資料，但該學生確定不在普通教師端名單時，才忽略
+    if (students.length > 0 && !studentExists) return;
+
+    if (!violationStorage[snap.name]) violationStorage[snap.name] = [];
+    const exists = violationStorage[snap.name].some(v => v.time === snap.time && v.reason === snap.reason);
+    if (!exists) violationStorage[snap.name].unshift(snap);
+});
         renderViolations();
     }
 });
