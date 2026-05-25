@@ -3933,7 +3933,7 @@ activeUserSockets.set(username, socket.id);
     console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${roomKey}`);
 
     socket.emit('teacher_update', {
-    logs: teacherLogsByRoom[roomKey] || teacherLogs || [],
+    logs: teacherLogsByRoom[roomKey] || [],
     snaps: violationSnaps.filter(snap => snap.roomMode === roomKey)
 });
 
