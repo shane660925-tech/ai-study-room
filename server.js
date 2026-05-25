@@ -4625,6 +4625,12 @@ if (data.teamId) user.teamId = data.teamId;
             socket.join(user.roomMode);
 
 if (blackboardByRoom[user.roomMode]) {
+    socket.emit('admin_action', {
+        type: 'BLACKBOARD',
+        content: blackboardByRoom[user.roomMode].content,
+        roomMode: user.roomMode
+    });
+
     socket.emit('update_blackboard', blackboardByRoom[user.roomMode]);
 }
             
