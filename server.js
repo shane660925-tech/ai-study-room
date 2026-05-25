@@ -4846,14 +4846,23 @@ broadcastUpdateRank();
     });
 
 socket.on('admin_action', (data) => {
+    const targetRoomMode = data?.roomMode || data?.roomId;
+
+    if (data.type === 'BLACKBOARD' && targetRoomMode) {
+        blackboardByRoom[targetRoomMode] = {
+            ...data,
+            content: data.content || data.message || '',
+            roomMode: targetRoomMode,
+            updatedAt: new Date().toISOString()
+        };
+    }
+
     if (data.target) {
         const targetUser = onlineUsers.find(u => u.name === data.target);
         if (targetUser) {
             io.to(targetUser.roomMode).emit('admin_action', data);
         }
     } else {
-        const targetRoomMode = data?.roomMode || data?.roomId;
-
         if (targetRoomMode) {
             io.to(targetRoomMode).emit('admin_action', data);
         } else {
@@ -4861,12 +4870,8 @@ socket.on('admin_action', (data) => {
         }
     }
 
-    if (data.type === 'BLACKBOARD') {
-        const targetRoomMode = data?.roomMode || data?.roomId;
-
-        if (targetRoomMode) {
-            addTeacherLog(`📢 教師公告：${data.content}`, targetRoomMode);
-        }
+    if (data.type === 'BLACKBOARD' && targetRoomMode) {
+        addTeacherLog(`📢 教師公告：${data.content}`, targetRoomMode);
     }
 });
 
