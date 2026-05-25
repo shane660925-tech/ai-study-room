@@ -66,11 +66,11 @@
                     <p class="text-xs text-purple-200/60">手機蓋上即進入深度專注模式。</p>
                 </div>
             </button>
-            <button onclick="openStandaloneModal('managed-room.html')" class="w-full bg-gradient-to-r from-blue-900/80 to-blue-800/80 border border-blue-500/40 rounded-3xl p-5 text-left flex items-center gap-5 shadow-2xl active:scale-95">
+            <button onclick="openStandaloneThemeRoomModal()" class="w-full bg-gradient-to-r from-blue-900/80 to-blue-800/80 border border-blue-500/40 rounded-3xl p-5 text-left flex items-center gap-5 shadow-2xl active:scale-95">
                 <div class="w-14 h-14 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-300 text-3xl"><i class="fas fa-users-viewfinder"></i></div>
                 <div class="flex-1">
-                    <h3 class="text-xl font-black text-white mb-1">模擬線上教室</h3>
-                    <p class="text-xs text-blue-200/60">與大家同步顯示努力狀態。</p>
+                    <h3 class="text-xl font-black text-white mb-1">主題教室</h3>
+                    <p class="text-xs text-blue-200/60">選擇目前開放中的主題教室，手機蓋上後進入專注模式。</p>
                 </div>
             </button>
         </section>
@@ -188,7 +188,110 @@
         // ==========================================
         // 單機翻轉 核心邏輯 (新版：略過大廳翻轉，直接跳轉教室)
         // ==========================================
-
+async function openStandaloneThemeRoomModal() {
+let oldModal = document.getElementById('standaloneThemeRoomModal');
+if (oldModal) oldModal.remove();
+const modal = document.createElement('div');
+modal.id = 'standaloneThemeRoomModal';
+modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
+modal.innerHTML = `
+<div class="bg-[#111827] w-full max-w-lg rounded-3xl border border-blue-500/30 shadow-2xl overflow-hidden relative">
+<button onclick="document.getElementById('standaloneThemeRoomModal').remove()"
+class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
+<i class="fas fa-times"></i>
+</button>
+<div class="p-6 border-b border-gray-800 bg-gradient-to-b from-blue-900/30 to-transparent">
+<h2 class="text-2xl font-black text-white flex items-center gap-2">
+<i class="fas fa-chalkboard text-blue-400"></i>
+選擇主題教室
+</h2>
+<p class="text-gray-400 text-xs mt-2">
+請選擇目前開放中的主題教室，選完後再進入單機翻轉設定。
+</p>
+</div>
+<div id="standaloneThemeRoomList" class="p-6 max-h-[65vh] overflow-y-auto">
+<div class="flex flex-col items-center justify-center py-10 text-gray-500">
+<div class="w-10 h-10 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+<p class="text-xs tracking-widest uppercase">正在載入主題教室...</p>
+</div>
+</div>
+</div>
+`;
+document.body.appendChild(modal);
+await loadStandaloneThemeRoomList();
+}
+async function loadStandaloneThemeRoomList() {
+const list = document.getElementById('standaloneThemeRoomList');
+if (!list) return;
+try {
+const res = await fetch('/api/theme-rooms');
+const data = await res.json();
+if (!res.ok) {
+throw new Error(data.error || '取得主題教室失敗');
+}
+const rooms = data.rooms || [];
+if (rooms.length === 0) {
+list.innerHTML = `
+<div class="text-center py-10">
+<div class="w-14 h-14 bg-gray-500/20 rounded-2xl flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
+<i class="fas fa-door-closed"></i>
+</div>
+<h3 class="text-white font-black mb-2">目前沒有開放中的主題教室</h3>
+<p class="text-gray-500 text-xs">請等待官方開放新的衝刺教室。</p>
+</div>
+`;
+return;
+}
+list.innerHTML = rooms.map(room => {
+const title = room.name || '主題教室';
+const description = room.description || '官方開放中的主題教室。';
+const badge = room.badge_text || '限時開放';
+const slug = room.slug;
+const roomPage = room.room_page || 'managed-room.html';
+const onlineCount = room.online_count || 0;
+const targetUrl = `${roomPage}?theme=${encodeURIComponent(slug)}`;
+return `
+<button onclick="selectStandaloneThemeRoom('${targetUrl}')"
+class="w-full bg-white/5 hover:bg-blue-500/10 border border-white/10 hover:border-blue-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-2xl group-hover:bg-blue-500 group-hover:text-white transition-all">
+<i class="fas fa-users-viewfinder"></i>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="text-white font-black text-lg">${title}</h3>
+<span class="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-black">${badge}</span>
+</div>
+<p class="text-gray-500 text-xs leading-relaxed mb-3">${description}</p>
+<div class="flex items-center justify-between">
+<span class="text-green-400 text-xs font-bold">
+<i class="fas fa-circle text-[8px] mr-1"></i>
+目前 ${onlineCount} 人
+</span>
+<span class="text-blue-400 text-xs font-black group-hover:text-blue-300">
+選擇此教室 →
+</span>
+</div>
+</div>
+</div>
+</button>
+`;
+}).join('');
+} catch (err) {
+console.error('單機主題教室列表載入失敗:', err);
+list.innerHTML = `
+<div class="text-center py-10">
+<h3 class="text-red-300 font-black mb-2">主題教室載入失敗</h3>
+<p class="text-gray-500 text-xs">請稍後重新整理頁面。</p>
+</div>
+`;
+}
+}
+function selectStandaloneThemeRoom(targetUrl) {
+const modal = document.getElementById('standaloneThemeRoomModal');
+if (modal) modal.remove();
+openStandaloneModal(targetUrl);
+}
         // 步驟 1: 開啟設定 Modal
         function openStandaloneModal(roomUrl) {
             targetStandaloneRoomUrl = roomUrl;
