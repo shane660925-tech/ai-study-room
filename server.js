@@ -3923,13 +3923,21 @@ activeUserSockets.set(username, socket.id);
 
     // 新增：接收客戶端加入房間的請求
     socket.on('join_room', (room) => {
-    socket.join(room);
-    console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${room}`);
+    const roomKey = typeof room === 'string'
+        ? room
+        : room?.roomId || room?.room || room?.roomMode;
+
+    if (!roomKey) return;
+
+    socket.join(roomKey);
+    console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${roomKey}`);
 
     socket.emit('teacher_update', {
-        logs: teacherLogsByRoom[room] || [],
-        snaps: violationSnaps.filter(snap => snap.roomMode === room)
+        logs: teacherLogsByRoom[roomKey] || [],
+        snaps: violationSnaps.filter(snap => snap.roomMode === roomKey)
     });
+
+    socket.emit('update_rank', onlineUsers.filter(u => u.roomMode !== 'tutor'));
 });
 
    socket.on('tutor_patrol', (data) => {
