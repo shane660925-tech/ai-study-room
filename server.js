@@ -62,6 +62,9 @@ registerRoomHandler(io);
 // 儲存各個特約教室的專屬課表
 const tutorSchedules = {};
 
+// 儲存每個教室最後一次黑板公告
+const blackboardByRoom = {};
+
 // 提高 JSON 限制以接收 Base64 截圖
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -4235,7 +4238,14 @@ socket.on('get_attendance', (data) => {
         socket.roomMode;
 
     if (targetRoom) {
-        io.to(targetRoom).emit('update_blackboard', data);
+        blackboardByRoom[targetRoom] = {
+            ...data,
+            content: data.content || data.message || '',
+            roomMode: targetRoom,
+            updatedAt: new Date().toISOString()
+        };
+
+        io.to(targetRoom).emit('update_blackboard', blackboardByRoom[targetRoom]);
     } else {
         socket.broadcast.emit('update_blackboard', data);
     }
@@ -4613,6 +4623,10 @@ if (data.teamId) user.teamId = data.teamId;
             }
 
             socket.join(user.roomMode);
+
+if (blackboardByRoom[user.roomMode]) {
+    socket.emit('update_blackboard', blackboardByRoom[user.roomMode]);
+}
             
             // 廣播最新出席表
             io.to(user.roomMode).emit(
