@@ -5012,8 +5012,9 @@ function addTeacherLog(msg, roomMode = 'global') {
     }
 
     const time = new Date().toLocaleTimeString('zh-TW', {
-        hour12: false
-    });
+    timeZone: 'Asia/Taipei',
+    hour12: false
+});
 
     teacherLogsByRoom[roomMode].unshift(`[${time}] ${msg}`);
 
