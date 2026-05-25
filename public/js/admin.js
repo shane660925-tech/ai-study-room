@@ -136,7 +136,10 @@ if (typeof renderSummary === 'function') {
 });
 
 socket.on('teacher_update', (data) => {
-    if (data.logs) renderLogs(data.logs);
+    if (data.logs && data.logs.length > 0) {
+        renderLogs(data.logs);
+    }
+
     if (data.snaps) {
         data.snaps.forEach(snap => {
     const studentExists = students.some(s => s.name === snap.name);
