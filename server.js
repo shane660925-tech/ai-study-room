@@ -4807,7 +4807,10 @@ broadcastUpdateRank();
     name: data.name,
     reason: reasonStr,
     image: data.image,
-    time: new Date().toLocaleTimeString(),
+    time: new Date().toLocaleTimeString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        hour12: false
+    }),
     current_integrity: user.integrity_score,
     roomMode: user.roomMode
 };
