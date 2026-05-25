@@ -515,8 +515,24 @@ window.closeImageModal = function() {
 window.updateBlackboard = function() {
     const text = document.getElementById('announcementInput').value;
     if (!text.trim()) return alert('請輸入公告內容');
-    socket.emit('admin_action', { type: 'BLACKBOARD', content: text });
-    document.getElementById('logContainer').insertAdjacentHTML('afterbegin', `<p class="text-green-400 text-[10px] font-bold">[系統] 已同步黑板公告</p>`);
+
+    let targetRoomMode = currentRoomFilter;
+
+    if (targetRoomMode === 'ALL') {
+        return alert('請先選擇要公告的教室：沉浸式自習室、主題教室，或某一間主題教室。');
+    }
+
+    socket.emit('admin_action', {
+        type: 'BLACKBOARD',
+        content: text,
+        roomMode: targetRoomMode
+    });
+
+    document.getElementById('logContainer').insertAdjacentHTML(
+        'afterbegin',
+        `<p class="text-green-400 text-[10px] font-bold">[系統] 已同步黑板公告至 ${targetRoomMode}</p>`
+    );
+
     document.getElementById('announcementInput').value = '';
 };
 
