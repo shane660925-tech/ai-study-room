@@ -435,90 +435,114 @@ let finalUrl = `/${targetRoom}${separator}username=${encodeURIComponent(currentU
         };
 
         function overwriteTeamSyncLogic() {
-            window.joinTeam = function(teamId, teamName, is_approval_required, roomType) {
-                const jtm = document.getElementById('joinTeamModal');
-                if(jtm) { jtm.classList.remove('flex'); jtm.classList.add('hidden'); }
-
-                // 根據傳入的 roomType 解析並導向正確的教室檔名
-                let mappedRoom = 'managed-room.html'; // 預設
-                if (roomType) {
-                    if (typeof roomType === 'string' && roomType.includes('immersive')) {
-                        mappedRoom = 'immersive-room.html';
-                    } else if (typeof roomType === 'string' && roomType.includes('managed')) {
-                        mappedRoom = 'managed-room.html';
-                    } else if (typeof roomType === 'string' && roomType.endsWith('.html')) {
-                        mappedRoom = roomType;
-                    } else {
-                        mappedRoom = `${roomType}-room.html`;
-                    }
-                }
-                pendingRoomType = mappedRoom;
-
-                const needsApproval = (is_approval_required === true || is_approval_required === 'true');
-
-                if (needsApproval) {
-                    socket.emit('request_join_team', {
-                        teamName: teamId, 
-                        username: username,
-                        realTeamName: teamName, 
-                        roomType: pendingRoomType
-                    });
-                    if (window.showWaitingModal) window.showWaitingModal(teamName);
-                } else {
-                    // 免審核直接開啟設定 Modal，加上 &mode=team
+    function isApprovalRequired(value) {
+        return value === true || value === 'true' || value === 1 || value === '1';
+    }
+    function isThemeRoomType(roomType) {
+        return (
+            roomType === 'selected_theme_room' ||
+            roomType === 'theme_room' ||
+            roomType === 'theme' ||
+            roomType === 'simulated'
+        );
+    }
+    window.startStandaloneTeamFlow = function({ teamId, teamName, targetUrl }) {
                     const teamParams = `&mode=team&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
-                    openStandaloneModal(pendingRoomType);
                     window.tempTeamParams = teamParams;
-                }
+        openStandaloneModal(targetUrl);
             };
-
-            socket.off('join_team_approved');
-            socket.on('join_team_approved', (data) => {
-                if (window.hideWaitingModal) window.hideWaitingModal();
-                
-                // 收到審核通過時，再次確認跳轉的教室檔名是否正確
-                let mappedRoom = 'managed-room.html'; 
-                if (data.roomType) {
-                    if (typeof data.roomType === 'string' && data.roomType.includes('immersive')) {
-                        mappedRoom = 'immersive-room.html';
-                    } else if (typeof data.roomType === 'string' && data.roomType.includes('managed')) {
-                        mappedRoom = 'managed-room.html';
-                    } else if (typeof data.roomType === 'string' && data.roomType.endsWith('.html')) {
-                        mappedRoom = data.roomType;
+    window.joinTeam = function(teamId, teamName, is_approval_required, roomType) {
+        const jtm = document.getElementById('joinTeamModal');
+        if (jtm) {
+            jtm.classList.remove('flex');
+            jtm.classList.add('hidden');
+        }
+        const needsApproval = isApprovalRequired(is_approval_required);
+        if (isThemeRoomType(roomType)) {
+            if (needsApproval) {
+                socket.emit('request_join_team', {
+                    teamName: teamId,
+                    teamId: teamId,
+                    username: username,
+                    requestUser: username,
+                    realTeamName: teamName,
+                    roomType: 'selected_theme_room'
+                });
+                if (window.showWaitingModal) window.showWaitingModal(teamName);
+                return;
+            }
+            window.pendingThemeTeamJoinData = {
+                teamId,
+                teamName
+            };
+            if (typeof window.showThemeRoomModal === 'function') {
+                window.showThemeRoomModal();
                     } else {
-                        mappedRoom = `${data.roomType}-room.html`;
+                alert('找不到主題教室彈窗，請確認 flip-room.html 的 openStandaloneThemeRoomModal 是否存在');
                     }
-                }
-                const targetRoom = mappedRoom;
-                // 審核通過時，同樣加上 &mode=team
-                const teamParams = `&mode=team&teamId=${data.teamId || data.teamName}&teamName=${encodeURIComponent(data.realTeamName || data.teamName)}`;
-
-                if (typeof openSetupModal === 'function') {
-                    openSetupModal(targetRoom, teamParams); 
-                } else if (typeof showRoomSetup === 'function') {
-                    showRoomSetup(targetRoom, teamParams);
+            return;
+        }
+        let mappedRoom = 'managed-room.html';
+        if (roomType) {
+            if (typeof roomType === 'string' && roomType.includes('immersive')) {
+                mappedRoom = 'immersive-room.html';
+            } else if (typeof roomType === 'string' && roomType.includes('managed')) {
+                mappedRoom = 'managed-room.html';
+            } else if (typeof roomType === 'string' && roomType.endsWith('.html')) {
+                mappedRoom = roomType;
                 } else {
-                    // 審核通過後開啟設定 Modal
-                    openStandaloneModal(targetRoom);
-                    window.tempTeamParams = teamParams;
+                mappedRoom = `${roomType}-room.html`;
                 }
-            });
-
-            socket.off('join_team_rejected');
-            socket.on('join_team_rejected', (data) => {
-                if (window.hideWaitingModal) window.hideWaitingModal();
-                document.getElementById('standalone-modal-container').classList.remove('hidden');
-                document.getElementById('rejected-modal').classList.remove('hidden');
-            });
         }
-
-        function loadScriptAsync(src) {
-            return new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = src; s.onload = resolve; s.onerror = reject;
-                document.body.appendChild(s);
+        if (needsApproval) {
+            socket.emit('request_join_team', {
+                teamName: teamId,
+                teamId: teamId,
+                username: username,
+                requestUser: username,
+                realTeamName: teamName,
+                roomType: mappedRoom
             });
+            if (window.showWaitingModal) window.showWaitingModal(teamName);
+            return;
         }
+        window.startStandaloneTeamFlow({
+            teamId,
+            teamName,
+            targetUrl: mappedRoom
+        });
+    };
+    socket.off('join_team_approved');
+    socket.on('join_team_approved', (data) => {
+        if (window.hideWaitingModal) window.hideWaitingModal();
+        const approvedTeamId = data.teamId || data.teamName;
+        const approvedTeamName = data.realTeamName || data.teamName;
+        if (isThemeRoomType(data.roomType)) {
+            window.pendingThemeTeamJoinData = {
+                teamId: approvedTeamId,
+                teamName: approvedTeamName
+            };
+            if (typeof window.showThemeRoomModal === 'function') {
+                window.showThemeRoomModal();
+            } else {
+                alert('找不到主題教室彈窗，請確認 flip-room.html 的 openStandaloneThemeRoomModal 是否存在');
+        }
+            return;
+        }
+        const targetRoom = data.roomType || 'managed-room.html';
+        window.startStandaloneTeamFlow({
+            teamId: approvedTeamId,
+            teamName: approvedTeamName,
+            targetUrl: targetRoom
+        });
+    });
+    socket.off('join_team_rejected');
+    socket.on('join_team_rejected', () => {
+        if (window.hideWaitingModal) window.hideWaitingModal();
+        document.getElementById('standalone-modal-container').classList.remove('hidden');
+        document.getElementById('rejected-modal').classList.remove('hidden');
+    });
+}
     </script>
 </body>
 </html>
