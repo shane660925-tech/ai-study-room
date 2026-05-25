@@ -350,7 +350,8 @@ openStandaloneModal(targetUrl);
             const currentUser = localStorage.getItem('studyVerseUser') || "游擊隊員";
             
             // 組合最終 URL (帶上 standalone=true)
-            let finalUrl = `/${targetRoom}?username=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
+const separator = targetRoom.includes('?') ? '&' : '?';
+let finalUrl = `/${targetRoom}${separator}username=${encodeURIComponent(currentUser)}&name=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
             
             // 若是加入隊伍進來的，把隊伍參數也接上
             if (window.tempTeamParams) {
