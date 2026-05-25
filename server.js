@@ -3923,9 +3923,14 @@ activeUserSockets.set(username, socket.id);
 
     // 新增：接收客戶端加入房間的請求
     socket.on('join_room', (room) => {
-        socket.join(room);
-        console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${room}`);
+    socket.join(room);
+    console.log(`🏠 [房間管理] Socket ${socket.id} 已成功加入房間: ${room}`);
+
+    socket.emit('teacher_update', {
+        logs: teacherLogsByRoom[room] || [],
+        snaps: violationSnaps.filter(snap => snap.roomMode === room)
     });
+});
 
    socket.on('tutor_patrol', (data) => {
     console.log(`[巡堂廣播] 收到導師請求，房間代碼: ${data.room}，訊息: ${data.message}`);
