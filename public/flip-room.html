@@ -407,33 +407,51 @@ let finalUrl = `/${targetRoom}${separator}username=${encodeURIComponent(currentU
             try {
                 if (!document.getElementById('team-css-link')) {
                     const link = document.createElement('link');
-                    link.id = 'team-css-link'; link.rel = 'stylesheet'; link.href = '/css/lobby-team.css';
+link.id = 'team-css-link';
+link.rel = 'stylesheet';
+link.href = '/css/lobby-team.css';
                     document.head.appendChild(link);
                 }
-                if (!customElements.get('team-modals')) {
                     await loadScriptAsync('/js/team-modals.js');
+if (!document.querySelector('team-modals')) {
                     const modalContainer = document.createElement('team-modals');
-                    document.getElementById('modal-container').appendChild(modalContainer);
+document.body.appendChild(modalContainer);
                 }
-                if (!window.executeJoinTeam) {
                     await loadScriptAsync('/js/lobby-team.js');
-                }
-
                 overwriteTeamSyncLogic();
-
                 setTimeout(() => {
                     const targetModal = document.getElementById('joinTeamModal');
                     if (targetModal) {
                         targetModal.classList.remove('hidden');
                         targetModal.classList.add('flex');
+} else if (typeof window.openJoinTeamModal === 'function') {
+window.openJoinTeamModal();
+} else {
+console.error('找不到 joinTeamModal，也找不到 openJoinTeamModal');
+alert('隊伍視窗載入了，但找不到加入小隊彈窗。');
                     }
-                }, 50);
+}, 100);
             } catch (error) {
-                console.error(error);
-                alert("模組載入失敗");
+console.error('單機翻轉組隊模組載入失敗：', error);
+alert('模組載入失敗，請打開 Console 查看錯誤來源。');
             }
         };
-
+function loadScriptAsync(src) {
+return new Promise((resolve, reject) => {
+const existing = document.querySelector(`script[src="${src}"]`);
+if (existing) {
+resolve();
+return;
+}
+const s = document.createElement('script');
+s.src = src;
+s.onload = resolve;
+s.onerror = () => {
+reject(new Error(`載入失敗：${src}`));
+};
+document.body.appendChild(s);
+});
+}
         function overwriteTeamSyncLogic() {
     function isApprovalRequired(value) {
         return value === true || value === 'true' || value === 1 || value === '1';
