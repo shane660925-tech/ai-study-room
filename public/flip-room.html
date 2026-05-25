@@ -290,8 +290,17 @@ list.innerHTML = `
 function selectStandaloneThemeRoom(targetUrl) {
 const modal = document.getElementById('standaloneThemeRoomModal');
 if (modal) modal.remove();
+if (window.pendingThemeTeamJoinData) {
+const data = window.pendingThemeTeamJoinData;
+window.pendingThemeTeamJoinData = null;
+const teamParams = `&mode=team&teamId=${data.teamId}&teamName=${encodeURIComponent(data.teamName)}`;
+window.tempTeamParams = teamParams;
+openStandaloneModal(targetUrl);
+return;
+}
 openStandaloneModal(targetUrl);
 }
+window.showThemeRoomModal = openStandaloneThemeRoomModal;
         // 步驟 1: 開啟設定 Modal
         function openStandaloneModal(roomUrl) {
             targetStandaloneRoomUrl = roomUrl;
