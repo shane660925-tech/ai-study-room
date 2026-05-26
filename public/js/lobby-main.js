@@ -1127,8 +1127,14 @@ window.generateTeacherRoom = async function() {
     const restTime = document.getElementById('teacherRestTime').value;
     const startTime = document.getElementById('teacherStartTime').value;
 
-    if (!periods || !periodTime || !restTime || !startTime) {
-        alert("請將排課設定填寫完整！");
+    const scheduledDateEl = document.getElementById('teacherScheduledDate');
+    const roomNoteEl = document.getElementById('teacherRoomNote');
+
+    const scheduledDate = scheduledDateEl ? scheduledDateEl.value : '';
+    const roomNote = roomNoteEl ? roomNoteEl.value.trim() : '';
+
+    if (!periods || !periodTime || !restTime || !startTime || !scheduledDate) {
+        alert("請將排課日期、時間與課程設定填寫完整！");
         return;
     }
 
@@ -1147,12 +1153,14 @@ window.generateTeacherRoom = async function() {
             },
             body: JSON.stringify({
                 teacherUsername: username,
-                roomTitle: '特約教室',
+                roomTitle: roomNote || '特約教室',
+                roomNote,
                 roomSize: size,
                 periods: parseInt(periods),
                 classMinutes: parseInt(periodTime),
                 restMinutes: parseInt(restTime),
-                startTime
+                startTime,
+                scheduledDate
             })
         });
 
@@ -1172,8 +1180,9 @@ window.generateTeacherRoom = async function() {
             teacherUsername: username,
             teacher_username: username,
             roomTitle: schedule.room_title || '特約教室',
+            roomNote: schedule.room_note || roomNote,
+            scheduledDate: schedule.scheduled_date || scheduledDate,
             roomSize: schedule.room_size || size,
-            size,
             periods: Number(schedule.periods || periods),
             periodTime: Number(schedule.class_minutes || periodTime),
             classMinutes: Number(schedule.class_minutes || periodTime),

@@ -591,27 +591,39 @@
 
                 <div>
                     <label class="text-xs text-gray-400 font-bold mb-1 block">2. 課程排程設定</label>
-                    <div class="grid grid-cols-2 gap-3 mb-3">
+<div class="mb-3">
                         <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-                            <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">總節數</div>
-                            <input type="number" id="teacherPeriods" placeholder="例: 3" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">日期</div>
+<input type="date" id="teacherScheduledDate" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
                         </div>
+                        </div>
+<div class="mb-3">
                         <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-                            <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">每節(分)</div>
-                            <input type="number" id="teacherPeriodTime" placeholder="例: 50" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">備註</div>
+<input type="text" id="teacherRoomNote" maxlength="24" placeholder="例：國三數學段考班" class="w-full bg-transparent text-white p-2 text-sm outline-none">
                         </div>
+                        </div>
+<div class="grid grid-cols-2 gap-3 mb-3">
+<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">總節數</div>
+<input type="number" id="teacherPeriods" placeholder="例: 3" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-                            <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">休息(分)</div>
-                            <input type="number" id="teacherRestTime" placeholder="例: 10" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
-                        </div>
-                        <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-                            <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">首節時間</div>
-                            <input type="time" id="teacherStartTime" value="08:00" class="bg-black border border-blue-500/30 text-white rounded-lg p-2 text-sm text-center [&::-webkit-calendar-picker-indicator]:hidden">
-                        </div>
-                    </div>
+<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">每節(分)</div>
+<input type="number" id="teacherPeriodTime" placeholder="例: 50" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
                 </div>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">休息(分)</div>
+<input type="number" id="teacherRestTime" placeholder="例: 10" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+</div>
+<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">首節時間</div>
+<input type="time" id="teacherStartTime" value="08:00" class="bg-black border border-blue-500/30 text-white rounded-lg p-2 text-sm text-center [&::-webkit-calendar-picker-indicator]:hidden">
+</div>
+</div>
+</div>
 
                 <div id="endTimeDisplayContainer" class="hidden mt-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl flex items-center justify-center gap-2 transition-all">
                     <i class="fas fa-clock text-blue-400"></i>
