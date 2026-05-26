@@ -521,9 +521,17 @@ window.skipAndExecuteTeamCreation = function() {
 
 window.executeTeamCreation = function() {
     if (!pendingTeamData) return;
-    const { name, size, roomUrl, audit } = pendingTeamData;
+const {
+name,
+size,
+roomUrl,
+audit,
+room_type,
+theme_room_slug,
+theme_room_name
+} = pendingTeamData;
     const uniqueCode = 'TEAM-' + Math.random().toString(36).substr(2, 4).toUpperCase();
-    
+const isThemeTeam = room_type === 'theme_room';
     if (typeof socket !== 'undefined') {
         socket.emit('create_team', {
             id: uniqueCode,
@@ -532,14 +540,18 @@ window.executeTeamCreation = function() {
             maxMembers: parseInt(size),
             currentMembers: 1,
             roomType: roomUrl,
-            goal: '專注衝刺',
+room_type: isThemeTeam ? 'theme_room' : 'study_room',
+theme_room_slug: theme_room_slug || null,
+theme_room_name: theme_room_name || null,
+goal: isThemeTeam ? '主題教室衝刺' : '專注衝刺',
             totalHours: 0,
             auditMode: audit 
         });
     }
-
     alert(`🚀 部署成功！\n\n您的專屬作戰代碼為：【 ${uniqueCode} 】\n即將導向實體教室...`);
-    window.location.href = `${roomUrl}?mode=team&teamId=${uniqueCode}&teamName=${encodeURIComponent(name)}&size=${size}&audit=${audit}`;
+const separator = roomUrl.includes('?') ? '&' : '?';
+window.location.href =
+`${roomUrl}${separator}mode=team&teamId=${uniqueCode}&teamName=${encodeURIComponent(name)}&size=${size}&audit=${audit}`;
 };
 
 window.executeThemeRoomTeamCreation = function(themeRoomData) {
@@ -552,37 +564,52 @@ window.executeThemeRoomTeamCreation = function(themeRoomData) {
         audit
     } = window.pendingSquadCreateData;
 
-    const uniqueCode = 'TEAM-' + Math.random().toString(36).substr(2, 4).toUpperCase();
-
     const finalRoomUrl =
         themeRoomData.targetUrl ||
         `${roomUrl}?theme=${encodeURIComponent(themeRoomData.slug)}`;
 
-    if (typeof socket !== 'undefined') {
-        socket.emit('create_team', {
-            id: uniqueCode,
-            name: name,
-            creator: typeof myUsername !== 'undefined' ? myUsername : '匿名使用者',
-            maxMembers: parseInt(size),
-            currentMembers: 1,
-
-            roomType: finalRoomUrl,
+    pendingTeamData = {
+        name,
+        size,
+        roomUrl: finalRoomUrl,
             room_type: 'theme_room',
             theme_room_slug: themeRoomData.slug,
             theme_room_name: themeRoomData.name,
-
-            goal: '主題教室衝刺',
-            totalHours: 0,
-            auditMode: audit
+        audit
+    };
+    window.pendingSquadCreateData = null;
+    const createModal = document.getElementById('createTeamModal');
+    if (createModal) {
+        createModal.classList.remove('hidden');
+        createModal.classList.add('flex');
+    }
+    const step1 = document.getElementById('createTeamStep1');
+    const step2 = document.getElementById('createTeamStep2');
+    if (step1) {
+        step1.classList.add('hidden');
+        step1.classList.remove('flex');
+    }
+    if (step2) {
+        step2.classList.remove('hidden');
+        step2.classList.add('flex');
+    }
+    const qrContainer = document.getElementById('teamSyncQr');
+    if (qrContainer) {
+        qrContainer.innerHTML = '';
+        const mobileUrl = `${window.location.origin}/mobile.html`;
+        new QRCode(qrContainer, {
+            text: mobileUrl,
+            width: 144,
+            height: 144,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
         });
     }
-
-    window.pendingSquadCreateData = null;
-
-    alert(`🚀 主題小隊建立成功！\n\n主題教室：${themeRoomData.name}\n小隊代碼：【 ${uniqueCode} 】`);
-
-    window.location.href =
-        `${finalRoomUrl}&mode=team&teamId=${uniqueCode}&teamName=${encodeURIComponent(name)}&size=${size}&audit=${audit}`;
+    if (!window.syncUIInterval) {
+        window.syncUIInterval = setInterval(checkSyncStatus, 500);
+    }
+    checkSyncStatus();
 };
 
 // ==========================================
