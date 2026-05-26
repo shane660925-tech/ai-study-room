@@ -4420,7 +4420,9 @@ socket.on('get_attendance', (data) => {
         userToSocketMap[data.username] = socket.id;
 
         if (team.auditMode === 'leader') {
-            const leaderUser = onlineUsers.find(u => u.name === team.leader && u.teamId === roomId);
+            const leaderUser =
+onlineUsers.find(u => u.name === team.leader && u.teamId === roomId) ||
+onlineUsers.find(u => u.name === team.leader);
             if (leaderUser) {
                 io.to(leaderUser.id).emit('team_join_request', { 
                     requestUser: data.username,
