@@ -47,41 +47,53 @@ function setTutorRoomCode(roomCode) {
 async function loadTutorRoomSwitcher() {
     const teacherUsername = getCurrentTeacherUsername();
     const switcher = document.getElementById('tutorRoomSwitcher');
-
     if (!switcher) return;
-
     if (!teacherUsername) {
         switcher.innerHTML = `<option value="">找不到教師帳號</option>`;
         return;
     }
-
     try {
         const res = await fetch(`/api/tutor-schedules?teacherUsername=${encodeURIComponent(teacherUsername)}`);
         const data = await res.json();
-
-        const schedules = data.schedules || [];
+const now = new Date();
+const schedules = (data.schedules || []).filter(room => {
+if (!room || !room.room_code) return false;
+const startText = room.start_time;
+if (!startText) return true;
+const [hh, mm] = String(startText).slice(0, 5).split(':').map(Number);
+if (Number.isNaN(hh) || Number.isNaN(mm)) return true;
+const periods = Number(room.periods || 1);
+const classMinutes = Number(room.class_minutes || room.classMinutes || 50);
+const restMinutes = Number(room.rest_minutes || room.restMinutes || 10);
+const startAt = new Date();
+startAt.setHours(hh, mm, 0, 0);
+const totalMinutes =
+(periods * classMinutes) +
+((periods > 1) ? (periods - 1) * restMinutes : 0);
+const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+return now <= endAt;
+});
         window.tutorRoomsCache = schedules;
-
         if (schedules.length === 0) {
             switcher.innerHTML = `<option value="">目前沒有特約教室</option>`;
             return;
         }
-
         switcher.innerHTML = schedules.map(room => {
             const code = room.room_code;
             const title = room.room_title || '特約教室';
             return `<option value="${code}">${title}｜${code}</option>`;
         }).join('');
-
         const urlRoom = new URLSearchParams(window.location.search).get('room');
-        const targetRoom = urlRoom || schedules[0].room_code;
-
+const hasUrlRoom = schedules.some(room => room.room_code === urlRoom);
+const targetRoom = hasUrlRoom ? urlRoom : schedules[0].room_code;
         setTutorRoomCode(targetRoom);
-
-    } catch (err) {
-        console.error('載入特約教室切換器失敗:', err);
-        switcher.innerHTML = `<option value="">載入失敗</option>`;
+if (targetRoom) {
+window.switchTutorRoom(targetRoom);
     }
+} catch (err) {
+console.error('載入特約教室切換器失敗:', err);
+switcher.innerHTML = `<option value="">載入失敗</option>`;
+}
 }
 
 window.switchTutorRoom = function(roomCode) {
@@ -263,6 +275,22 @@ socket.on('tutor_timer_sync', (state) => {
 
     if (!state) return;
 
+    const currentRoomCode = window.currentTutorRoomCode;
+    const stateRoom =
+        state.roomId ||
+        state.room ||
+        state.roomCode ||
+        state.tutorRoomCode;
+
+    if (stateRoom && currentRoomCode && stateRoom !== currentRoomCode) {
+        console.log("⏭️ 忽略非目前特約教室 timer sync:", {
+            currentRoomCode,
+            stateRoom,
+            phase: state.phase
+        });
+        return;
+    }
+
     const remaining = Number(state.remainingSeconds || 0);
     const total = Number(state.totalSeconds || 1);
     const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
@@ -277,9 +305,9 @@ socket.on('tutor_timer_sync', (state) => {
     } else if (state.phase === 'CLASS') {
         label = `第 ${state.period || 1} 節課`;
         status = '進行中';
-   } else if (state.phase === 'BREAK' || state.phase === 'REST') {
-    label = '休息時間';
-    status = '休息中';
+    } else if (state.phase === 'BREAK' || state.phase === 'REST') {
+        label = '休息時間';
+        status = '休息中';
     } else if (state.phase === 'ENDED') {
         label = '課程結束';
         status = '已完成';
