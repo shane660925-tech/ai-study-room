@@ -26,6 +26,18 @@
                     讀取中...
                 </div>
             </div>
+            <div class="mt-3">
+    <label class="block text-[10px] text-amber-500/70 font-bold uppercase mb-1 tracking-widest">
+        特約教室切換
+    </label>
+    <select
+        id="tutorRoomSwitcher"
+        onchange="switchTutorRoom(this.value)"
+        class="w-full bg-black/50 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-100 focus:outline-none focus:border-amber-500"
+    >
+        <option value="">讀取特約教室中...</option>
+    </select>
+</div>
             <div id="systemClock" class="mt-4 text-[22px] font-normal text-[#E6C280] tracking-[3px] drop-shadow-[0_2px_8px_rgba(230,194,128,0.4)] font-mono text-center">2026.03.14 --:--:--</div>
         </div>
 

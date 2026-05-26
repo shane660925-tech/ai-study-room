@@ -11,6 +11,110 @@ window.currentScheduleData = null;
 window.currentScheduleText = "";
 window.tutorSessionSummaries = {};
 
+window.tutorRoomsCache = [];
+
+function getCurrentTeacherUsername() {
+    return (
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        new URLSearchParams(window.location.search).get('teacherUsername') ||
+        new URLSearchParams(window.location.search).get('username') ||
+        ''
+    );
+}
+
+function setTutorRoomCode(roomCode) {
+    if (!roomCode) return;
+
+    window.currentTutorRoomCode = roomCode;
+
+    const displayEl = document.getElementById('displayDashboardRoomCode');
+    if (displayEl) {
+        displayEl.innerText = roomCode;
+        displayEl.classList.remove('text-red-500');
+        displayEl.classList.add('text-amber-400');
+    }
+
+    const switcher = document.getElementById('tutorRoomSwitcher');
+    if (switcher) {
+        switcher.value = roomCode;
+    }
+}
+
+async function loadTutorRoomSwitcher() {
+    const teacherUsername = getCurrentTeacherUsername();
+    const switcher = document.getElementById('tutorRoomSwitcher');
+
+    if (!switcher) return;
+
+    if (!teacherUsername) {
+        switcher.innerHTML = `<option value="">找不到教師帳號</option>`;
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/tutor-schedules?teacherUsername=${encodeURIComponent(teacherUsername)}`);
+        const data = await res.json();
+
+        const schedules = data.schedules || [];
+        window.tutorRoomsCache = schedules;
+
+        if (schedules.length === 0) {
+            switcher.innerHTML = `<option value="">目前沒有特約教室</option>`;
+            return;
+        }
+
+        switcher.innerHTML = schedules.map(room => {
+            const code = room.room_code;
+            const title = room.room_title || '特約教室';
+            return `<option value="${code}">${title}｜${code}</option>`;
+        }).join('');
+
+        const urlRoom = new URLSearchParams(window.location.search).get('room');
+        const targetRoom = urlRoom || schedules[0].room_code;
+
+        setTutorRoomCode(targetRoom);
+
+    } catch (err) {
+        console.error('載入特約教室切換器失敗:', err);
+        switcher.innerHTML = `<option value="">載入失敗</option>`;
+    }
+}
+
+window.switchTutorRoom = function(roomCode) {
+    if (!roomCode) return;
+
+    setTutorRoomCode(roomCode);
+
+    activeStudents = [];
+    window.latestAttendanceData = [];
+
+    if (typeof renderStudents === 'function') {
+        renderStudents();
+    }
+
+    if (typeof renderAttendanceData === 'function') {
+        renderAttendanceData();
+    }
+
+    socket.emit('join_tutor_room', {
+        room: roomCode,
+        roomId: roomCode,
+        roomCode: roomCode,
+        role: 'teacher'
+    });
+
+    socket.emit('get_attendance', {
+        room: roomCode,
+        roomId: roomCode
+    });
+
+    socket.emit('request_tutor_schedule', roomCode);
+    socket.emit('request_tutor_timer_sync', roomCode);
+
+    addLog(`已切換至特約教室：${roomCode}`, "text-amber-400 font-bold");
+};
+
 // ================= 修正：讀取與複製教室代碼 =================
 document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -39,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayEl.innerText = "無法取得代碼";
         displayEl.classList.add('text-red-500');
     }
+        loadTutorRoomSwitcher();
 });
 
 // 一鍵複製代碼功能
