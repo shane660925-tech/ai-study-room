@@ -454,37 +454,78 @@ document.body.appendChild(s);
 }
         function overwriteTeamSyncLogic() {
     function isApprovalRequired(value) {
-        return value === true || value === 'true' || value === 1 || value === '1';
+        return (
+            value === true ||
+            value === 'true' ||
+            value === 1 ||
+            value === '1' ||
+            value === 'leader' ||
+            value === 'required'
+        );
     }
+
     function isThemeRoomType(roomType) {
         return (
             roomType === 'selected_theme_room' ||
             roomType === 'theme_room' ||
             roomType === 'theme' ||
-roomType === 'simulated' ||
-roomType === 'managed-room.html' ||
-roomType === 'managed'
+            roomType === 'simulated' ||
+            roomType === 'managed-room.html' ||
+            roomType === 'managed'
         );
     }
-    window.startStandaloneTeamFlow = function({ teamId, teamName, targetUrl }) {
-                    const teamParams = `&mode=team&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
-                    window.tempTeamParams = teamParams;
-        openStandaloneModal(targetUrl);
+
+    function mapRoomType(roomType) {
+        if (!roomType) return 'managed-room.html';
+            if (typeof roomType === 'string' && roomType.includes('immersive')) {
+            return 'immersive-room.html';
+        }
+        if (typeof roomType === 'string' && roomType.includes('managed')) {
+            return 'managed-room.html';
+                }
+        if (typeof roomType === 'string' && roomType.endsWith('.html')) {
+            return roomType;
+        }
+        return `${roomType}-room.html`;
+    }
+
+    function normalizeJoinArgs(args) {
+        const first = args[0];
+        if (first && typeof first === 'object') {
+            return {
+                teamId: first.teamId || first.id || first.teamName,
+                teamName: first.teamName || first.name || first.title || first.teamId || first.id,
+                approvalValue:
+                    first.is_approval_required ??
+                    first.requiresApproval ??
+                    first.needs_approval ??
+                    first.needApproval ??
+                    first.auditMode,
+                roomType: first.roomType || first.room_type || first.mode || 'managed-room.html'
+    };
+        }
+        return {
+            teamId: args[0],
+            teamName: args[1],
+            approvalValue: args[2],
+            roomType: args[3] || 'managed-room.html'
             };
-    window.joinTeam = function(teamId, teamName, is_approval_required, roomType) {
-        console.log('[flip joinTeam debug]', {
-    teamId,
-    teamName,
-    is_approval_required,
-    roomType,
-    arguments: Array.from(arguments)
-});
+        }
+
+    window.startStandaloneTeamFlow = function({ teamId, teamName, targetUrl }) {
+        const teamParams = `&mode=team&teamId=${teamId}&teamName=${encodeURIComponent(teamName)}`;
+        window.tempTeamParams = teamParams;
+        openStandaloneModal(targetUrl);
+    };
+
+    function handleStandaloneJoinTeam() {
+        const { teamId, teamName, approvalValue, roomType } = normalizeJoinArgs(Array.from(arguments));
         const jtm = document.getElementById('joinTeamModal');
         if (jtm) {
             jtm.classList.remove('flex');
             jtm.classList.add('hidden');
         }
-        const needsApproval = isApprovalRequired(is_approval_required);
+        const needsApproval = isApprovalRequired(approvalValue);
         if (isThemeRoomType(roomType)) {
             if (needsApproval) {
                 socket.emit('request_join_team', {
@@ -495,7 +536,7 @@ roomType === 'managed'
                     realTeamName: teamName,
                     roomType: 'managed-room.html',
                     isThemeTeam: true
-                });
+        });
                 if (window.showWaitingModal) window.showWaitingModal(teamName);
                 return;
             }
@@ -505,23 +546,12 @@ roomType === 'managed'
             };
             if (typeof window.showThemeRoomModal === 'function') {
                 window.showThemeRoomModal();
-                    } else {
+            } else {
                 alert('找不到主題教室彈窗，請確認 flip-room.html 的 openStandaloneThemeRoomModal 是否存在');
-                    }
+            }
             return;
         }
-        let mappedRoom = 'managed-room.html';
-        if (roomType) {
-            if (typeof roomType === 'string' && roomType.includes('immersive')) {
-                mappedRoom = 'immersive-room.html';
-            } else if (typeof roomType === 'string' && roomType.includes('managed')) {
-                mappedRoom = 'managed-room.html';
-            } else if (typeof roomType === 'string' && roomType.endsWith('.html')) {
-                mappedRoom = roomType;
-                } else {
-                mappedRoom = `${roomType}-room.html`;
-                }
-        }
+        const mappedRoom = mapRoomType(roomType);
         if (needsApproval) {
             socket.emit('request_join_team', {
                 teamName: teamId,
@@ -530,22 +560,27 @@ roomType === 'managed'
                 requestUser: username,
                 realTeamName: teamName,
                 roomType: mappedRoom
-            });
+    });
             if (window.showWaitingModal) window.showWaitingModal(teamName);
             return;
-        }
+}
         window.startStandaloneTeamFlow({
             teamId,
             teamName,
             targetUrl: mappedRoom
         });
-    };
+    }
+
+    window.joinTeam = handleStandaloneJoinTeam;
+    window.executeJoinTeam = handleStandaloneJoinTeam;
+
     socket.off('join_team_approved');
     socket.on('join_team_approved', (data) => {
         if (window.hideWaitingModal) window.hideWaitingModal();
         const approvedTeamId = data.teamId || data.teamName;
         const approvedTeamName = data.realTeamName || data.teamName;
-        if (isThemeRoomType(data.roomType)) {
+        const approvedRoomType = data.roomType || 'managed-room.html';
+        if (isThemeRoomType(approvedRoomType)) {
             window.pendingThemeTeamJoinData = {
                 teamId: approvedTeamId,
                 teamName: approvedTeamName
@@ -554,16 +589,16 @@ roomType === 'managed'
                 window.showThemeRoomModal();
             } else {
                 alert('找不到主題教室彈窗，請確認 flip-room.html 的 openStandaloneThemeRoomModal 是否存在');
-        }
+            }
             return;
         }
-        const targetRoom = data.roomType || 'managed-room.html';
         window.startStandaloneTeamFlow({
             teamId: approvedTeamId,
             teamName: approvedTeamName,
-            targetUrl: targetRoom
+            targetUrl: mapRoomType(approvedRoomType)
         });
     });
+
     socket.off('join_team_rejected');
     socket.on('join_team_rejected', () => {
         if (window.hideWaitingModal) window.hideWaitingModal();
