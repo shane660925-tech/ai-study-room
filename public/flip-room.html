@@ -472,6 +472,13 @@ roomType === 'managed'
         openStandaloneModal(targetUrl);
             };
     window.joinTeam = function(teamId, teamName, is_approval_required, roomType) {
+        console.log('[flip joinTeam debug]', {
+    teamId,
+    teamName,
+    is_approval_required,
+    roomType,
+    arguments: Array.from(arguments)
+});
         const jtm = document.getElementById('joinTeamModal');
         if (jtm) {
             jtm.classList.remove('flex');
