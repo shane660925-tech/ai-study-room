@@ -14,11 +14,14 @@ window.tutorSessionSummaries = {};
 window.tutorRoomsCache = [];
 
 function getCurrentTeacherUsername() {
+    const params = new URLSearchParams(window.location.search);
+
     return (
+        params.get('teacher') ||
+        params.get('teacherUsername') ||
+        params.get('username') ||
         localStorage.getItem('studyVerseUser') ||
         localStorage.getItem('username') ||
-        new URLSearchParams(window.location.search).get('teacherUsername') ||
-        new URLSearchParams(window.location.search).get('username') ||
         ''
     );
 }
@@ -85,6 +88,33 @@ window.switchTutorRoom = function(roomCode) {
     if (!roomCode) return;
 
     setTutorRoomCode(roomCode);
+
+    const selectedSchedule = (window.tutorRoomsCache || []).find(room =>
+        room.room_code === roomCode
+    );
+
+    if (selectedSchedule) {
+        const scheduleData = {
+            ...selectedSchedule,
+            roomId: roomCode,
+            room: roomCode,
+            roomCode: roomCode,
+            startTime: selectedSchedule.start_time,
+            classMinutes: Number(selectedSchedule.class_minutes || 50),
+            restMinutes: Number(selectedSchedule.rest_minutes || 10),
+            periods: Number(selectedSchedule.periods || 1),
+            message: `本次課表為 ${selectedSchedule.start_time}，分 ${selectedSchedule.periods} 節課，每節課 ${selectedSchedule.class_minutes} 分鐘，每次休息 ${selectedSchedule.rest_minutes} 分鐘`,
+            scheduleText: `本次課表為 ${selectedSchedule.start_time}，分 ${selectedSchedule.periods} 節課，每節課 ${selectedSchedule.class_minutes} 分鐘，每次休息 ${selectedSchedule.rest_minutes} 分鐘`
+        };
+
+        window.currentScheduleData = scheduleData;
+
+        if (typeof updateDashboardUI === 'function') {
+            updateDashboardUI(scheduleData);
+        }
+
+        socket.emit('create_tutor_room_schedule', scheduleData);
+    }
 
     activeStudents = [];
     window.latestAttendanceData = [];
