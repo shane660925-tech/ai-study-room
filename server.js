@@ -235,74 +235,69 @@ async function generateUniqueTutorRoomCode() {
 
 // 建立一間新的特約教室
 app.post('/api/tutor-schedules', async (req, res) => {
-    try {
-        const {
+try {
+const {
             teacherUsername,
             roomTitle,
             roomSize,
             periods,
             classMinutes,
             restMinutes,
-            startTime
+startTime,
+scheduledDate,
+roomNote
         } = req.body;
-
         if (!teacherUsername) {
             return res.status(400).json({ error: '缺少 teacherUsername' });
         }
-
         if (!periods || !classMinutes || !restMinutes || !startTime) {
             return res.status(400).json({ error: '排課資料不完整' });
         }
-
+const finalScheduledDate =
+scheduledDate ||
+new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+const finalRoomNote = String(roomNote || '').trim();
         const { data: teacher, error: teacherError } = await supabase
             .from('users')
             .select('username, role, teacher_status, is_blocked')
             .eq('username', teacherUsername)
             .maybeSingle();
-
         if (teacherError) throw teacherError;
-
         if (!teacher) {
             return res.status(404).json({ error: '找不到教師帳號' });
         }
-
         if (teacher.is_blocked) {
             return res.status(403).json({ error: '此教師帳號已被停用' });
         }
-
         if (teacher.role !== 'teacher' && teacher.role !== 'admin') {
             return res.status(403).json({ error: '此帳號不是教師或管理員' });
         }
-
         if (teacher.role === 'teacher' && teacher.teacher_status !== 'approved') {
             return res.status(403).json({ error: '教師資格尚未通過審核' });
         }
-
         const roomCode = await generateUniqueTutorRoomCode();
-
         const { data: schedule, error: insertError } = await supabase
             .from('tutor_schedules')
             .insert([{
                 teacher_username: teacherUsername,
                 room_code: roomCode,
                 room_title: roomTitle || '特約教室',
+room_note: finalRoomNote || null,
                 room_size: roomSize || null,
                 periods: Number(periods),
                 class_minutes: Number(classMinutes),
                 rest_minutes: Number(restMinutes),
                 start_time: startTime,
+scheduled_date: finalScheduledDate,
                 status: 'live'
             }])
             .select()
             .single();
-
         if (insertError) throw insertError;
-
         res.json({
             success: true,
             schedule
         });
-
     } catch (err) {
         console.error('建立特約教室失敗:', err);
         res.status(500).json({ error: '建立特約教室失敗' });
