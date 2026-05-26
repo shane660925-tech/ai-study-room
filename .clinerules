@@ -1,0 +1,22 @@
+# STUDY VERSE 修改規則
+
+1. 不准重構 legacy flow。
+2. 不准新增第二套 architecture。
+3. 不准自動抽 function。
+4. 不准修改未選取區塊。
+5. 不准格式化整份檔案。
+6. 不准推測 server.js event。
+7. 不准自行命名新 roomType。
+8. roomType 必須沿用現有系統。
+9. 一次只修改一個 bug。
+10. 不准順手最佳化。
+11. 不准改 naming。
+12. 不准新增 abstraction。
+13. 所有修改必須保持 backward compatibility。
+14. simulated 必須保留 legacy 相容。
+15. theme:${slug} 為新版主題教室正式格式。
+16. server.js 暫時禁止拆分。
+17. 若不確定，先輸出修改計畫，不可直接改 code。
+18. 每次修改前，必須先說明要改哪個檔案、哪個區塊、原因。
+19. 修改時只能替換使用者指定的選取區塊。
+20. 不准一次處理多個問題。
