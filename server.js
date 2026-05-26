@@ -312,7 +312,10 @@ app.post('/api/tutor-schedules', async (req, res) => {
 // 取得某位教師目前的特約教室
 app.get('/api/tutor-schedules', async (req, res) => {
     try {
-        const teacherUsername = req.query.teacherUsername;
+        const teacherUsername =
+            req.query.teacherUsername ||
+            req.query.teacher ||
+            req.query.username;
 
         if (!teacherUsername) {
             return res.status(400).json({ error: '缺少 teacherUsername' });
@@ -327,9 +330,49 @@ app.get('/api/tutor-schedules', async (req, res) => {
 
         if (error) throw error;
 
+        const now = new Date();
+        const activeSchedules = [];
+        const expiredIds = [];
+
+        (schedules || []).forEach(schedule => {
+            const startText = schedule.start_time;
+            const periods = Number(schedule.periods || 1);
+            const classMinutes = Number(schedule.class_minutes || 50);
+            const restMinutes = Number(schedule.rest_minutes || 10);
+
+            if (!startText) {
+                activeSchedules.push(schedule);
+                return;
+            }
+
+            const [hh, mm] = String(startText).slice(0, 5).split(':').map(Number);
+
+            const startAt = new Date();
+            startAt.setHours(hh, mm, 0, 0);
+
+            const totalMinutes =
+                (periods * classMinutes) +
+                ((periods > 1) ? (periods - 1) * restMinutes : 0);
+
+            const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+            if (now > endAt) {
+                expiredIds.push(schedule.id);
+            } else {
+                activeSchedules.push(schedule);
+            }
+        });
+
+        if (expiredIds.length > 0) {
+            await supabase
+                .from('tutor_schedules')
+                .update({ status: 'ended' })
+                .in('id', expiredIds);
+        }
+
         res.json({
             success: true,
-            schedules: schedules || []
+            schedules: activeSchedules
         });
 
     } catch (err) {
