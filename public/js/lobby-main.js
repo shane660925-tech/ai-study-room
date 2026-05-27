@@ -708,35 +708,39 @@ socket.on("status_updated", (data) => {
     }
 });
 
-const currentRoomCode =
-    new URLSearchParams(window.location.search).get('room') ||
-    new URLSearchParams(window.location.search).get('roomId') ||
-    window.currentTutorRoomCode ||
-    window.currentRoomCode;
+socket.on('flip_failed', (data) => {
+    const currentRoomCode =
+        new URLSearchParams(window.location.search).get('room') ||
+        new URLSearchParams(window.location.search).get('roomId') ||
+        window.currentTutorRoomCode ||
+        window.currentRoomCode;
 
-const eventRoom =
-    data?.roomId ||
-    data?.room ||
-    data?.roomCode;
+    const eventRoom =
+        data?.roomId ||
+        data?.room ||
+        data?.roomCode;
 
-if (eventRoom && currentRoomCode && eventRoom !== currentRoomCode) {
-    console.log("⏭️ 忽略非本教室 flip_failed:", {
-        currentRoomCode,
-        eventRoom,
-        data
-    });
-    return;
-}
+    if (eventRoom && currentRoomCode && eventRoom !== currentRoomCode) {
+        console.log("⏭️ 忽略非本教室 flip_failed:", {
+            currentRoomCode,
+            eventRoom,
+            data
+        });
+        return;
+    }
 
     const userName = data.name;
     const userCard = document.getElementById(`user-card-${userName}`);
+
     if (userCard) {
         userCard.classList.add('flip-failed-shatter');
+
         const statusText = userCard.querySelector('.status-text');
         if (statusText) {
             statusText.innerHTML = "💔 專注陣亡";
-            statusText.style.color = "#ef4444"; 
+            statusText.style.color = "#ef4444";
         }
+
         setTimeout(() => {
             userCard.classList.remove('flip-failed-shatter');
         }, 10000);
@@ -752,13 +756,15 @@ if (eventRoom && currentRoomCode && eventRoom !== currentRoomCode) {
             </span>
         `;
         chatBox.appendChild(msgEl);
-        chatBox.scrollTop = chatBox.scrollHeight; 
+        chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     const shatterSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2855/2855-preview.mp3');
     shatterSound.volume = 0.6;
     shatterSound.play().catch(() => {});
 
+    showPublicShamingToast(userName);
+});
 const shamingStyle = document.createElement('style');
 shamingStyle.innerHTML = `
     @keyframes shatterAndShake {
