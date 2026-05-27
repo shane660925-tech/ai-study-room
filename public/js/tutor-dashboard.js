@@ -94,6 +94,16 @@ const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
 return now <= endAt;
 });
         window.tutorRoomsCache = schedules;
+        schedules.forEach(room => {
+    if (!room.room_code) return;
+
+    socket.emit('join_tutor_room', {
+        room: room.room_code,
+        roomId: room.room_code,
+        roomCode: room.room_code,
+        role: 'teacher'
+    });
+});
         if (schedules.length === 0) {
             switcher.innerHTML = `<option value="">目前沒有特約教室</option>`;
             return;
@@ -825,43 +835,56 @@ function renderStudents() {
 // ==========================================
 let violationStorage = {}; 
 
-function saveAndRenderViolation(studentName, type, img) {
+function saveAndRenderViolation(studentName, type, img, roomCode) {
     if (!studentName) return;
-    if (!violationStorage[studentName]) violationStorage[studentName] = [];
-    
-    // 🚀 新增：攔截「學生已回位」的通知，去更新上一筆離座紀錄
+
+    const eventRoom = roomCode || window.currentTutorRoomCode || 'unknown';
+
+    if (!violationStorage[eventRoom]) violationStorage[eventRoom] = {};
+    if (!violationStorage[eventRoom][studentName]) violationStorage[eventRoom][studentName] = [];
+
     if (type.includes("【更新狀態】學生已回位")) {
         const timeMatch = type.match(/回位時間: (.*?)\)/);
         const returnTime = timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('zh-TW', { hour12: false });
-        
-        const records = violationStorage[studentName];
+
+        const records = violationStorage[eventRoom][studentName];
         const lastLeaveRecord = records.find(r => r.type && r.type.includes("尚未回位"));
-        
+
         if (lastLeaveRecord) {
-            // 把尚未回位替換成精準的回位時間
             lastLeaveRecord.type = lastLeaveRecord.type.replace("尚未回位", `回位時間: ${returnTime}`);
             addLog(`✅ 狀態更新：${studentName} 已回到座位`, "text-green-400 font-bold");
             renderViolationsList();
         }
-        return; // 這是用來更新的指令，不要當作新的違規存進去！
+        return;
     }
 
-    // --- 原本的違規儲存邏輯 ---
     const now = new Date();
     const nowTime = now.toLocaleTimeString('zh-TW', { hour12: false });
     const noImageKeywords = ['翻開', '翻轉', '分頁', 'tab', '離開', '手動', '警告', '導師'];
     const isNoImage = noImageKeywords.some(keyword => type.includes(keyword));
     const finalImg = isNoImage ? null : img;
-    
-    // 防重複機制
-    const isDuplicate = violationStorage[studentName].some(v => v.type === type && (now.getTime() - v.rawTime < 3000));
+
+    const isDuplicate = violationStorage[eventRoom][studentName].some(v =>
+        v.type === type &&
+        (now.getTime() - v.rawTime < 3000)
+    );
+
     if (isDuplicate) return;
 
-    violationStorage[studentName].unshift({ time: nowTime, rawTime: now.getTime(), type: type, img: finalImg });
+    violationStorage[eventRoom][studentName].unshift({
+        time: nowTime,
+        rawTime: now.getTime(),
+        type: type,
+        img: finalImg,
+        roomId: eventRoom
+    });
+
     addLog(`🚨 系統攔截：${studentName} - ${type}`, "text-red-400 font-bold");
-    renderViolationsList();
-    
-    if (typeof renderStudents === 'function') renderStudents();
+
+    if (eventRoom === window.currentTutorRoomCode) {
+        renderViolationsList();
+        if (typeof renderStudents === 'function') renderStudents();
+    }
 }
 
 socket.on('teacher_update', (data) => {
@@ -884,10 +907,24 @@ socket.on('teacher_update', (data) => {
 
 function handleDirectViolation(data) {
     const name = data.name || data.studentName || data.username;
-    if (!activeStudents.some(s => s.name === name)) return;
+    if (!name) return;
+
+    const eventRoom =
+        data.roomId ||
+        data.room ||
+        data.roomCode ||
+        window.currentTutorRoomCode;
+
+    const ownedRoomCodes = (window.tutorRoomsCache || []).map(room => room.room_code);
+
+    if (eventRoom && ownedRoomCodes.length > 0 && !ownedRoomCodes.includes(eventRoom)) {
+        return;
+    }
+
     const type = data.type || data.reason || data.violationType || '異常行為';
     const img = data.image || data.img || data.screenshot || null;
-    saveAndRenderViolation(name, type, img);
+
+    saveAndRenderViolation(name, type, img, eventRoom);
 }
 socket.on('student_violation', handleDirectViolation);
 socket.on('violation', handleDirectViolation);
@@ -905,30 +942,52 @@ socket.on('tab_switched', (data) => {
 function renderViolationsList() {
     const container = document.getElementById('tab-violations');
     if (!container) return;
+
+    const currentRoomCode = window.currentTutorRoomCode;
+    const currentRoomStorage = violationStorage[currentRoomCode] || {};
+
     container.innerHTML = `<h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">學員違規證據分類流</h3>`;
-    const studentNames = Object.keys(violationStorage);
+
+    const studentNames = Object.keys(currentRoomStorage);
+
     if (studentNames.length === 0) {
-        container.innerHTML += `<p class="text-slate-600 italic text-center py-8 text-xs">目前無任何違規紀錄</p>`;
+        container.innerHTML += `<p class="text-slate-600 italic text-center py-8 text-xs">目前此教室無任何違規紀錄</p>`;
         return;
     }
+
     studentNames.forEach(name => {
-        const records = violationStorage[name];
+        const records = currentRoomStorage[name];
+
         const groupDiv = document.createElement('div');
         groupDiv.className = 'mb-3 border border-red-900/30 rounded-xl overflow-hidden bg-black/20';
+
         const headerBtn = document.createElement('button');
         headerBtn.className = 'w-full bg-slate-800/40 p-3 flex justify-between items-center';
         headerBtn.innerHTML = `<span class="font-bold text-white text-sm">${name}</span><span class="bg-red-500/20 text-red-400 text-[10px] px-2 py-1 rounded-full">${records.length} 次</span>`;
+
         const listDiv = document.createElement('div');
         listDiv.className = 'hidden flex-col gap-2 p-3 bg-black/40';
-        headerBtn.onclick = () => { listDiv.classList.toggle('hidden'); listDiv.classList.toggle('flex'); };
+
+        headerBtn.onclick = () => {
+            listDiv.classList.toggle('hidden');
+            listDiv.classList.toggle('flex');
+        };
+
         records.forEach(rec => {
             const item = document.createElement('div');
             item.className = 'flex justify-between items-center p-2 bg-slate-800/50 rounded-lg';
-            const actionBtn = rec.img ? `<button onclick="showTutorImageModal('${rec.img}', '${name}', '${rec.type}')" class="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 rounded">截圖</button>` : `<span class="text-slate-500 text-[10px]">文字</span>`;
+
+            const actionBtn = rec.img
+                ? `<button onclick="showTutorImageModal('${rec.img}', '${name}', '${rec.type}')" class="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 rounded">截圖</button>`
+                : `<span class="text-slate-500 text-[10px]">文字</span>`;
+
             item.innerHTML = `<div class="flex flex-col text-left"><span class="text-[10px] text-slate-400">${rec.time}</span><span class="text-xs text-red-300 font-bold">${rec.type}</span></div>${actionBtn}`;
             listDiv.appendChild(item);
         });
-        groupDiv.appendChild(headerBtn); groupDiv.appendChild(listDiv); container.appendChild(groupDiv);
+
+        groupDiv.appendChild(headerBtn);
+        groupDiv.appendChild(listDiv);
+        container.appendChild(groupDiv);
     });
 }
 
