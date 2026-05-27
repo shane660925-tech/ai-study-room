@@ -493,19 +493,44 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
         });
 
         socket.on('receive_tutor_schedule', (data) => {
+    console.log("📅 [TutorClient] 收到 receive_tutor_schedule:", data);
+
+    if (!data) return;
+
     const container = document.getElementById('studentScheduleContainer');
     const textEl = document.getElementById('studentScheduleText');
 
-    const message =
-        data?.message ||
-        data?.scheduleText ||
-        data?.text ||
-        '';
+    if (!container || !textEl) return;
 
-    if (container && textEl && message) {
-        textEl.innerText = message;
-        container.classList.remove('hidden');
+    const periods = Number(data.periods || 1);
+    const classMinutes = Number(data.classMinutes || data.class_minutes || data.periodTime || 50);
+    const restMinutes = Number(data.restMinutes || data.rest_minutes || data.restTime || 10);
+
+    const rawStartTime = String(data.startTime || data.start_time || '08:00').slice(0, 5);
+
+    let finalText = data.scheduleText || data.message || data.text || '';
+
+    if (rawStartTime && rawStartTime.includes(':')) {
+        const [hours, minutes] = rawStartTime.split(':').map(Number);
+        const endDate = new Date();
+        endDate.setHours(hours, minutes, 0, 0);
+
+        const totalMinutes =
+            (periods * classMinutes) +
+            ((periods > 1) ? (periods - 1) * restMinutes : 0);
+
+        endDate.setMinutes(endDate.getMinutes() + totalMinutes);
+
+        const endTime =
+            String(endDate.getHours()).padStart(2, '0') +
+            ':' +
+            String(endDate.getMinutes()).padStart(2, '0');
+
+        finalText = `本次課表為 ${rawStartTime}~${endTime}，分 ${periods} 節課，每節課 ${classMinutes} 分鐘，每次休息 ${restMinutes} 分鐘`;
     }
+
+    textEl.innerText = finalText;
+    container.classList.remove('hidden');
 });
 
         socket.on('tutor_timer_sync', (state) => {
