@@ -282,7 +282,12 @@ socket.on('tutor_timer_sync', (state) => {
         state.roomCode ||
         state.tutorRoomCode;
 
-    if (stateRoom && currentRoomCode && stateRoom !== currentRoomCode) {
+    if (!stateRoom) {
+        console.log("⏭️ 忽略沒有 roomId 的 tutor_timer_sync:", state);
+        return;
+    }
+
+    if (currentRoomCode && stateRoom !== currentRoomCode) {
         console.log("⏭️ 忽略非目前特約教室 timer sync:", {
             currentRoomCode,
             stateRoom,

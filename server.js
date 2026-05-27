@@ -4115,11 +4115,17 @@ io.to(targetRoom).emit('receive_tutor_schedule', normalizedScheduleData);
 
     // 學生請求當下課表時間
     socket.on('request_tutor_timer_sync', (roomId) => {
-        const timeState = getTutorRoomTimeState(roomId);
-        if (timeState) {
-            socket.emit('tutor_timer_sync', timeState);
-        }
+const targetRoom = roomId || socket.currentTutorRoom || socket.roomId;
+const timeState = getTutorRoomTimeState(targetRoom);
+if (timeState && targetRoom) {
+socket.emit('tutor_timer_sync', {
+...timeState,
+roomId: targetRoom,
+room: targetRoom,
+roomCode: targetRoom
     });
+}
+});
 
     // 1. 學生進入特約教室 (雙機分開加入)
     socket.on('join_tutor_room', async (data) => {
