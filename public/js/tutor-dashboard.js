@@ -118,13 +118,10 @@ switcher.innerHTML = `<option value="">載入失敗</option>`;
 
 window.switchTutorRoom = function(roomCode) {
     if (!roomCode) return;
-
     setTutorRoomCode(roomCode);
-
     const selectedSchedule = (window.tutorRoomsCache || []).find(room =>
         room.room_code === roomCode
     );
-
     if (selectedSchedule) {
         const scheduleData = {
             ...selectedSchedule,
@@ -138,42 +135,42 @@ window.switchTutorRoom = function(roomCode) {
             message: `本次課表為 ${selectedSchedule.start_time}，分 ${selectedSchedule.periods} 節課，每節課 ${selectedSchedule.class_minutes} 分鐘，每次休息 ${selectedSchedule.rest_minutes} 分鐘`,
             scheduleText: `本次課表為 ${selectedSchedule.start_time}，分 ${selectedSchedule.periods} 節課，每節課 ${selectedSchedule.class_minutes} 分鐘，每次休息 ${selectedSchedule.rest_minutes} 分鐘`
         };
-
         window.currentScheduleData = scheduleData;
-
         if (typeof updateDashboardUI === 'function') {
             updateDashboardUI(scheduleData);
         }
-
         socket.emit('create_tutor_room_schedule', scheduleData);
     }
-
     activeStudents = [];
     window.latestAttendanceData = [];
-
     if (typeof renderStudents === 'function') {
         renderStudents();
     }
-
     if (typeof renderAttendanceData === 'function') {
         renderAttendanceData();
     }
-
+if (typeof renderViolationsList === 'function') {
+renderViolationsList();
+}
+if (typeof renderTutorSummaryReports === 'function') {
+renderTutorSummaryReports();
+}
     socket.emit('join_tutor_room', {
         room: roomCode,
         roomId: roomCode,
         roomCode: roomCode,
         role: 'teacher'
     });
-
     socket.emit('get_attendance', {
         room: roomCode,
         roomId: roomCode
     });
-
     socket.emit('request_tutor_schedule', roomCode);
-    restartTutorTimerSyncLoop(roomCode);
-
+if (typeof restartTutorTimerSyncLoop === 'function') {
+restartTutorTimerSyncLoop(roomCode);
+} else {
+socket.emit('request_tutor_timer_sync', roomCode);
+}
     addLog(`已切換至特約教室：${roomCode}`, "text-amber-400 font-bold");
 };
 
