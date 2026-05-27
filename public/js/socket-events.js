@@ -89,44 +89,25 @@ socket.emit("update_status", {
     });
 
     // 3. 翻轉失敗 (被踢出)
-    socket.on('flip_failed', async (data) => {
-        const targetName = data.name || data.username || "某位同學";
+    const currentRoomCode =
+    new URLSearchParams(window.location.search).get('room') ||
+    new URLSearchParams(window.location.search).get('roomId') ||
+    window.currentTutorRoomCode ||
+    window.currentRoomCode;
 
-        if (targetName === myUsername && sessionStorage.getItem('mobileLinked') === 'true') {
-            if (window.isKickingOut) return; 
-            window.isKickingOut = true; 
+const eventRoom =
+    data?.roomId ||
+    data?.room ||
+    data?.roomCode;
 
-            if (window.isAIPaused) {
-                window.isKickingOut = false;
-                return; 
-            }
-
-            window.isPhoneFlipped = false; 
-            if (window.alertAudio) {
-                window.alertAudio.pause();
-                window.alertAudio.currentTime = 0;
-            }
-            if (window.RoomUI) window.RoomUI.hideWarning();
-            if (window.hideFlipCountdownModal) window.hideFlipCountdownModal();
-            
-            window.totalViolationCount++;
-            window.violationDetails["📱 手機翻轉中斷"] = (window.violationDetails["📱 手機翻轉中斷"] || 0) + 1;
-            
-            setTimeout(async () => {
-                alert("🚨 您已違反翻轉專注規則，系統即將為您結算專注數據並通報導師！");
-                if (window.endSession) await window.endSession();
-            }, 100);
-            
-        } else if (targetName !== myUsername) {
-            if (window.showPublicShamingToast) window.showPublicShamingToast(targetName);
-            const bbContent = document.getElementById('blackboardContent'); 
-            if (bbContent) {
-                bbContent.innerText = `🚨 系統廣播：${targetName} 因翻開手機被強制踢出教室！`;
-                bbContent.classList.add('text-red-400');
-                setTimeout(() => bbContent.classList.remove('text-red-400'), 4000);
-            }
-        }
+if (eventRoom && currentRoomCode && eventRoom !== currentRoomCode) {
+    console.log("⏭️ 忽略非本教室 flip_failed:", {
+        currentRoomCode,
+        eventRoom,
+        data
     });
+    return;
+}
     
     // 4. 導師指令
     socket.on('tutor_command', async (data) => {

@@ -708,7 +708,26 @@ socket.on("status_updated", (data) => {
     }
 });
 
-socket.on('flip_failed', (data) => {
+const currentRoomCode =
+    new URLSearchParams(window.location.search).get('room') ||
+    new URLSearchParams(window.location.search).get('roomId') ||
+    window.currentTutorRoomCode ||
+    window.currentRoomCode;
+
+const eventRoom =
+    data?.roomId ||
+    data?.room ||
+    data?.roomCode;
+
+if (eventRoom && currentRoomCode && eventRoom !== currentRoomCode) {
+    console.log("⏭️ 忽略非本教室 flip_failed:", {
+        currentRoomCode,
+        eventRoom,
+        data
+    });
+    return;
+}
+
     const userName = data.name;
     const userCard = document.getElementById(`user-card-${userName}`);
     if (userCard) {
@@ -739,8 +758,6 @@ socket.on('flip_failed', (data) => {
     const shatterSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2855/2855-preview.mp3');
     shatterSound.volume = 0.6;
     shatterSound.play().catch(() => {});
-    showPublicShamingToast(userName);
-});
 
 const shamingStyle = document.createElement('style');
 shamingStyle.innerHTML = `
