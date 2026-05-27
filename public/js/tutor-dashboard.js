@@ -13,6 +13,26 @@ window.tutorSessionSummaries = {};
 
 window.tutorRoomsCache = [];
 
+window.tutorTimerSyncInterval = null;
+
+function restartTutorTimerSyncLoop(roomCode) {
+    if (window.tutorTimerSyncInterval) {
+        clearInterval(window.tutorTimerSyncInterval);
+        window.tutorTimerSyncInterval = null;
+    }
+
+    if (!roomCode) return;
+
+    socket.emit('request_tutor_timer_sync', roomCode);
+
+    window.tutorTimerSyncInterval = setInterval(() => {
+        const currentRoomCode = window.currentTutorRoomCode;
+        if (!currentRoomCode) return;
+
+        socket.emit('request_tutor_timer_sync', currentRoomCode);
+    }, 1000);
+}
+
 function getCurrentTeacherUsername() {
     const params = new URLSearchParams(window.location.search);
 
@@ -152,7 +172,7 @@ window.switchTutorRoom = function(roomCode) {
     });
 
     socket.emit('request_tutor_schedule', roomCode);
-    socket.emit('request_tutor_timer_sync', roomCode);
+    restartTutorTimerSyncLoop(roomCode);
 
     addLog(`已切換至特約教室：${roomCode}`, "text-amber-400 font-bold");
 };
@@ -265,8 +285,8 @@ socket.on('connect', () => {
         periods: Number(window.currentScheduleData.periods || 1)
     });
 
-    socket.emit('request_tutor_timer_sync', roomCode);
-console.log("✅ [TutorDashboard] 排程已註冊到伺服器，並請求 timer sync:", roomCode);
+    restartTutorTimerSyncLoop(roomCode);
+console.log("✅ [TutorDashboard] 排程已註冊到伺服器，並啟動 timer sync loop:", roomCode);
 }
 });
 
