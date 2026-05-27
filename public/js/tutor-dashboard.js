@@ -1212,21 +1212,48 @@ function updateTimerUI(time, label, status, progress) {
 // ==========================================
 
 function handleTutorReport(report) {
-    // 核心隔離：如果報告的名字不在我們記錄的特約學生名單內，直接無視
-    if (!knownTutorNames.has(report.name)) return;
+    if (!report || !report.name) return;
 
-    if (!window.tutorSessionSummaries[report.name]) {
-        window.tutorSessionSummaries[report.name] = [];
+    const reportRoom =
+        report.roomId ||
+        report.room ||
+        report.roomCode ||
+        window.currentTutorRoomCode ||
+        'unknown';
+
+    const ownedRoomCodes = (window.tutorRoomsCache || []).map(room => room.room_code);
+
+    if (
+        reportRoom !== 'unknown' &&
+        ownedRoomCodes.length > 0 &&
+        !ownedRoomCodes.includes(reportRoom)
+    ) {
+        return;
     }
-    
-    // 避免重複接收同一份報告
-    const exists = window.tutorSessionSummaries[report.name].some(r => r.timestamp === report.timestamp);
+
+    if (!window.tutorSessionSummaries[reportRoom]) {
+        window.tutorSessionSummaries[reportRoom] = {};
+    }
+
+    if (!window.tutorSessionSummaries[reportRoom][report.name]) {
+        window.tutorSessionSummaries[reportRoom][report.name] = [];
+    }
+
+    const exists = window.tutorSessionSummaries[reportRoom][report.name].some(r =>
+        r.timestamp === report.timestamp
+    );
+
     if (!exists) {
-        window.tutorSessionSummaries[report.name].unshift(report);
-        addLog(`📄 學生 [${report.name}] 已結束自習並產生 AI 結算報告，得分：${report.score}`, "text-blue-400 font-bold");
-        
-        // 嘗試更新畫面
-        renderTutorSummaryReports();
+        window.tutorSessionSummaries[reportRoom][report.name].unshift({
+            ...report,
+            roomId: reportRoom
+        });
+
+        addLog(`📄 學生 [${report.name}] 已提交 AI 結算報告，得分：${report.score}`, "text-blue-400 font-bold");
+
+        if (reportRoom === window.currentTutorRoomCode) {
+            renderTutorSummaryReports();
+        }
     }
 }
 
@@ -1238,20 +1265,22 @@ function renderTutorSummaryReports() {
     const container = document.getElementById('tab-summary');
     if (!container) return;
 
+    const currentRoomCode = window.currentTutorRoomCode;
+    const currentRoomReports = window.tutorSessionSummaries[currentRoomCode] || {};
+
     let html = `<h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">學員 AI 數據總結報告</h3>`;
 
-    const names = Object.keys(window.tutorSessionSummaries);
-    
+    const names = Object.keys(currentRoomReports);
+
     if (names.length === 0) {
-        html += `<p class="text-slate-600 italic text-center py-8 text-xs">目前尚未有學員結束自習</p>`;
+        html += `<p class="text-slate-600 italic text-center py-8 text-xs">目前此教室尚未有學員結束自習</p>`;
         container.innerHTML = html;
         return;
     }
 
     names.forEach(name => {
-        const reports = window.tutorSessionSummaries[name];
-        
-        // 建立學生專屬的折疊外框 (Accordion)
+        const reports = currentRoomReports[name];
+
         html += `
         <div class="mb-3 border border-blue-900/30 rounded-xl overflow-hidden bg-black/20">
             <button onclick="toggleTutorReport('${name}')" class="w-full bg-slate-800/40 p-3 flex justify-between items-center hover:bg-slate-700/50 transition-colors">
@@ -1261,13 +1290,12 @@ function renderTutorSummaryReports() {
                 </div>
                 <span class="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-1 rounded-full font-bold">查看 ${reports.length} 份報告</span>
             </button>
-            <div id="report-content-${name}" class="hidden flex-col gap-3 p-3 bg-black/40">
+            <div id="report-content-${currentRoomCode}-${name}" class="hidden flex-col gap-3 p-3 bg-black/40">
         `;
 
-        // 渲染該學生的每一份報告卡片
         reports.forEach(r => {
-            // 處理違規明細
             let detailsHtml = "";
+
             if (r.details) {
                 for (const [key, val] of Object.entries(r.details)) {
                     if (val > 0) {
@@ -1286,7 +1314,7 @@ function renderTutorSummaryReports() {
                         <span class="text-xs text-slate-400 font-mono"><i class="fas fa-clock mr-1"></i>${r.timestamp || '未知時間'}</span>
                         <span class="text-amber-400 font-mono font-black text-lg">專注評分: ${r.score}</span>
                     </div>
-                    
+
                     <div class="bg-black/30 rounded-lg p-3 mb-3 border border-white/5">
                         <div class="flex justify-between text-red-400 font-bold mb-2 border-b border-red-900/30 pb-2 text-sm">
                             <span>總違規次數</span>
@@ -1294,7 +1322,7 @@ function renderTutorSummaryReports() {
                         </div>
                         ${detailsHtml || '<p class="text-green-500/70 text-xs text-center py-2 font-bold tracking-widest"><i class="fas fa-star mr-1"></i>無違規記錄，表現極佳！</p>'}
                     </div>
-                    
+
                     <div class="text-blue-300 text-xs bg-blue-900/20 p-3 rounded-lg border-l-4 border-blue-500 italic leading-relaxed">
                         <p class="font-bold text-blue-400 mb-1 not-italic"><i class="fas fa-robot mr-1"></i> AI 老師真心話評語：</p>
                         ${r.aiComment || r.comment || '無'}
@@ -1312,7 +1340,11 @@ function renderTutorSummaryReports() {
 
 // 綁定全域函數供 HTML 的 onClick 點擊展開/收合使用
 window.toggleTutorReport = function(name) {
-    const content = document.getElementById(`report-content-${name}`);
+    const currentRoomCode = window.currentTutorRoomCode;
+    const content =
+        document.getElementById(`report-content-${currentRoomCode}-${name}`) ||
+        document.getElementById(`report-content-${name}`);
+
     if (content) {
         content.classList.toggle('hidden');
         content.classList.toggle('flex');
