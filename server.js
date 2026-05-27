@@ -4969,38 +4969,69 @@ socket.on('admin_action', (data) => {
 });
 
     socket.on('flip_failed', (data) => {
+    const studentName = data?.name || data?.username;
+
+    const user = onlineUsers.find(u =>
+        u.id === socket.id ||
+        u.name === studentName ||
+        u.username === studentName
+    );
+
     const targetRoom =
         data?.roomId ||
         data?.room ||
+        data?.roomCode ||
+        data?.roomMode ||
         socket.roomId ||
-        data?.roomMode;
+        socket.currentTutorRoom ||
+        socket.currentRoom ||
+        user?.roomId ||
+        user?.room ||
+        user?.roomCode ||
+        user?.roomMode;
 
-    const studentName = data.name || data.username;
-
-if (targetRoom && tutorAttendanceByRoom.has(targetRoom) && studentName) {
-    const roomMap = tutorAttendanceByRoom.get(targetRoom);
-    const student = roomMap.get(studentName);
-
-    if (student) {
-        student.status = 'OFFLINE';
-        student.leaveTime = getTaiwanTimeString();
-        roomMap.set(studentName, student);
-    }
-
-    broadcastTutorAttendance(targetRoom);
-}
-
-    if (targetRoom) {
-        io.to(targetRoom).emit('flip_failed', data);
-        io.to(targetRoom).emit('student_violation', {
-            name: data.name || data.username,
-            type: '📱 手機翻轉中斷（超過5秒，已強制踢出教室）',
-            image: null,
-            roomId: targetRoom
+    if (!targetRoom) {
+        console.warn('⚠️ flip_failed 找不到 targetRoom，已拒絕全域廣播:', data);
+        socket.emit('flip_failed', {
+            ...data,
+            roomId: null,
+            room: null,
+            roomCode: null
         });
-    } else {
-        socket.broadcast.emit('flip_failed', data);
+        return;
     }
+
+    const normalizedData = {
+        ...data,
+        name: studentName,
+        roomId: targetRoom,
+        room: targetRoom,
+        roomCode: targetRoom
+    };
+
+    if (tutorAttendanceByRoom.has(targetRoom) && studentName) {
+        const roomMap = tutorAttendanceByRoom.get(targetRoom);
+        const student = roomMap.get(studentName);
+
+        if (student) {
+            student.status = 'OFFLINE';
+            student.leaveTime = getTaiwanTimeString();
+            roomMap.set(studentName, student);
+        }
+
+        broadcastTutorAttendance(targetRoom);
+    }
+
+    io.to(targetRoom).emit('flip_failed', normalizedData);
+
+    io.to(targetRoom).emit('student_violation', {
+        name: studentName,
+        type: '📱 手機翻轉中斷（超過5秒，已強制踢出教室）',
+        image: null,
+        roomId: targetRoom,
+        room: targetRoom,
+        roomCode: targetRoom
+    });
 });
 
     // 斷線處理：升級加入特約教室裝置清除邏輯
