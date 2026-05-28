@@ -266,29 +266,42 @@
     }
 
     #intro-ai-rooms .grid.grid-cols-1.md\:grid-cols-3 > * {
-        min-width: 82%;
-        flex-shrink: 0;
-        scroll-snap-align: start;
-    }
+    min-width: calc(50% - 7px);
+    max-width: calc(50% - 7px);
+    flex-shrink: 0;
+    scroll-snap-align: start;
+}
 
     #intro-ai-rooms .room-card {
-        padding: 20px 16px !important;
-        border-radius: 24px !important;
-        min-height: 230px;
-    }
+    padding: 18px 14px !important;
+    border-radius: 24px !important;
+    min-height: 434px;
+}
+#intro-ai-rooms .room-card .w-12 {
+    width: 60px !important;
+    height: 60px !important;
+    border-radius: 22px !important;
+    font-size: 1.75rem !important;
+}
 
-    #intro-ai-rooms .room-card h3 {
-        font-size: 1.25rem !important;
-        line-height: 1.25;
-    }
+#intro-ai-rooms .room-card h3 {
+    font-size: 1.45rem !important;
+    line-height: 1.25 !important;
+}
 
-    #intro-ai-rooms .room-card p {
-        font-size: 12px !important;
-        line-height: 1.5;
-    }
+#intro-ai-rooms .room-card p {
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+}
+
+#intro-ai-rooms .room-card > div:last-child {
+    margin-top: auto;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
 
     #course-list-container > div {
-        min-height: 230px !important;
-        border-radius: 24px !important;
-    }
+    min-height: 434px !important;
+    border-radius: 24px !important;
+}
 }
