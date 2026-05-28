@@ -220,3 +220,31 @@
         font-size: 11px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-1
+   index.html 主大廳手機基礎排版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    /* 主大廳：主容器縮小間距，避免手機太鬆散 */
+    main.max-w-6xl {
+        padding: 16px 14px 96px !important;
+        gap: 24px !important;
+    }
+
+    /* 主大廳頂部統計卡：手機保留 2 欄 */
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > div:first-child {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > div:first-child > * {
+        min-width: 0;
+    }
+
+    /* 主大廳側邊欄先移到統計卡下方，滿版顯示 */
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside {
+        width: 100%;
+    }
+}
