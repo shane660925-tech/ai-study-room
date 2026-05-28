@@ -1096,6 +1096,65 @@ if (!countdownPhase || remaining > 4) {
     window.currentCountdownSession = null;
 }
 
+// 下一堂課開始瞬間：檢查是否已完成手機重新連線與翻轉
+const reconnectFailKey = `${previousPhase}->${phase}-${state.period || 1}`;
+
+if (
+    (previousPhase === 'REST' || previousPhase === 'BREAK') &&
+    phase === 'CLASS' &&
+    window.lastTutorReconnectFailKey !== reconnectFailKey
+) {
+    window.lastTutorReconnectFailKey = reconnectFailKey;
+
+    const mobileLinked =
+        sessionStorage.getItem('mobileLinked') === 'true' ||
+        localStorage.getItem('mobileLinked') === 'true';
+
+    const isReconnectReady =
+        mobileLinked &&
+        window.currentPhoneFlipped === true;
+
+    if (!isReconnectReady) {
+        const myName =
+            localStorage.getItem('studyVerseUser') ||
+            document.getElementById('inputName')?.value ||
+            window.myUsername ||
+            '特約學員';
+
+        if (typeof window.totalViolationCount !== 'undefined') {
+            window.totalViolationCount++;
+        }
+
+        if (typeof window.violationDetails !== 'undefined') {
+            window.violationDetails["📱 手機未重新連線"] =
+                (window.violationDetails["📱 手機未重新連線"] || 0) + 1;
+        }
+
+        socket.emit('flip_failed', {
+            name: myName,
+            roomId: getTutorRoomCode(),
+            reason: '手機未重新連線 / 未完成翻轉'
+        });
+
+        emitTutorViolation({
+            name: myName,
+            type: '📱 手機未重新連線 / 未完成翻轉，第二堂課開始自動退出',
+            image: null,
+            roomId: getTutorRoomCode()
+        });
+
+        alert('🚨 第二堂課已開始，但你尚未完成手機重新連線與翻轉，系統將自動退出教室。');
+
+        if (typeof window.endSession === 'function') {
+            window.endSession();
+        } else {
+            window.location.href = 'index.html';
+        }
+
+        return;
+    }
+}
+
 // 進入休息或課程結束時播放下課音效
 const classEndKey = `${previousPhase}->${phase}-${state.period || 1}`;
 
