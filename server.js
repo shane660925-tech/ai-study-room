@@ -4776,6 +4776,15 @@ broadcastUpdateRank();
 
     console.log('[mobile_sync_update]', data);
 
+    const targetTutorRoom =
+    data?.roomId ||
+    data?.room ||
+    data?.roomCode;
+
+if (targetTutorRoom) {
+    io.to(targetTutorRoom).emit('mobile_sync_update', data);
+}
+
     // 手機 QR 連動：優先送回掃 QR 的那台電腦
     if (data?.syncToken) {
         io.to(data.syncToken).emit('mobile_sync_update', data);
