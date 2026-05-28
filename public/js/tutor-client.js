@@ -928,26 +928,6 @@ window.currentTutorPhase = phase;
 window.currentTutorPeriod = Number(state.period || 1);
 window.currentTutorRemainingSeconds = Number(state.remainingSeconds || 0);
 
-const tutorIsPausedForMobile =
-    phase === 'WAITING' ||
-    phase === 'REST' ||
-    phase === 'BREAK' ||
-    phase === 'ENDED';
-
-const tutorStudentName =
-    localStorage.getItem('studyVerseUser') ||
-    document.getElementById('inputName')?.value ||
-    window.myUsername ||
-    '特約學員';
-
-socket.emit('mobile_sync_update', {
-    type: 'PAUSE_STATE_CHANGED',
-    studentName: tutorStudentName,
-    isPaused: tutorIsPausedForMobile,
-    phase,
-    syncToken: socket.id
-});
-
     const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
     const secs = (remaining % 60).toString().padStart(2, '0');
 
@@ -1047,7 +1027,7 @@ if (
 socket.emit('mobile_sync_update', {
     type: 'FORCE_DISCONNECT',
     studentName: tutorStudentName,
-    reason: 'TUTOR_CLASS_REST_STARTED',
+    reason: 'TUTOR_REST_STARTED',
     roomId: getTutorRoomCode()
 });
 

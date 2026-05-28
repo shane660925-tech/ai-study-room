@@ -95,7 +95,6 @@
     
     // 🚀 新增：紀錄目前是否為 AI 休息時間
     let isAIPaused = false;
-let currentTutorPhase = null;
 
     socket.on('mobile_sync_update', (data) => {
         if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
@@ -109,106 +108,10 @@ isAIPaused = false;
             document.getElementById('setupView').classList.remove('hidden');
             alert("✅ 電腦端自習已結束！手機連動已斷開。");
         }
-        // 🚀 新增：接收來自電腦端的休息狀態同步
-        else if (data.type === 'PAUSE_STATE_CHANGED' && data.studentName === studentName) {
-            isAIPaused = data.isPaused;
-            if (isAIPaused) {
-                // ☕ 進入休息時間：清除倒數、隱藏紅屏、顯示綠屏並更改文字
-                if (flipWarningTimer) {
-                    clearInterval(flipWarningTimer);
-                    flipWarningTimer = null;
-                }
-                
-                // 強制設為安全狀態，確保上課一恢復若手機朝上能立刻觸發違規
-                hasFlipped = true; 
-                
-                document.getElementById('warningOverlay').classList.add('hidden');
-                document.getElementById('flippedOverlay').classList.remove('hidden');
-                
-                document.querySelector('#flippedOverlay h1').innerText = "☕ 休息時間";
-                document.querySelector('#flippedOverlay p.text-green-300').innerText = "可自由使用手機，AI 豁免中";
-                document.querySelector('#flippedOverlay p.text-xs').innerText = "上課鐘響後，請務必將手機蓋回桌面";
-            } else {
-                // 📚 恢復上課：把綠屏文字改回預設嚴格狀態
-                document.querySelector('#flippedOverlay h1').innerText = "防護罩已啟動";
-                document.querySelector('#flippedOverlay p.text-green-300').innerText = "AI 豁免生效中";
-                document.querySelector('#flippedOverlay p.text-xs').innerText = "請保持手機朝下 ‧ 專注看電腦螢幕";
-            }
-        }
     });
-
-    function applyTutorPhaseToMobile(state) {
-    if (!state) return;
-
-    const phase = state.phase || 'WAITING';
-    currentTutorPhase = phase;
-
-    isAIPaused =
-        phase === 'WAITING' ||
-        phase === 'REST' ||
-        phase === 'BREAK' ||
-        phase === 'ENDED';
-
-    if (isAIPaused) {
-        if (flipWarningTimer) {
-            clearInterval(flipWarningTimer);
-            flipWarningTimer = null;
-        }
-
-        hasFlipped = true;
-
-        const warningOverlay = document.getElementById('warningOverlay');
-        const flippedOverlay = document.getElementById('flippedOverlay');
-
-        if (warningOverlay) warningOverlay.classList.add('hidden');
-        if (flippedOverlay) flippedOverlay.classList.remove('hidden');
-
-        const title = document.querySelector('#flippedOverlay h1');
-        const subtitle = document.querySelector('#flippedOverlay p.text-green-300');
-        const hint = document.querySelector('#flippedOverlay p.text-xs');
-
-        if (title) title.innerText = '☕ 休息時間';
-        if (subtitle) subtitle.innerText = '可自由使用手機，AI 豁免中';
-        if (hint) hint.innerText = '上課鐘響後，請務必將手機蓋回桌面';
-    } else {
-        const title = document.querySelector('#flippedOverlay h1');
-        const subtitle = document.querySelector('#flippedOverlay p.text-green-300');
-        const hint = document.querySelector('#flippedOverlay p.text-xs');
-
-        if (title) title.innerText = '防護罩已啟動';
-        if (subtitle) subtitle.innerText = 'AI 豁免生效中';
-        if (hint) hint.innerText = '請保持手機朝下 ‧ 專注看電腦螢幕';
-    }
-}
-
-socket.on('tutor_timer_sync', applyTutorPhaseToMobile);
 
     function handleOrientation(event) {
         if (event.beta === null) return;
-
-const urlParamsForPhase = new URLSearchParams(window.location.search);
-const isTutorMobile = urlParamsForPhase.get('target') === 'tutor';
-
-if (isTutorMobile && currentTutorPhase === null) {
-    return;
-}
-
-if (isAIPaused) {
-    if (flipWarningTimer) {
-        clearInterval(flipWarningTimer);
-        flipWarningTimer = null;
-    }
-
-    hasFlipped = true;
-
-    const warningOverlay = document.getElementById('warningOverlay');
-    const flippedOverlay = document.getElementById('flippedOverlay');
-
-    if (warningOverlay) warningOverlay.classList.add('hidden');
-    if (flippedOverlay) flippedOverlay.classList.remove('hidden');
-
-    return;
-}
 
         const isFaceDown = Math.abs(event.beta) > 130;
         const urlParams = new URLSearchParams(window.location.search);
@@ -382,10 +285,6 @@ if (urlParams.get('target') === 'tutor' && tutorRoomCode) {
         deviceType: 'mobile'
     });
 
-    socket.emit('request_tutor_timer_sync', tutorRoomCode);
-    setInterval(() => {
-    socket.emit('request_tutor_timer_sync', tutorRoomCode);
-}, 1000);
 }
                 socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
                 const badge = document.getElementById('connectionBadge');
