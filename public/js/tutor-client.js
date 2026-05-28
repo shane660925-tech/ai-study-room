@@ -915,6 +915,57 @@ function forceHideBreakButton() {
     });
 }
 
+function showTutorReconnectQRModal() {
+    const oldModal = document.getElementById('tutorReconnectQRModal');
+    if (oldModal) oldModal.remove();
+
+    const roomCode = getTutorRoomCode();
+    const studentName =
+        localStorage.getItem('studyVerseUser') ||
+        document.getElementById('inputName')?.value ||
+        window.myUsername ||
+        '特約學員';
+
+    const syncToken = socket?.id || '';
+    const mobileUrl =
+        `${window.location.origin}/mobile.html?name=${encodeURIComponent(studentName)}&sync=${encodeURIComponent(syncToken)}&target=tutor&room=${encodeURIComponent(roomCode)}`;
+
+    const modal = document.createElement('div');
+    modal.id = 'tutorReconnectQRModal';
+    modal.className = 'fixed inset-0 z-[10050] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6';
+
+    modal.innerHTML = `
+        <div class="bg-[#111827] border-2 border-amber-500/50 rounded-3xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(245,158,11,0.35)]">
+            <div class="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                <i class="fas fa-mobile-alt text-4xl text-amber-400 animate-pulse"></i>
+            </div>
+
+            <h2 class="text-3xl font-black text-white mb-3">下一堂課即將開始</h2>
+            <p class="text-amber-200 text-sm mb-6 leading-relaxed">
+                請重新掃描 QR Code，並將手機螢幕朝下翻轉，完成第二堂課前驗證。
+            </p>
+
+            <div class="bg-white p-4 rounded-2xl mx-auto w-fit mb-6">
+                <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(mobileUrl)}"
+                    class="w-[220px] h-[220px]"
+                    alt="手機重新連線 QR Code"
+                >
+            </div>
+
+            <div id="tutorReconnectStatus" class="bg-yellow-500/10 border border-yellow-500/40 text-yellow-300 text-sm font-black rounded-xl py-3 px-4">
+                🟡 等待手機重新連線
+            </div>
+
+            <p class="text-[10px] text-gray-500 mt-5 break-all">
+                ${mobileUrl}
+            </p>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
 function applyTutorTimerSyncToStudent(state) {
     if (!state) return;
 
@@ -980,6 +1031,18 @@ const shouldStartCountdown =
     countdownPhase &&
     remaining <= 4 &&
     remaining > 0;
+
+    const reconnectQRKey = `${phase}-${state.period || 1}`;
+
+if (
+    (phase === 'REST' || phase === 'BREAK') &&
+    remaining <= 60 &&
+    remaining > 0 &&
+    window.lastTutorReconnectQRKey !== reconnectQRKey
+) {
+    window.lastTutorReconnectQRKey = reconnectQRKey;
+    showTutorReconnectQRModal();
+}
 
 // 新的一輪倒數開始
 if (
