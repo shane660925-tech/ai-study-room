@@ -795,7 +795,7 @@ window.isLeaveSeatActive = false; // 離座鎖定狀態
 
 document.addEventListener('CameraViolation', (e) => {
     // 🛑 【豁免機制】如果是休息時間，無視所有鏡頭違規 (離座、趴睡、手機)
-    if (window.isAIPaused) return;
+    if (window.isAIPaused || window.isTutorReconnectKicking) return;
 
     const { name, reason } = e.detail; 
 
@@ -912,7 +912,7 @@ function showLeaveSeatModal() {
 
 document.addEventListener('TabSwitchedViolation', (e) => {
     // 🛑 【豁免機制】休息時間切換分頁，不計違規
-    if (window.isAIPaused) return;
+    if (window.isAIPaused || window.isTutorReconnectKicking) return;
 
     const { name } = e.detail;
     
@@ -1129,6 +1129,8 @@ if (
         window.currentPhoneFlipped === true;
 
     if (!isReconnectReady) {
+        window.isTutorReconnectKicking = true;
+window.isAIPaused = true;
         const myName =
             localStorage.getItem('studyVerseUser') ||
             document.getElementById('inputName')?.value ||
