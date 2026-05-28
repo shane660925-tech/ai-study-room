@@ -430,32 +430,33 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 }
 
 /* ===========================================================
-   Mobile Lobby Phase 2-6 Revised
-   QR 大卡橫滑 + 工具入口 2 欄短卡
+   Mobile Lobby Phase 2-6 Final
+   QR 橫向滑動 + 工具入口 2 欄短卡
    =========================================================== */
 
 @media (max-width: 640px) {
     #lobby-tool-carousel {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex !important;
+        flex-wrap: wrap;
         gap: 14px !important;
     }
 
-    /* 前兩張：手機連動 QR / LINE 綁定 QR，維持大卡 */
+    /* 上排：前兩張 QR code 大卡橫向滑動 */
     #lobby-tool-carousel > *:nth-child(1),
     #lobby-tool-carousel > *:nth-child(2) {
-        min-height: 340px !important;
-        grid-column: span 1;
+        min-width: 82%;
+        max-width: 82%;
+        height: 340px !important;
+        flex-shrink: 0;
+        scroll-snap-align: start;
         border-radius: 24px !important;
     }
 
-    /* 後兩張：單機翻轉 / 課程商店，變短卡 */
-    #lobby-tool-carousel > *:nth-child(3),
-    #lobby-tool-carousel > *:nth-child(4) {
-        min-height: 180px !important;
-        height: 180px !important;
-        border-radius: 24px !important;
-        overflow: hidden;
+    #lobby-tool-carousel {
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
     }
 
     #syncModule,
@@ -466,25 +467,61 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 
     #qrcode,
     #lineBindQrcode {
-        transform: scale(0.92);
-        margin: 4px auto;
+        transform: scale(1);
+        margin: 6px auto;
+    }
+
+    /* 下排：單機翻轉 + 課程商店 */
+    #lobby-tool-carousel > *:nth-child(3),
+    #lobby-tool-carousel > *:nth-child(4) {
+        width: calc(50% - 7px) !important;
+        min-width: calc(50% - 7px) !important;
+        max-width: calc(50% - 7px) !important;
+        height: 168px !important;
+        flex-shrink: 0;
+        border-radius: 22px !important;
+        overflow: hidden;
     }
 
     #intro-standalone-mode,
     #course-store-card {
-        height: 180px !important;
-        padding: 18px 14px !important;
+        height: 168px !important;
+        padding: 16px 12px !important;
+        border-radius: 22px !important;
+    }
+
+    #intro-standalone-mode {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        text-align: center;
+    }
+
+    #intro-standalone-mode i,
+    #course-store-card i {
+        font-size: 1.45rem !important;
     }
 
     #intro-standalone-mode h3,
     #course-store-card h3 {
-        font-size: 1.15rem !important;
-        line-height: 1.25 !important;
+        font-size: 1rem !important;
+        line-height: 1.2 !important;
+        margin-bottom: 6px !important;
     }
 
     #intro-standalone-mode p,
     #course-store-card p {
+        font-size: 10px !important;
+        line-height: 1.4 !important;
+        margin-bottom: 8px !important;
+    }
+
+    #course-store-card button,
+    #course-store-card a,
+    #intro-standalone-mode button,
+    #intro-standalone-mode a {
         font-size: 11px !important;
-        line-height: 1.45 !important;
+        padding: 8px 10px !important;
+        border-radius: 12px !important;
     }
 }
