@@ -14,6 +14,9 @@ window.vibrationInterval = null;
 // 🚀 新增：音效狀態鎖與前次狀態紀錄 (音效物件將在計時器內動態載入)
 window.hasPlayedStartAudio = false; 
 window.previousClassStatus = null;  
+window.currentTutorPhase = 'WAITING';
+window.currentTutorPeriod = 1;
+window.currentTutorRemainingSeconds = 0;
 
 // 保險起見，宣告全域 AI 暫停變數，準備與計時器連動
 if (typeof window.isAIPaused === 'undefined') window.isAIPaused = false;
@@ -918,8 +921,12 @@ function applyTutorTimerSyncToStudent(state) {
     const remaining = Number(state.remainingSeconds || 0);
     const total = Number(state.totalSeconds || 1);
 
-    const phase = state.phase;
-const previousPhase = window.previousClassStatus;
+    const phase = state.phase || 'WAITING';
+const previousPhase = window.currentTutorPhase || window.previousClassStatus || null;
+
+window.currentTutorPhase = phase;
+window.currentTutorPeriod = Number(state.period || 1);
+window.currentTutorRemainingSeconds = Number(state.remainingSeconds || 0);
 
     const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
     const secs = (remaining % 60).toString().padStart(2, '0');
