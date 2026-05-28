@@ -248,3 +248,47 @@
         width: 100%;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-2
+   index.html AI 教室卡手機橫向滑動
+   =========================================================== */
+
+@media (max-width: 640px) {
+    /* AI 專業自習空間：手機改橫向滑動 */
+    #intro-ai-rooms .grid.grid-cols-1.md\:grid-cols-3 {
+        display: flex !important;
+        overflow-x: auto;
+        gap: 14px !important;
+        padding-bottom: 6px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #intro-ai-rooms .grid.grid-cols-1.md\:grid-cols-3 > * {
+        min-width: 82%;
+        flex-shrink: 0;
+        scroll-snap-align: start;
+    }
+
+    #intro-ai-rooms .room-card {
+        padding: 20px 16px !important;
+        border-radius: 24px !important;
+        min-height: 230px;
+    }
+
+    #intro-ai-rooms .room-card h3 {
+        font-size: 1.25rem !important;
+        line-height: 1.25;
+    }
+
+    #intro-ai-rooms .room-card p {
+        font-size: 12px !important;
+        line-height: 1.5;
+    }
+
+    #course-list-container > div {
+        min-height: 230px !important;
+        border-radius: 24px !important;
+    }
+}
