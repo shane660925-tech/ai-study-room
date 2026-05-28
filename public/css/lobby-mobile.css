@@ -307,3 +307,46 @@
     border-radius: 24px !important;
 }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-3
+   index.html 社群組隊卡手機版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #intro-team-system .grid.grid-cols-1.md\:grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    #intro-team-system .room-card {
+        padding: 18px 14px !important;
+        border-radius: 24px !important;
+        min-height: 320px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #intro-team-system .room-card .w-12 {
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 22px !important;
+        font-size: 1.75rem !important;
+    }
+
+    #intro-team-system .room-card h3 {
+        font-size: 1.45rem !important;
+        line-height: 1.25 !important;
+    }
+
+    #intro-team-system .room-card p {
+        font-size: 14px !important;
+        line-height: 1.6 !important;
+    }
+
+    #intro-team-system .room-card > div:last-child {
+        margin-top: auto;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+    }
+}
