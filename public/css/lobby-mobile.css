@@ -430,51 +430,61 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 }
 
 /* ===========================================================
-   Mobile Lobby Phase 2-6
-   index.html 底部工具卡橫向滑動
-   手機連動 / LINE 綁定 / 單機翻轉 / 課程商店
+   Mobile Lobby Phase 2-6 Revised
+   QR 大卡橫滑 + 工具入口 2 欄短卡
    =========================================================== */
 
 @media (max-width: 640px) {
     #lobby-tool-carousel {
-        display: flex !important;
-        flex-direction: row !important;
-        overflow-x: auto;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 14px !important;
-        padding-bottom: 8px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
     }
 
-    #lobby-tool-carousel > * {
-        min-width: 82%;
-        max-width: 82%;
-        flex-shrink: 0;
-        scroll-snap-align: start;
-    }
-
-    #lobby-tool-carousel > div,
-    #lobby-tool-carousel > a,
-    #lobby-tool-carousel #course-store-card {
-        min-height: 360px !important;
-    }
-
-    #syncModule,
-    #lineBindModule,
-    #course-store-card,
-    #intro-standalone-mode {
-        height: 320px !important;
+    /* 前兩張：手機連動 QR / LINE 綁定 QR，維持大卡 */
+    #lobby-tool-carousel > *:nth-child(1),
+    #lobby-tool-carousel > *:nth-child(2) {
+        min-height: 340px !important;
+        grid-column: span 1;
         border-radius: 24px !important;
+    }
+
+    /* 後兩張：單機翻轉 / 課程商店，變短卡 */
+    #lobby-tool-carousel > *:nth-child(3),
+    #lobby-tool-carousel > *:nth-child(4) {
+        min-height: 180px !important;
+        height: 180px !important;
+        border-radius: 24px !important;
+        overflow: hidden;
     }
 
     #syncModule,
     #lineBindModule {
+        height: 340px !important;
         justify-content: center;
     }
 
     #qrcode,
     #lineBindQrcode {
-        transform: scale(1.08);
-        margin: 8px 0;
+        transform: scale(0.92);
+        margin: 4px auto;
+    }
+
+    #intro-standalone-mode,
+    #course-store-card {
+        height: 180px !important;
+        padding: 18px 14px !important;
+    }
+
+    #intro-standalone-mode h3,
+    #course-store-card h3 {
+        font-size: 1.15rem !important;
+        line-height: 1.25 !important;
+    }
+
+    #intro-standalone-mode p,
+    #course-store-card p {
+        font-size: 11px !important;
+        line-height: 1.45 !important;
     }
 }
