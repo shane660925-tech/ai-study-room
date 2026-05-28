@@ -99,6 +99,8 @@ let currentTutorPhase = null;
 
     socket.on('mobile_sync_update', (data) => {
         if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
+            window.removeEventListener('deviceorientation', handleOrientation);
+isAIPaused = false;
             if (flipWarningTimer) clearInterval(flipWarningTimer);
             hasFlipped = false;
             document.getElementById('flippedOverlay').classList.add('hidden');

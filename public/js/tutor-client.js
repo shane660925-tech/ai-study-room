@@ -1038,6 +1038,26 @@ if (
 ) {
     window.lastTutorClassEndKey = classEndKey;
 
+    const tutorStudentName =
+    localStorage.getItem('studyVerseUser') ||
+    document.getElementById('inputName')?.value ||
+    window.myUsername ||
+    '特約學員';
+
+socket.emit('mobile_sync_update', {
+    type: 'FORCE_DISCONNECT',
+    studentName: tutorStudentName,
+    reason: 'TUTOR_CLASS_REST_STARTED',
+    roomId: getTutorRoomCode()
+});
+
+sessionStorage.removeItem('mobileLinked');
+localStorage.removeItem('mobileLinked');
+window.isPhoneFlipped = false;
+window.currentPhoneFlipped = false;
+
+console.log('📱 [Tutor] 下課，已要求手機端斷線回首頁');
+
     if (window.activeTutorClassEndAudio) {
         window.activeTutorClassEndAudio.pause();
         window.activeTutorClassEndAudio.currentTime = 0;
