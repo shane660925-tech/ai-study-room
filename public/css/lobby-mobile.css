@@ -428,3 +428,53 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
     display: none;
 }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-6
+   index.html 底部工具卡橫向滑動
+   手機連動 / LINE 綁定 / 單機翻轉 / 課程商店
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #lobby-tool-carousel {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto;
+        gap: 14px !important;
+        padding-bottom: 8px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #lobby-tool-carousel > * {
+        min-width: 82%;
+        max-width: 82%;
+        flex-shrink: 0;
+        scroll-snap-align: start;
+    }
+
+    #lobby-tool-carousel > div,
+    #lobby-tool-carousel > a,
+    #lobby-tool-carousel #course-store-card {
+        min-height: 360px !important;
+    }
+
+    #syncModule,
+    #lineBindModule,
+    #course-store-card,
+    #intro-standalone-mode {
+        height: 320px !important;
+        border-radius: 24px !important;
+    }
+
+    #syncModule,
+    #lineBindModule {
+        justify-content: center;
+    }
+
+    #qrcode,
+    #lineBindQrcode {
+        transform: scale(1.08);
+        margin: 8px 0;
+    }
+}
