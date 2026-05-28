@@ -310,6 +310,24 @@ if (isAIPaused) {
             document.getElementById('displayName').innerText = name;
             
             if (syncToken) {
+                const tutorRoomCode =
+    urlParams.get('room') ||
+    urlParams.get('roomId') ||
+    urlParams.get('roomCode');
+
+if (urlParams.get('target') === 'tutor' && tutorRoomCode) {
+    socket.emit('join_tutor_room', {
+        name: studentName,
+        username: studentName,
+        roomId: tutorRoomCode,
+        room: tutorRoomCode,
+        roomCode: tutorRoomCode,
+        role: 'mobile',
+        deviceType: 'mobile'
+    });
+
+    socket.emit('request_tutor_timer_sync', tutorRoomCode);
+}
                 socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
                 const badge = document.getElementById('connectionBadge');
                 badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';

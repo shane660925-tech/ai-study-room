@@ -1308,7 +1308,7 @@ window.verifyAndEnterTutorRoom = async function() {
                 const syncToken = typeof socket !== 'undefined' ? socket.id : '';
 
                 const mobileUrl =
-                    `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}`;
+    `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}&target=tutor&room=${encodeURIComponent(roomCode)}`;
 
                 new QRCode(qrContainer, {
                     text: mobileUrl,
