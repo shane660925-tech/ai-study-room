@@ -1144,18 +1144,12 @@ if (
                 (window.violationDetails["📱 手機未重新連線"] || 0) + 1;
         }
 
-        socket.emit('flip_failed', {
-            name: myName,
-            roomId: getTutorRoomCode(),
-            reason: '手機未重新連線 / 未完成翻轉'
-        });
-
         emitTutorViolation({
-            name: myName,
-            type: '📱 手機未重新連線 / 未完成翻轉，第二堂課開始自動退出',
-            image: null,
-            roomId: getTutorRoomCode()
-        });
+    name: myName,
+    type: '📱 手機未重新連線 / 未完成翻轉，第二堂課開始自動退出',
+    image: null,
+    roomId: getTutorRoomCode()
+});
 
         const reconnectModal = document.getElementById('tutorReconnectQRModal');
 if (reconnectModal) reconnectModal.remove();
@@ -1178,12 +1172,18 @@ failModal.innerHTML = `
 `;
 document.body.appendChild(failModal);
 
-        setTimeout(() => {
-    if (typeof window.endSession === 'function') {
-        window.endSession();
-    } else {
-        window.location.href = 'index.html';
+        setTimeout(async () => {
+    try {
+        if (typeof window.endSession === 'function') {
+            await window.endSession();
+        }
+    } catch (err) {
+        console.error('手機未重連 endSession 失敗:', err);
     }
+
+    setTimeout(() => {
+        window.location.href = 'index.html';
+    }, 1200);
 }, 800);
 
         return;
