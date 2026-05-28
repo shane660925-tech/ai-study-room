@@ -350,3 +350,31 @@
         padding-bottom: 12px !important;
     }
 }
+/* ===========================================================
+   Mobile Lobby Phase 2-4
+   index.html 社群組隊卡標題不醜換行
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #intro-team-system .room-card h3 {
+        font-size: 1.2rem !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.04em;
+    }
+
+    #intro-team-system .room-card {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+
+    #intro-team-system .room-card p {
+        font-size: 12px !important;
+        line-height: 1.55 !important;
+    }
+
+    #intro-team-system .room-card > div:last-child {
+        font-size: 12px !important;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+}
