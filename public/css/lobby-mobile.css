@@ -1,0 +1,65 @@
+@charset "UTF-8";
+
+/* ===========================================================
+   STUDY VERSE - Mobile Lobby Responsive CSS
+   目前只處理 index.html 手機大廳 header
+   =========================================================== */
+
+@media (max-width: 640px) {
+    body {
+        overflow-x: hidden;
+    }
+
+    header {
+        height: auto !important;
+        min-height: 64px;
+        padding: 10px 12px !important;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    header > div:first-child {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    header h1 {
+        font-size: 1rem !important;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    header a[href="team-lobby.html"] {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 8px 10px !important;
+        font-size: 11px !important;
+        gap: 6px;
+    }
+
+    header > div:nth-child(2) {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    header > div:nth-child(2) > div:first-child {
+        align-items: flex-start;
+    }
+
+    header .border-l {
+        padding-left: 10px !important;
+    }
+
+    #navAvatar {
+        width: 36px !important;
+        height: 36px !important;
+    }
+
+    #notificationBell {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 14px !important;
+    }
+}
