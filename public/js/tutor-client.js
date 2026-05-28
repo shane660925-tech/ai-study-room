@@ -291,6 +291,12 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
 const reconnectStatus = document.getElementById('tutorReconnectStatus');
 
 if (reconnectModal && reconnectStatus) {
+    if (
+    window.currentTutorReconnectKey &&
+    data.reconnectKey !== window.currentTutorReconnectKey
+) {
+    return;
+}
     if (data.isFlipped === false) {
         reconnectStatus.className = 'bg-yellow-500/10 border border-yellow-500/40 text-yellow-300 text-sm font-black rounded-xl py-3 px-4';
         reconnectStatus.innerText = '🟡 已連線，等待翻轉';
@@ -952,8 +958,16 @@ function showTutorReconnectQRModal() {
         '特約學員';
 
     const syncToken = socket?.id || '';
-    const mobileUrl =
-        `${window.location.origin}/mobile.html?name=${encodeURIComponent(studentName)}&sync=${encodeURIComponent(syncToken)}&target=tutor&room=${encodeURIComponent(roomCode)}`;
+const reconnectKey = `tutor-reconnect-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+window.currentTutorReconnectKey = reconnectKey;
+window.currentTutorReconnectVerified = false;
+window.currentPhoneFlipped = false;
+sessionStorage.removeItem('mobileLinked');
+localStorage.removeItem('mobileLinked');
+
+const mobileUrl =
+        `${window.location.origin}/mobile.html?name=${encodeURIComponent(studentName)}&sync=${encodeURIComponent(syncToken)}&target=tutor&room=${encodeURIComponent(roomCode)}&reconnectKey=${encodeURIComponent(reconnectKey)}`;
 
     const modal = document.createElement('div');
     modal.id = 'tutorReconnectQRModal';

@@ -143,8 +143,18 @@ isAIPaused = false;
                 document.getElementById('flippedOverlay').classList.remove('hidden');
                 document.getElementById('warningOverlay').classList.add('hidden');
                 
-                socket.emit('update_status', { name: studentName, isFlipped: true });
-                socket.emit('mobile_sync_update', { type: 'FLIP_COMPLETED', studentName: studentName, syncToken: syncToken });
+                socket.emit('update_status', {
+    name: studentName,
+    isFlipped: true,
+    reconnectKey: urlParams.get('reconnectKey') || null,
+    deviceType: 'mobile'
+});
+                socket.emit('mobile_sync_update', {
+    type: 'FLIP_COMPLETED',
+    studentName: studentName,
+    syncToken: syncToken,
+    reconnectKey: urlParams.get('reconnectKey') || null
+});
 
                 if (syncToken) {
                     socket.emit('student_status_changed', { sync: syncToken, status: 'green', name: studentName });
@@ -165,11 +175,17 @@ isAIPaused = false;
                 flipWarningCount = 5;
                 document.getElementById('warningCounter').innerText = flipWarningCount;
                 
-                socket.emit('update_status', { name: studentName, isFlipped: false });
+                socket.emit('update_status', {
+    name: studentName,
+    isFlipped: false,
+    reconnectKey: urlParams.get('reconnectKey') || null,
+    deviceType: 'mobile'
+});
                 socket.emit('mobile_sync_update', {
     type: 'FLIP_WARNING',
     studentName: studentName,
-    syncToken: syncToken
+    syncToken: syncToken,
+    reconnectKey: urlParams.get('reconnectKey') || null
 });
 
                 if (syncToken) {
@@ -286,7 +302,11 @@ if (urlParams.get('target') === 'tutor' && tutorRoomCode) {
     });
 
 }
-                socket.emit('request_link_device', { syncToken: syncToken, studentName: name });
+                socket.emit('request_link_device', {
+    syncToken: syncToken,
+    studentName: name,
+    reconnectKey: urlParams.get('reconnectKey') || null
+});
                 const badge = document.getElementById('connectionBadge');
                 badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 已與主大廳連線，請翻轉';
                 badge.className = 'bg-green-500/20 text-green-400 text-[10px] px-3 py-1 rounded-full border border-green-500/30 font-bold uppercase tracking-tighter animate-pulse';
