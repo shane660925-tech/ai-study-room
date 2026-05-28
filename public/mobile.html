@@ -143,8 +143,13 @@ if (isAIPaused) {
         flipWarningTimer = null;
     }
 
-    document.getElementById('warningOverlay').classList.add('hidden');
-    document.getElementById('flippedOverlay').classList.remove('hidden');
+    hasFlipped = true;
+
+    const warningOverlay = document.getElementById('warningOverlay');
+    const flippedOverlay = document.getElementById('flippedOverlay');
+
+    if (warningOverlay) warningOverlay.classList.add('hidden');
+    if (flippedOverlay) flippedOverlay.classList.remove('hidden');
 
     return;
 }
