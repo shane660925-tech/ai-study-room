@@ -1157,13 +1157,34 @@ if (
             roomId: getTutorRoomCode()
         });
 
-        alert('🚨 第二堂課已開始，但你尚未完成手機重新連線與翻轉，系統將自動退出教室。');
+        const reconnectModal = document.getElementById('tutorReconnectQRModal');
+if (reconnectModal) reconnectModal.remove();
 
-        if (typeof window.endSession === 'function') {
-            window.endSession();
-        } else {
-            window.location.href = 'index.html';
-        }
+const failModal = document.createElement('div');
+failModal.id = 'tutorReconnectFailModal';
+failModal.className = 'fixed inset-0 z-[10080] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6';
+failModal.innerHTML = `
+    <div class="bg-[#111827] border-2 border-red-500/60 rounded-3xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.4)]">
+        <i class="fas fa-triangle-exclamation text-6xl text-red-500 mb-6 animate-pulse"></i>
+        <h2 class="text-3xl font-black text-white mb-3">手機未完成重新連線</h2>
+        <p class="text-red-200 text-sm leading-relaxed mb-6">
+            第二堂課已開始，但你尚未完成手機重新連線與翻轉。<br>
+            系統正在產生學習總結並退出教室。
+        </p>
+        <div class="text-xs text-gray-500 font-mono animate-pulse">
+            正在返回大廳...
+        </div>
+    </div>
+`;
+document.body.appendChild(failModal);
+
+        setTimeout(() => {
+    if (typeof window.endSession === 'function') {
+        window.endSession();
+    } else {
+        window.location.href = 'index.html';
+    }
+}, 800);
 
         return;
     }
