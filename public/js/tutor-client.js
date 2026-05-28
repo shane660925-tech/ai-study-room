@@ -980,6 +980,9 @@ const mobileUrl =
             </div>
 
             <h2 class="text-3xl font-black text-white mb-3">下一堂課即將開始</h2>
+            <div id="tutorReconnectCountdown" class="text-5xl font-black text-amber-300 mb-4 font-mono">
+    -- 秒
+</div>
             <p class="text-amber-200 text-sm mb-6 leading-relaxed">
                 請重新掃描 QR Code，並將手機螢幕朝下翻轉，完成第二堂課前驗證。
             </p>
@@ -1081,6 +1084,15 @@ if (
 ) {
     window.lastTutorReconnectQRKey = reconnectQRKey;
     showTutorReconnectQRModal();
+}
+
+const reconnectCountdownEl = document.getElementById('tutorReconnectCountdown');
+if (
+    reconnectCountdownEl &&
+    (phase === 'REST' || phase === 'BREAK') &&
+    remaining > 0
+) {
+    reconnectCountdownEl.innerText = `${remaining} 秒`;
 }
 
 // 新的一輪倒數開始
