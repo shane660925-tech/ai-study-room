@@ -312,9 +312,17 @@ if (reconnectModal && reconnectStatus) {
         window.currentPhoneFlipped = true;
 
         setTimeout(() => {
-            const modal = document.getElementById('tutorReconnectQRModal');
-            if (modal) modal.remove();
-        }, 800);
+    const modal = document.getElementById('tutorReconnectQRModal');
+
+    if (modal) modal.remove();
+
+    // 🔊 關閉 QR 倒數音效
+    if (window.tutorReconnectAudio) {
+        window.tutorReconnectAudio.pause();
+        window.tutorReconnectAudio.currentTime = 0;
+        window.tutorReconnectAudio = null;
+    }
+}, 800);
     }
 }
                 
@@ -984,7 +992,7 @@ const mobileUrl =
     -- 秒
 </div>
             <p class="text-amber-200 text-sm mb-6 leading-relaxed">
-                請重新掃描 QR Code，並將手機螢幕朝下翻轉，完成第二堂課前驗證。
+                請重新掃描 QR Code，並將手機螢幕朝下翻轉，完成下一堂課前驗證。
             </p>
 
             <div class="bg-white p-4 rounded-2xl mx-auto w-fit mb-6">
@@ -1006,6 +1014,18 @@ const mobileUrl =
     `;
 
     document.body.appendChild(modal);
+
+    if (window.tutorReconnectAudio) {
+    window.tutorReconnectAudio.pause();
+    window.tutorReconnectAudio.currentTime = 0;
+}
+
+window.tutorReconnectAudio = new Audio('/sounds/reconnect_countdown.mp3');
+window.tutorReconnectAudio.loop = true;
+window.tutorReconnectAudio.volume = 0.7;
+window.tutorReconnectAudio.play().catch(err => {
+    console.log('重新連線倒數音效播放失敗:', err);
+});
 }
 
 function applyTutorTimerSyncToStudent(state) {
@@ -1167,6 +1187,12 @@ window.isAIPaused = true;
 
         const reconnectModal = document.getElementById('tutorReconnectQRModal');
 if (reconnectModal) reconnectModal.remove();
+
+if (window.tutorReconnectAudio) {
+    window.tutorReconnectAudio.pause();
+    window.tutorReconnectAudio.currentTime = 0;
+    window.tutorReconnectAudio = null;
+}
 
 const failModal = document.createElement('div');
 failModal.id = 'tutorReconnectFailModal';
