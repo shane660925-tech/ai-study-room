@@ -378,3 +378,30 @@
         padding-right: 8px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-5
+   index.html 側邊欄手機橫向滑動
+   =========================================================== */
+
+@media (max-width: 640px) {
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 {
+        gap: 18px !important;
+    }
+
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside {
+        display: flex !important;
+        overflow-x: auto;
+        gap: 14px !important;
+        padding-bottom: 6px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > * {
+        min-width: 82%;
+        flex-shrink: 0;
+        scroll-snap-align: start;
+        border-radius: 24px !important;
+    }
+}
