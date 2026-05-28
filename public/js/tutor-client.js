@@ -286,6 +286,31 @@ console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
             if (data.name === myName && data.isFlipped !== undefined) {
                 // 更新電腦端認知的「手機狀態」
                 window.currentPhoneFlipped = data.isFlipped;
+
+                const reconnectModal = document.getElementById('tutorReconnectQRModal');
+const reconnectStatus = document.getElementById('tutorReconnectStatus');
+
+if (reconnectModal && reconnectStatus) {
+    if (data.isFlipped === false) {
+        reconnectStatus.className = 'bg-yellow-500/10 border border-yellow-500/40 text-yellow-300 text-sm font-black rounded-xl py-3 px-4';
+        reconnectStatus.innerText = '🟡 已連線，等待翻轉';
+    }
+
+    if (data.isFlipped === true) {
+        reconnectStatus.className = 'bg-green-500/10 border border-green-500/40 text-green-300 text-sm font-black rounded-xl py-3 px-4';
+        reconnectStatus.innerText = '🟢 已翻轉完成，準備進入下一堂課';
+
+        sessionStorage.setItem('mobileLinked', 'true');
+        localStorage.setItem('mobileLinked', 'true');
+        window.isPhoneFlipped = true;
+        window.currentPhoneFlipped = true;
+
+        setTimeout(() => {
+            const modal = document.getElementById('tutorReconnectQRModal');
+            if (modal) modal.remove();
+        }, 800);
+    }
+}
                 
                 if (!window.isAIPaused && !window.currentPhoneFlipped) {
                     // 情境 A：正在上課中，學生卻把手機翻開 -> 立刻啟動電腦端倒數
