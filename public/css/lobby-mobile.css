@@ -63,3 +63,73 @@
         border-radius: 14px !important;
     }
 }
+
+/* 組隊大廳 team-lobby.html：手機 header 修正 */
+@media (max-width: 640px) {
+    header a[href="index.html"] {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 8px 10px !important;
+        font-size: 11px !important;
+        gap: 6px;
+    }
+
+    header a[href="index.html"] i {
+        flex-shrink: 0;
+    }
+}
+
+/* ===========================================================
+   Mobile Lobby Phase 1-2
+   team-lobby.html 主內容手機排版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    main {
+        padding: 16px 14px 96px !important;
+        gap: 24px !important;
+    }
+
+    main section {
+        margin-top: 0 !important;
+    }
+
+    /* 組隊大廳：我的小隊狀態標題 */
+    main section.flex.flex-col.gap-6 > div:first-child {
+        align-items: center;
+        gap: 10px;
+    }
+
+    main section.flex.flex-col.gap-6 h2 {
+        font-size: 1.45rem !important;
+        line-height: 1.2;
+    }
+
+    /* 統計卡：手機保留 2 欄 */
+    main section.flex.flex-col.gap-6 .grid.grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    main section.flex.flex-col.gap-6 .grid.grid-cols-2 > div {
+        padding: 18px 12px !important;
+        min-height: 138px;
+        border-radius: 22px !important;
+    }
+
+    main section.flex.flex-col.gap-6 .grid.grid-cols-2 > div .w-10 {
+        width: 42px !important;
+        height: 42px !important;
+        margin-bottom: 10px !important;
+    }
+
+    main section.flex.flex-col.gap-6 .grid.grid-cols-2 > div p {
+        font-size: 10px !important;
+        line-height: 1.25;
+    }
+
+    main section.flex.flex-col.gap-6 .grid.grid-cols-2 > div h4 {
+        font-size: 1.8rem !important;
+        line-height: 1.1;
+    }
+}
