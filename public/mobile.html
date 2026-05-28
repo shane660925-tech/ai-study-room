@@ -136,7 +136,18 @@
 
     function handleOrientation(event) {
         if (event.beta === null) return;
-        if (isAIPaused) return;
+
+if (isAIPaused) {
+    if (flipWarningTimer) {
+        clearInterval(flipWarningTimer);
+        flipWarningTimer = null;
+    }
+
+    document.getElementById('warningOverlay').classList.add('hidden');
+    document.getElementById('flippedOverlay').classList.remove('hidden');
+
+    return;
+}
 
         const isFaceDown = Math.abs(event.beta) > 130;
         const urlParams = new URLSearchParams(window.location.search);
