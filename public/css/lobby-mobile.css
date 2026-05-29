@@ -624,3 +624,56 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         font-size: 12px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-2
+   登入 / 註冊彈窗手機版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #loginOverlay,
+    #registerOverlay {
+        padding: 12px !important;
+        align-items: flex-start !important;
+        padding-top: 72px !important;
+    }
+
+    #authBox,
+    #registerBox {
+        width: 100% !important;
+        max-width: none !important;
+        max-height: calc(100vh - 96px) !important;
+        padding: 22px 16px !important;
+        border-radius: 24px !important;
+    }
+
+    #authBox h1,
+    #registerBox h1 {
+        font-size: 1.65rem !important;
+    }
+
+    #authRoleStep,
+    #registerTypeStep {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    #authRoleStep button,
+    #registerTypeStep button {
+        padding: 18px !important;
+        border-radius: 22px !important;
+    }
+
+    #authBox input,
+    #registerBox input,
+    #registerBox select,
+    #registerBox textarea {
+        padding: 13px !important;
+        font-size: 14px !important;
+    }
+
+    #studentAuthPanel .flex.gap-4,
+    #teacherAuthPanel .flex.gap-4 {
+        gap: 10px !important;
+    }
+}
