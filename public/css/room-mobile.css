@@ -248,39 +248,37 @@
         height: 46px !important;
     }
 
-    /* =========================
-   Mobile Header Layout
-========================= */
+    /* 手機版：日期 + 結束自習 + 大時鐘 */
+#mobileRoomTopMount > div:first-child {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    align-items: center !important;
+    gap: 8px 12px !important;
+    padding: 18px 18px 14px !important;
+}
 
-#mobileRoomTopMount {
-    display: flex !important;
-    flex-direction: column !important;
+#clockDate {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    font-size: 13px !important;
+    margin-bottom: 0 !important;
 }
 
 .mobile-end-btn {
-    align-self: flex-end !important;
-
-    margin:
-        -56px 18px 12px 0 !important;
-
-    padding: 10px 16px !important;
-
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    padding: 10px 14px !important;
     border-radius: 14px !important;
-
     font-size: 14px !important;
+    white-space: nowrap !important;
 }
-
-/* 日期 */
-
-#clockDate {
-    font-size: 13px !important;
-}
-
-/* 時間 */
 
 #clockTime {
-    font-size: 58px !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    font-size: 52px !important;
     line-height: 1 !important;
-    margin-top: 6px !important;
+    margin-top: 8px !important;
+    letter-spacing: -0.04em !important;
 }
 }
