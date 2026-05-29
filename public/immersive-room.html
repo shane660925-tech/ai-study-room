@@ -287,10 +287,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabPanels = aside.children[3];
     const profileBlock = aside.children[4];
 
-    if (clockBlock) topMount.appendChild(clockBlock);
-    if (timerBlock) topMount.appendChild(timerBlock);
     const endBtn = document.getElementById('endSessionBtn');
-if (clockBlock && endBtn) clockBlock.appendChild(endBtn);
+
+if (clockBlock) topMount.appendChild(clockBlock);
+
+if (endBtn) {
+    endBtn.classList.add('mobile-end-btn');
+    topMount.appendChild(endBtn);
+}
+
+if (timerBlock) topMount.appendChild(timerBlock);
 
     if (tabButtons) statsMount.appendChild(tabButtons);
     if (tabPanels) statsMount.appendChild(tabPanels);
