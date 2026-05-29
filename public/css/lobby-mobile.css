@@ -908,3 +908,27 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         line-height: 1.25 !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-8
+   小組競賽大廳彈窗固定高度
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #joinTeamModal > div {
+        height: calc(100vh - 170px) !important;
+        min-height: 560px !important;
+        max-height: 680px !important;
+    }
+
+    #joinTeamModal > div > div:nth-child(2) {
+        flex: 1 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #teamListContainer {
+        min-height: 100% !important;
+    }
+}
