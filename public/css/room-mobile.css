@@ -30,7 +30,7 @@
     }
 
     #mobileRoomStatsMount .flex-1 {
-    min-height: 180px !important;
+    min-height: auto !important;
     flex: none !important;
 }
 
