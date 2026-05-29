@@ -984,3 +984,23 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         padding: 10px 8px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-10
+   等待審核彈窗置中
+   =========================================================== */
+
+@media (max-width: 640px) {
+
+    #waitingApprovalModal {
+        align-items: center !important;
+        justify-content: center !important;
+        padding-top: 0 !important;
+    }
+
+    #waitingApprovalModal > div {
+        width: calc(100% - 24px) !important;
+        max-width: 520px !important;
+    }
+
+}
