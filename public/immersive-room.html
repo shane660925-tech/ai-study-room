@@ -205,9 +205,19 @@
     <main class="flex-1 flex flex-col relative bg-[#05070a]">
         <header class="h-16 flex justify-between items-center px-6 border-b border-white/5 bg-[#05070a]/50 backdrop-blur-md z-10">
             <div class="flex items-center gap-3">
-                <h2 class="text-lg font-bold text-white tracking-tight">虛擬共學空間</h2>
-                <span id="modeLabel" class="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase">MODE: 連線中</span>
-            </div>
+    <div class="min-w-0">
+        <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-tight">虛擬共學空間</h2>
+            <span id="modeLabel" class="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase">MODE: 連線中</span>
+        </div>
+
+        <div id="mobileRoomMeta" class="hidden mt-2 text-xs font-bold text-gray-400">
+            <span id="mobileTimerDisplay">00:00</span>
+            <span class="mx-2 text-gray-600">｜</span>
+            <span class="text-green-400">● 專注中</span>
+        </div>
+    </div>
+</div>
             
             <div id="breakButtons" class="hidden flex gap-2">
                 <button onclick="requestBreak('toilet')" class="bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white text-[10px] px-3 py-1.5 rounded-full border border-blue-600/30 transition-all font-bold">🚽 洗手間</button>
@@ -263,6 +273,28 @@
 
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
     </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const desktopTimer = document.getElementById('myTimerDisplay');
+        const mobileTimer = document.getElementById('mobileTimerDisplay');
+
+        if (!desktopTimer || !mobileTimer) return;
+
+        const syncMobileTimer = () => {
+            mobileTimer.innerText = desktopTimer.innerText || '00:00';
+        };
+
+        syncMobileTimer();
+
+        const observer = new MutationObserver(syncMobileTimer);
+        observer.observe(desktopTimer, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    });
+</script>
 
     <script>
         // 🚀【核心攔截器】：攔截 /api/save-focus 請求，強制加上 flip-mode 讓後端減半計分
