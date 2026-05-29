@@ -202,4 +202,65 @@
         position: static !important;
         border-top: 1px solid rgba(255,255,255,0.08) !important;
     }
+
+        /* 手機版：目前時間 + 結束自習 */
+    #mobileRoomTopMount > div:first-child {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 14px !important;
+        padding: 18px 18px 10px !important;
+    }
+
+    #mobileRoomTopMount > div:first-child > div {
+        min-width: 0 !important;
+    }
+
+    #endSessionBtn {
+        flex-shrink: 0 !important;
+        padding: 12px 16px !important;
+        border-radius: 16px !important;
+        font-size: 15px !important;
+    }
+
+    /* 手機版：倒數時間區留白 */
+    #mobileRoomTopMount > div:nth-child(2) {
+        padding: 10px 18px 18px !important;
+    }
+
+    #mobileRoomTopMount > div:nth-child(2) .flex {
+        gap: 14px !important;
+    }
+
+    /* 手機版：排行榜與個人資訊縮小 */
+    #mobileRoomStatsMount {
+        margin: 14px 0 0 !important;
+        border-radius: 16px !important;
+    }
+
+    #mobileRoomStatsMount .tab-btn {
+        padding: 12px 8px !important;
+        font-size: 14px !important;
+    }
+
+    #mobileRoomStatsMount .flex-1 {
+        min-height: 120px !important;
+        height: 120px !important;
+    }
+
+    #mobileRoomStatsMount #tab-rank,
+    #mobileRoomStatsMount #tab-achieve {
+        padding: 12px !important;
+    }
+
+    #mobileRoomStatsMount > .p-4 {
+        min-height: 92px !important;
+        padding: 14px 18px !important;
+        gap: 12px !important;
+    }
+
+    #mobileRoomStatsMount > .p-4 img {
+        width: 46px !important;
+        height: 46px !important;
+    }
 }
