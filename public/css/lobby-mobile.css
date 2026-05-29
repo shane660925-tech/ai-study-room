@@ -932,46 +932,55 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         min-height: 100% !important;
     }
 }
-
 /* ===========================================================
    Mobile Lobby Phase 3-9
-   創建小隊 Step 1 表單內容手機版
+   創建小隊 Step 2 QR 驗證手機版
    =========================================================== */
 
 @media (max-width: 640px) {
-    #createTeamModal > div:not(.absolute) {
-        max-height: calc(100vh - 150px) !important;
-        overflow: hidden !important;
-    }
-
-    #createTeamStep1 {
-        min-height: 0 !important;
-    }
-
-    #createTeamStep1 > div:first-child {
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-        max-height: calc(100vh - 300px) !important;
-        padding: 16px !important;
-    }
-
-    #createTeamStep1 input,
-    #createTeamStep1 select {
-        font-size: 14px !important;
-        padding: 12px !important;
-    }
-
-    #createTeamStep1 label {
-        font-size: 10px !important;
-    }
-
-    #createTeamStep1 > div:last-child {
+    #createTeamStep2 > div:first-child {
         padding: 14px !important;
         gap: 10px !important;
     }
 
-    #createTeamStep1 > div:last-child button {
-        font-size: 13px !important;
-        padding: 12px 8px !important;
+    #createTeamStep2 .w-14.h-14 {
+        width: 46px !important;
+        height: 46px !important;
+        margin-bottom: 4px !important;
+    }
+
+    #createTeamStep2 h3 {
+        font-size: 1rem !important;
+        line-height: 1.2 !important;
+    }
+
+    #createTeamStep2 p {
+        font-size: 10px !important;
+        line-height: 1.45 !important;
+    }
+
+    #teamSyncQr {
+        width: 124px !important;
+        height: 124px !important;
+    }
+
+    #createTeamStep2 > div:first-child .bg-white {
+        padding: 8px !important;
+        margin-top: 2px !important;
+    }
+
+    #syncStatusBox {
+        margin-top: 8px !important;
+        padding: 10px 12px !important;
+    }
+
+    #createTeamStep2 > div:last-child {
+        padding: 12px !important;
+        gap: 8px !important;
+    }
+
+    #createTeamStep2 > div:last-child button {
+        font-size: 12px !important;
+        padding: 10px 8px !important;
     }
 }
