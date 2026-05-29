@@ -816,3 +816,50 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         padding: 12px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-6
+   特約教室入口驗證彈窗手機版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #tutor-setup-modal {
+        padding: 12px !important;
+        align-items: flex-start !important;
+        padding-top: 28px !important;
+        padding-bottom: 96px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #tutor-setup-modal > div {
+        width: 100% !important;
+        max-width: none !important;
+        padding: 20px 16px !important;
+        border-radius: 24px !important;
+    }
+
+    #tutor-setup-modal h2 {
+        font-size: 1.35rem !important;
+        line-height: 1.25 !important;
+    }
+
+    #tutor-setup-modal .space-y-4 {
+        gap: 10px !important;
+    }
+
+    #tutor-setup-modal #tutor-step-1,
+    #tutor-setup-modal #tutor-step-2 {
+        padding: 12px !important;
+        gap: 10px !important;
+    }
+
+    #tutor-qrcode-container {
+        margin-bottom: 16px !important;
+    }
+
+    #tutor-qrcode {
+        transform: scale(0.92);
+        transform-origin: center;
+    }
+}
