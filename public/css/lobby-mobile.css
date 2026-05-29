@@ -514,3 +514,64 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         margin-top: auto;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 2-7
+   index.html VIP / 導師卡手機尺寸修正
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #intro-vip-system {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    #intro-vip-system .room-card {
+        min-height: 320px !important;
+        padding: 18px 12px !important;
+        border-radius: 24px !important;
+    }
+
+    #intro-vip-system .room-card .w-12 {
+        width: 56px !important;
+        height: 56px !important;
+        border-radius: 20px !important;
+    }
+
+    #intro-vip-system .room-card h3 {
+        font-size: 1.18rem !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.04em;
+    }
+
+    #intro-vip-system .room-card p {
+        font-size: 12px !important;
+        line-height: 1.55 !important;
+    }
+
+    /* VIP 特約指導：SE3 改成上下排列，避免驗證按鈕消失 */
+    #intro-vip-system #tutorRoomCode {
+        width: 100% !important;
+        min-width: 0 !important;
+        text-align: center;
+        font-size: 12px !important;
+    }
+
+    #intro-vip-system #tutorRoomCode + button {
+        width: 100% !important;
+        padding: 10px 8px !important;
+        font-size: 12px !important;
+        white-space: nowrap;
+    }
+
+    #intro-vip-system .flex.gap-2.w-full.mt-2 {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    /* 導師卡兩個按鈕縮小一點 */
+    #intro-vip-system button {
+        font-size: 12px !important;
+        padding: 10px 8px !important;
+    }
+}
