@@ -435,21 +435,6 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
    =========================================================== */
 
 @media (max-width: 640px) {
-    #lobby-qr-carousel {
-        display: flex !important;
-        overflow-x: auto;
-        gap: 14px !important;
-        padding-bottom: 8px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #lobby-qr-carousel > div {
-        min-width: 82%;
-        max-width: 82%;
-        flex-shrink: 0;
-        scroll-snap-align: start;
-    }
 
     #syncModule,
     #lineBindModule {
@@ -521,6 +506,22 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
    =========================================================== */
 
 @media (max-width: 640px) {
+
+    #lobby-qr-carousel {
+    display: flex !important;
+    overflow-x: auto !important;
+    gap: 14px !important;
+
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+#lobby-qr-carousel > div {
+    min-width: 82%;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+}
+
     #intro-vip-system {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 12px !important;
@@ -577,18 +578,22 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 }
 /* ===========================================================
    Desktop safety reset
-   確保桌機版右欄維持直向排列
+   只作用於桌機
    =========================================================== */
 
-#lobby-qr-carousel {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    overflow: visible;
-}
+@media (min-width: 641px) {
 
-#lobby-tool-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
+    #lobby-qr-carousel {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        overflow: visible;
+    }
+
+    #lobby-tool-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
 }
