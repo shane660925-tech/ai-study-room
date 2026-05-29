@@ -863,3 +863,48 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         transform-origin: center;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-7
+   小隊彈窗外框手機版
+   joinTeamModal / createTeamModal / joinTeamSyncModal
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #joinTeamModal,
+    #createTeamModal,
+    #joinTeamSyncModal,
+    #waitingApprovalModal {
+        padding: 12px !important;
+        align-items: flex-start !important;
+        padding-top: 32px !important;
+        padding-bottom: 96px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #joinTeamModal > div,
+    #createTeamModal > div:not(.absolute),
+    #joinTeamSyncModal > div,
+    #waitingApprovalModal > div {
+        width: 100% !important;
+        max-width: none !important;
+        border-radius: 24px !important;
+        max-height: none !important;
+    }
+
+    #joinTeamModal .p-6,
+    #createTeamModal .p-6,
+    #joinTeamSyncModal .p-6,
+    #waitingApprovalModal .p-8 {
+        padding: 18px !important;
+    }
+
+    #joinTeamModal h2,
+    #createTeamModal h2,
+    #joinTeamSyncModal h2,
+    #waitingApprovalModal h2 {
+        font-size: 1.35rem !important;
+        line-height: 1.25 !important;
+    }
+}
