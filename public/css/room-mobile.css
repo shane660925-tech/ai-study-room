@@ -112,5 +112,78 @@
         padding: 10px 16px !important;
         border-radius: 14px !important;
         white-space: nowrap !important;
+        }
+
+    /* =======================================================
+       Room Mobile Phase 2
+       同學圖卡：手機版改成鏡頭下方橫向滑動列
+    ======================================================= */
+
+    body > main > .flex-1 {
+        padding: 28px 16px 110px !important;
+        overflow-y: visible !important;
+    }
+
+    #mainGrid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 18px !important;
+        padding: 0 !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+
+    #mainGrid > .flex.flex-col.group {
+        width: 100% !important;
+        max-width: 100% !important;
+        align-items: center !important;
+    }
+
+    #myDeskFrame {
+        width: 100% !important;
+        max-width: 560px !important;
+        border-radius: 22px !important;
+    }
+
+    #mainGrid > .flex.flex-col.group > .mt-3 {
+        width: 100% !important;
+        max-width: 560px !important;
+        border-radius: 20px !important;
+    }
+
+    #othersContainer {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 14px !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 8px 4px 16px !important;
+        scroll-snap-type: x proximity !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #othersContainer > * {
+        flex: 0 0 150px !important;
+        width: 150px !important;
+        max-width: 150px !important;
+        min-width: 150px !important;
+        scroll-snap-align: start !important;
+    }
+
+    #othersContainer img {
+        width: 64px !important;
+        height: 64px !important;
+    }
+
+    #othersContainer .text-2xl,
+    #othersContainer .text-3xl {
+        font-size: 20px !important;
+        line-height: 1.2 !important;
+    }
+
+    #othersContainer .p-6,
+    #othersContainer .p-8 {
+        padding: 16px !important;
     }
 }
