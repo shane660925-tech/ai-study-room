@@ -14,60 +14,8 @@
     }
 
     /* 左側資訊欄：手機版改成頂部資訊面板，不再吃滿整個高度 */
-    body > aside {
-        width: 100% !important;
-        height: auto !important;
-        max-height: none !important;
-        flex-shrink: 0 !important;
-        border-right: none !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    }
-
-    /* 時鐘區縮小 */
-    body > aside > div:first-child {
-        padding: 18px 24px 10px !important;
-    }
-
-    #clockDate {
-        font-size: 12px !important;
-        margin-bottom: 4px !important;
-    }
-
-    #clockTime {
-        font-size: 44px !important;
-        line-height: 1 !important;
-    }
-
-    /* Session timer 區縮小並防止爆版 */
-    body > aside > div:nth-child(2) {
-        padding: 12px 24px 14px !important;
-    }
-
-    body > aside > div:nth-child(2) .flex {
-        align-items: center !important;
-        gap: 12px !important;
-    }
-
-    #myTimerDisplay {
-        font-size: 28px !important;
-        white-space: nowrap !important;
-    }
-
-    #breakBtn {
-        margin-left: auto !important;
-        padding: 10px 14px !important;
-        font-size: 14px !important;
-        white-space: nowrap !important;
-        border-radius: 14px !important;
-    }
-
-    /* 手機版先隱藏中間排行榜內容，只保留 tabs 與底部個人資訊 */
-    body > aside > .flex-1 {
+            body > aside {
         display: none !important;
-    }
-
-    body > aside > .p-4 {
-        padding: 14px 24px !important;
     }
 
     /* 教室主區塊 */
@@ -112,7 +60,7 @@
         padding: 10px 16px !important;
         border-radius: 14px !important;
         white-space: nowrap !important;
-        }
+    }
 
     /* =======================================================
        Room Mobile Phase 2
