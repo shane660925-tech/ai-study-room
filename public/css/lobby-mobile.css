@@ -932,3 +932,46 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         min-height: 100% !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-9
+   創建小隊 Step 1 表單內容手機版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #createTeamModal > div:not(.absolute) {
+        max-height: calc(100vh - 150px) !important;
+        overflow: hidden !important;
+    }
+
+    #createTeamStep1 {
+        min-height: 0 !important;
+    }
+
+    #createTeamStep1 > div:first-child {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        max-height: calc(100vh - 300px) !important;
+        padding: 16px !important;
+    }
+
+    #createTeamStep1 input,
+    #createTeamStep1 select {
+        font-size: 14px !important;
+        padding: 12px !important;
+    }
+
+    #createTeamStep1 label {
+        font-size: 10px !important;
+    }
+
+    #createTeamStep1 > div:last-child {
+        padding: 14px !important;
+        gap: 10px !important;
+    }
+
+    #createTeamStep1 > div:last-child button {
+        font-size: 13px !important;
+        padding: 12px 8px !important;
+    }
+}
