@@ -679,3 +679,48 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         gap: 10px !important;
     }
 }
+
+/* ===========================================================
+   Mobile Lobby Phase 3-3
+   主題教室選擇彈窗手機版
+   =========================================================== */
+
+@media (max-width: 640px) {
+    #themeRoomModal {
+        padding: 12px !important;
+        align-items: flex-start !important;
+        padding-top: 42px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #themeRoomModal > div {
+        max-width: none !important;
+        width: 100% !important;
+        border-radius: 24px !important;
+        max-height: calc(100vh - 72px) !important;
+    }
+
+    #themeRoomModal .p-6 {
+        padding: 18px !important;
+    }
+
+    #themeRoomModal h2 {
+        font-size: 1.35rem !important;
+        line-height: 1.25 !important;
+    }
+
+    #themeRoomList {
+        max-height: calc(100vh - 210px) !important;
+        padding: 14px !important;
+    }
+
+    #themeRoomList button {
+        padding: 14px !important;
+        border-radius: 18px !important;
+    }
+
+    #themeRoomList h3 {
+        font-size: 1rem !important;
+    }
+}
