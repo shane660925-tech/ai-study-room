@@ -575,3 +575,20 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         padding: 10px 8px !important;
     }
 }
+/* ===========================================================
+   Desktop safety reset
+   確保桌機版右欄維持直向排列
+   =========================================================== */
+
+#lobby-qr-carousel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow: visible;
+}
+
+#lobby-tool-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
