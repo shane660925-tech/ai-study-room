@@ -227,11 +227,6 @@
         font-size: 14px !important;
     }
 
-    #mobileRoomStatsMount .flex-1 {
-        min-height: 120px !important;
-        height: 120px !important;
-    }
-
     #mobileRoomStatsMount #tab-rank,
     #mobileRoomStatsMount #tab-achieve {
         padding: 12px !important;
@@ -280,5 +275,52 @@
     line-height: 1 !important;
     margin-top: 8px !important;
     letter-spacing: -0.04em !important;
+}
+
+/* 手機版：專注榜卡片縮小、左右分布平均 */
+#mobileRoomStatsMount {
+    margin: 14px 0 0 !important;
+    border-radius: 16px !important;
+}
+
+#mobileRoomStatsMount .flex-1 {
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+#mobileRoomStatsMount #tab-rank,
+#mobileRoomStatsMount #tab-achieve {
+    position: relative !important;
+    inset: auto !important;
+    padding: 10px 12px !important;
+    max-height: 220px !important;
+    overflow-y: auto !important;
+}
+
+#mobileRoomStatsMount #tab-rank > *,
+#mobileRoomStatsMount #tab-achieve > * {
+    min-height: 72px !important;
+    height: auto !important;
+    padding: 12px 14px !important;
+    display: grid !important;
+    grid-template-columns: auto 48px 1fr auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+#mobileRoomStatsMount #tab-rank img,
+#mobileRoomStatsMount #tab-achieve img {
+    width: 44px !important;
+    height: 44px !important;
+}
+
+#mobileRoomStatsMount #tab-rank .text-xs,
+#mobileRoomStatsMount #tab-achieve .text-xs {
+    font-size: 12px !important;
+}
+
+#mobileRoomStatsMount > .p-4 {
+    min-height: 76px !important;
+    padding: 12px 16px !important;
 }
 }
