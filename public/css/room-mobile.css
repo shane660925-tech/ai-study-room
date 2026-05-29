@@ -6,16 +6,39 @@
 
 @media (max-width: 768px) {
 
+        body > aside {
+        display: none !important;
+    }
+
+    .mobile-room-mount {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    #mobileRoomTopMount {
+        padding: 12px 24px 10px !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        background: #0a0c14 !important;
+    }
+
+    #mobileRoomStatsMount {
+        margin: 18px 0 0 !important;
+        background: #0a0c14 !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 20px !important;
+        overflow: hidden !important;
+    }
+
+    #mobileRoomStatsMount .flex-1 {
+    min-height: 180px !important;
+    flex: none !important;
+}
+
     body {
         height: auto !important;
         min-height: 100dvh !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
-    }
-
-    /* 左側資訊欄：手機版改成頂部資訊面板，不再吃滿整個高度 */
-            body > aside {
-        display: none !important;
     }
 
     /* 教室主區塊 */
@@ -135,23 +158,48 @@
         padding: 16px !important;
     }
 
-        /* =======================================================
-       Room Mobile Phase 3
-       手機版 Header 顯示剩餘時間與專注狀態
-    ======================================================= */
-
-    #mobileRoomMeta {
-        display: flex !important;
-        align-items: center !important;
-        gap: 0 !important;
-        font-size: 14px !important;
-        letter-spacing: 0.02em !important;
+        /* 手機版目前時間 */
+    #mobileRoomTopMount > div:first-child {
+        padding: 14px 24px 6px !important;
     }
 
-    #mobileTimerDisplay {
-        color: #ffffff !important;
-        font-family: monospace !important;
-        font-size: 18px !important;
-        font-weight: 900 !important;
+    #clockDate {
+        font-size: 11px !important;
+        margin-bottom: 2px !important;
+    }
+
+    #clockTime {
+        font-size: 34px !important;
+        line-height: 1 !important;
+    }
+
+    /* 手機版倒數時間 + 休息按鈕 + 進度條 */
+    #mobileRoomTopMount > div:nth-child(2) {
+        padding: 8px 24px 14px !important;
+    }
+
+    #mobileRoomTopMount > div:nth-child(2) .flex {
+        align-items: center !important;
+        gap: 12px !important;
+    }
+
+    #myTimerDisplay {
+        font-size: 30px !important;
+        white-space: nowrap !important;
+    }
+
+    #breakBtn {
+        margin-left: auto !important;
+        padding: 10px 14px !important;
+        font-size: 14px !important;
+        white-space: nowrap !important;
+        border-radius: 14px !important;
+    }
+
+        /* 手機版：個人資訊放在專注榜 / 累積數據下方 */
+    #mobileRoomStatsMount > .p-4 {
+        display: flex !important;
+        position: static !important;
+        border-top: 1px solid rgba(255,255,255,0.08) !important;
     }
 }

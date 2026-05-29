@@ -210,12 +210,6 @@
             <h2 class="text-lg font-bold text-white tracking-tight">虛擬共學空間</h2>
             <span id="modeLabel" class="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase">MODE: 連線中</span>
         </div>
-
-        <div id="mobileRoomMeta" class="hidden mt-2 text-xs font-bold text-gray-400">
-            <span id="mobileTimerDisplay">00:00</span>
-            <span class="mx-2 text-gray-600">｜</span>
-            <span class="text-green-400">● 專注中</span>
-        </div>
     </div>
 </div>
             
@@ -226,6 +220,8 @@
 
             <button onclick="endSession()" class="bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white text-xs px-4 py-2 rounded-lg font-bold transition-all border border-red-600/20">結束自習</button>
         </header>
+
+        <div id="mobileRoomTopMount" class="mobile-room-mount"></div>
 
         <div class="flex-1 p-6 overflow-y-auto">
             <div id="blackboard" class="mb-6 bg-slate-800 border-4 border-slate-700 p-4 rounded-xl shadow-inner hidden max-w-4xl mx-auto">
@@ -271,29 +267,33 @@
             </div>
         </div>
 
+        <div id="mobileRoomStatsMount" class="mobile-room-mount"></div>
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
     </main>
 
     <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const desktopTimer = document.getElementById('myTimerDisplay');
-        const mobileTimer = document.getElementById('mobileTimerDisplay');
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
 
-        if (!desktopTimer || !mobileTimer) return;
+    const aside = document.querySelector('body > aside');
+    const topMount = document.getElementById('mobileRoomTopMount');
+    const statsMount = document.getElementById('mobileRoomStatsMount');
 
-        const syncMobileTimer = () => {
-            mobileTimer.innerText = desktopTimer.innerText || '00:00';
-        };
+    if (!aside || !topMount || !statsMount) return;
 
-        syncMobileTimer();
+    const clockBlock = aside.children[0];
+    const timerBlock = aside.children[1];
+    const tabButtons = aside.children[2];
+    const tabPanels = aside.children[3];
+    const profileBlock = aside.children[4];
 
-        const observer = new MutationObserver(syncMobileTimer);
-        observer.observe(desktopTimer, {
-            childList: true,
-            subtree: true,
-            characterData: true
-        });
-    });
+    if (clockBlock) topMount.appendChild(clockBlock);
+    if (timerBlock) topMount.appendChild(timerBlock);
+
+    if (tabButtons) statsMount.appendChild(tabButtons);
+    if (tabPanels) statsMount.appendChild(tabPanels);
+    if (profileBlock) statsMount.appendChild(profileBlock);
+});
 </script>
 
     <script>
