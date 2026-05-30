@@ -265,6 +265,7 @@
         </div>
 
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
+        <div id="mobileRoomStatsMount" class="mobile-room-mount hidden md:hidden"></div>
     </main>
 
     <script>
@@ -387,6 +388,23 @@ if (themeTitle && currentTheme) {
         });
     </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.innerWidth > 768) return;
+
+    const statsMount = document.getElementById('mobileRoomStatsMount');
+    const sidebarStats = document.querySelector('aside > .flex-1');
+    const sidebarProfile = document.querySelector('aside > .p-4.bg-\\[\\#111827\\]\\/80');
+
+    if (statsMount && sidebarStats && !statsMount.contains(sidebarStats)) {
+        statsMount.appendChild(sidebarStats);
+    }
+
+    if (statsMount && sidebarProfile && !statsMount.contains(sidebarProfile)) {
+        statsMount.appendChild(sidebarProfile);
+    }
+});
+</script>
     <script src="./js/ui-components.js"></script>
     <script src="./js/socket-events.js"></script>
     <script src="/js/session-manager.js"></script>
