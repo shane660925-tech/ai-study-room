@@ -507,6 +507,10 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 
 @media (max-width: 640px) {
 
+    #intro-vip-system input,
+#intro-vip-system button {
+    font-size: 16px !important;
+}
     #lobby-qr-carousel {
     display: flex !important;
     overflow-x: auto !important;
@@ -552,11 +556,11 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 
     /* VIP 特約指導：SE3 改成上下排列，避免驗證按鈕消失 */
     #intro-vip-system #tutorRoomCode {
-        width: 100% !important;
-        min-width: 0 !important;
-        text-align: center;
-        font-size: 12px !important;
-    }
+    width: 100% !important;
+    min-width: 0 !important;
+    text-align: center;
+    font-size: 16px !important;
+}
 
     #intro-vip-system #tutorRoomCode + button {
         width: 100% !important;
