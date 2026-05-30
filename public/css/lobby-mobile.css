@@ -818,49 +818,89 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 }
 
 /* ===========================================================
-   Mobile Lobby Phase 3-6
-   特約教室入口驗證彈窗手機版
+   Mobile Lobby Phase 3-6 Revised
+   特約教室入口驗證彈窗手機版壓縮
    =========================================================== */
 
 @media (max-width: 640px) {
     #tutor-setup-modal {
-        padding: 12px !important;
+        padding: 10px !important;
         align-items: flex-start !important;
-        padding-top: 28px !important;
-        padding-bottom: 96px !important;
+        justify-content: flex-start !important;
+        padding-top: 18px !important;
+        padding-bottom: 80px !important;
         overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
+        -webkit-overflow-scrolling: touch !important;
     }
 
     #tutor-setup-modal > div {
         width: 100% !important;
-        max-width: none !important;
-        padding: 20px 16px !important;
-        border-radius: 24px !important;
+        max-width: 360px !important;
+        margin: 0 auto !important;
+        padding: 16px 14px !important;
+        border-radius: 22px !important;
+        max-height: none !important;
     }
 
     #tutor-setup-modal h2 {
-        font-size: 1.35rem !important;
-        line-height: 1.25 !important;
+        font-size: 1.2rem !important;
+        line-height: 1.2 !important;
+        margin-bottom: 6px !important;
+    }
+
+    #tutor-setup-modal h2 + p {
+        font-size: 12px !important;
+        margin-bottom: 12px !important;
     }
 
     #tutor-setup-modal .space-y-4 {
-        gap: 10px !important;
+        margin-bottom: 14px !important;
     }
 
-    #tutor-setup-modal #tutor-step-1,
-    #tutor-setup-modal #tutor-step-2 {
-        padding: 12px !important;
+    #tutor-step-1,
+    #tutor-step-2 {
+        padding: 10px !important;
         gap: 10px !important;
+        border-radius: 14px !important;
+    }
+
+    #tutor-step-1-icon,
+    #tutor-step-2-icon {
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 14px !important;
+    }
+
+    #tutor-step-1 p,
+    #tutor-step-2 p {
+        line-height: 1.25 !important;
     }
 
     #tutor-qrcode-container {
-        margin-bottom: 16px !important;
+        margin-bottom: 10px !important;
+    }
+
+    #tutor-qrcode-container > div {
+        padding: 8px !important;
+        border-radius: 14px !important;
     }
 
     #tutor-qrcode {
-        transform: scale(0.92);
-        transform-origin: center;
+        transform: scale(0.82) !important;
+        transform-origin: center !important;
+        width: 116px !important;
+        height: 116px !important;
+        overflow: hidden !important;
+    }
+
+    #tutor-qrcode-container p {
+        font-size: 10px !important;
+        margin-top: 6px !important;
+        line-height: 1.35 !important;
+    }
+
+    #tutor-setup-modal button {
+        font-size: 12px !important;
     }
 }
 
@@ -1002,5 +1042,4 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         width: calc(100% - 24px) !important;
         max-width: 520px !important;
     }
-
 }
