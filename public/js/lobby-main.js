@@ -1248,11 +1248,6 @@ window.verifyAndEnterTutorRoom = async function() {
         return;
     }
 
-    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        alert("⚠️ 特約教室需要使用「電腦」進入，並將手機作為翻轉輔助鏡頭。請改用電腦開啟此網頁！");
-        return;
-    }
-
     try {
         const res = await fetch(`/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}`);
         const data = await res.json();
