@@ -144,8 +144,27 @@ class StudyTimerManager {
     /**
      * 專注時間結束的處理
      */
-    completeSession() {
+        completeSession() {
         if (this.timerInterval) clearInterval(this.timerInterval);
+
+        // ✅ 普通教室時間到時，先通知手機端斷線
+        // 避免學生讀完書翻開手機時，手機又顯示違規警示畫面
+        const studentName =
+            window.myUsername ||
+            localStorage.getItem('studyVerseUser') ||
+            document.getElementById('inputName')?.value ||
+            '';
+
+        const activeSocket = window.appSocket || window.socket;
+
+        if (studentName && activeSocket && activeSocket.connected) {
+            activeSocket.emit('mobile_sync_update', {
+                type: 'FORCE_DISCONNECT',
+                studentName: studentName,
+                reason: 'NORMAL_TIMER_COMPLETED'
+            });
+        }
+
         alert("🎉 達成專注目標！");
         
         // 呼叫原本寫在其他地方的 endSession 函數

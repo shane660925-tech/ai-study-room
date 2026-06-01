@@ -89,17 +89,23 @@
     <script>
     const socket = io();
     let hasFlipped = false;
-    let studentName = "";
-    let flipWarningTimer = null;
-    let flipWarningCount = 5;
+let studentName = "";
+let flipWarningTimer = null;
+let flipWarningCount = 5;
+
+// ✅ 防止電腦端重複送 FORCE_DISCONNECT 時，手機重複跳 alert
+let hasForceDisconnected = false;
     
     // 🚀 新增：紀錄目前是否為 AI 休息時間
     let isAIPaused = false;
 
     socket.on('mobile_sync_update', (data) => {
         if (data.type === 'FORCE_DISCONNECT' && data.studentName === studentName) {
+            if (hasForceDisconnected) return;
+            hasForceDisconnected = true;
+
             window.removeEventListener('deviceorientation', handleOrientation);
-isAIPaused = false;
+            isAIPaused = false;
             if (flipWarningTimer) clearInterval(flipWarningTimer);
             hasFlipped = false;
             document.getElementById('flippedOverlay').classList.add('hidden');
