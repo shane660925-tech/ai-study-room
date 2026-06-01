@@ -328,6 +328,7 @@
                 </div>
             </div>
 
+                        <div id="mobileRoomTopMount" class="mobile-room-mount hidden md:hidden"></div>
             <div id="studentScheduleContainer" class="bg-[#0a0e17] border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-center gap-4 shadow-[0_0_15px_rgba(245,158,11,0.1)] transition-all duration-500 hidden relative overflow-hidden">
                 <div class="w-10 h-10 bg-gradient-to-br from-amber-500/20 to-yellow-600/10 rounded-full flex items-center justify-center text-amber-400 text-lg border border-amber-500/30 flex-shrink-0 shadow-inner z-10">
                     <i class="fas fa-calendar-alt"></i>
@@ -397,11 +398,26 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth > 768) return;
 
+    const topMount = document.getElementById('mobileRoomTopMount');
     const statsMount = document.getElementById('mobileRoomStatsMount');
+
+    // 先抓好 aside 原本的順序，避免 appendChild 後 nth-child 位移
+    const clockBlock = document.querySelector('aside > div:nth-child(1)');
+    const timerBlock = document.querySelector('aside > div:nth-child(2)');
     const tabHeader = document.querySelector('aside > div:nth-child(3)');
     const tabContent = document.querySelector('aside > div:nth-child(4)');
     const sidebarProfile = document.querySelector('aside > div:nth-child(5)');
 
+    // 手機版：日期 / 目前時間 / SESSION TIMER / 倒數 / 進度條
+    if (topMount && clockBlock) {
+        topMount.appendChild(clockBlock);
+    }
+
+    if (topMount && timerBlock) {
+        topMount.appendChild(timerBlock);
+    }
+
+    // 手機版：專注榜 / 專屬數據 / 個人資訊
     if (statsMount && tabHeader) {
         statsMount.appendChild(tabHeader);
     }
