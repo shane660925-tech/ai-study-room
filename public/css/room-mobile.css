@@ -481,18 +481,16 @@
 }
 
 /* ===========================================================
-   Tutor Room Mobile Phase 2-3
-   中間下課掃碼重新連線手機彈窗手機版
+   Tutor Room Mobile Phase 2-3 Revised
+   中間下課手機重新連線 / 未完成翻轉彈窗手機版
 =========================================================== */
 
 @media (max-width: 768px) {
     #tutorReconnectQRModal,
     #tutorReconnectFailModal {
-        padding: 14px !important;
-        align-items: flex-start !important;
+        padding: 18px !important;
+        align-items: center !important;
         justify-content: center !important;
-        padding-top: 28px !important;
-        padding-bottom: 80px !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
     }
@@ -502,29 +500,36 @@
         width: 100% !important;
         max-width: 360px !important;
         margin: 0 auto !important;
-        padding: 20px 16px !important;
+        padding: 22px 18px !important;
         border-radius: 24px !important;
-        max-height: none !important;
+        max-height: calc(100dvh - 48px) !important;
+        overflow-y: auto !important;
+    }
+
+    #tutorReconnectQRModal i,
+    #tutorReconnectFailModal i {
+        font-size: 3rem !important;
+        margin-bottom: 16px !important;
     }
 
     #tutorReconnectQRModal h2,
     #tutorReconnectFailModal h2 {
-        font-size: 1.35rem !important;
+        font-size: 1.55rem !important;
         line-height: 1.25 !important;
-        margin-bottom: 10px !important;
+        margin-bottom: 12px !important;
     }
 
     #tutorReconnectQRModal p,
     #tutorReconnectFailModal p {
-        font-size: 12px !important;
-        line-height: 1.55 !important;
+        font-size: 0.95rem !important;
+        line-height: 1.6 !important;
     }
 
     #tutorReconnectQR {
-        transform: scale(0.86) !important;
+        transform: scale(0.82) !important;
         transform-origin: center !important;
-        width: 132px !important;
-        height: 132px !important;
+        width: 128px !important;
+        height: 128px !important;
         overflow: hidden !important;
         margin: 0 auto !important;
     }
@@ -536,14 +541,13 @@
     }
 
     #tutorReconnectCountdown {
-        font-size: 2.5rem !important;
+        font-size: 2.4rem !important;
         line-height: 1 !important;
-        margin-top: 8px !important;
-        margin-bottom: 8px !important;
+        margin: 10px 0 !important;
     }
 
     #tutorReconnectStatus {
-        font-size: 12px !important;
+        font-size: 0.9rem !important;
         line-height: 1.45 !important;
         padding: 12px !important;
         border-radius: 16px !important;
@@ -601,63 +605,55 @@
 }
 
 /* ===========================================================
-   Tutor Room Mobile Phase 2-5
-   喝水 / 上廁所彈窗手機版
-   共用教室彈窗，保守處理
+   Tutor Room Mobile Phase 2-5 Revised
+   喝水 / 上廁所休息畫面手機版
 =========================================================== */
 
 @media (max-width: 768px) {
-    #breakModal,
-    #break-modal,
-    #restModal,
-    #rest-modal {
-        padding: 16px !important;
+    #breakManagerOverlay {
+        padding: 24px 18px !important;
         align-items: center !important;
         justify-content: center !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
+        text-align: center !important;
     }
 
-    #breakModal > div,
-    #break-modal > div,
-    #restModal > div,
-    #rest-modal > div {
+    #breakManagerOverlay > div {
         width: 100% !important;
-        max-width: 360px !important;
-        padding: 22px 16px !important;
-        border-radius: 24px !important;
-        max-height: calc(100dvh - 48px) !important;
-        overflow-y: auto !important;
+        max-width: 340px !important;
+        gap: 10px !important;
     }
 
-    #breakModal h2,
-    #breakModal h3,
-    #break-modal h2,
-    #break-modal h3,
-    #restModal h2,
-    #restModal h3,
-    #rest-modal h2,
-    #rest-modal h3 {
-        font-size: 1.45rem !important;
-        line-height: 1.25 !important;
+    #breakManagerOverlay .text-7xl {
+        font-size: 3.2rem !important;
+        margin-bottom: 14px !important;
     }
 
-    #breakModal p,
-    #break-modal p,
-    #restModal p,
-    #rest-modal p {
-        font-size: 1rem !important;
-        line-height: 1.55 !important;
+    #breakManagerOverlay h2 {
+        font-size: 2rem !important;
+        line-height: 1.15 !important;
+        margin-bottom: 10px !important;
     }
 
-    #breakModal button,
-    #break-modal button,
-    #restModal button,
-    #rest-modal button {
+    #breakManagerOverlay p {
+        font-size: 0.95rem !important;
+        line-height: 1.45 !important;
+        margin-bottom: 24px !important;
+        padding: 8px 14px !important;
+        border-radius: 999px !important;
+    }
+
+    #breakTimerDisplay {
+        font-size: clamp(4.5rem, 22vw, 6.2rem) !important;
+        line-height: 1 !important;
+        margin-bottom: 34px !important;
+    }
+
+    #breakManagerOverlay button {
         width: 100% !important;
-        padding: 13px !important;
-        border-radius: 16px !important;
-        font-size: 14px !important;
+        max-width: 320px !important;
+        padding: 16px 18px !important;
+        border-radius: 999px !important;
+        font-size: 1.05rem !important;
     }
 }
 
