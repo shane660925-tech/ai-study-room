@@ -1212,18 +1212,31 @@ failModal.innerHTML = `
 `;
 document.body.appendChild(failModal);
 
-        setTimeout(async () => {
+                setTimeout(async () => {
     try {
         if (typeof window.endSession === 'function') {
             await window.endSession();
         }
+
+        // ✅ 強制退出時，不要立刻跳回大廳
+        // 讓 endSession 產生的學習總結先顯示
+        const failModal = document.getElementById('tutorReconnectFailModal');
+        if (failModal) failModal.remove();
+
+        const summaryModal = document.getElementById('summary-modal');
+        if (summaryModal) {
+            summaryModal.classList.remove('hidden');
+            summaryModal.style.display = 'flex';
+        }
+
     } catch (err) {
         console.error('手機未重連 endSession 失敗:', err);
-    }
 
-    setTimeout(() => {
-        window.location.href = 'index.html';
-    }, 1200);
+        // 如果真的結算失敗，才保底回大廳，避免學生卡死
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 1500);
+    }
 }, 800);
 
         return;
