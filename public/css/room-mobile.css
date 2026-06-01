@@ -850,10 +850,15 @@
     }
 
     body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentTimerDisplay {
-        font-size: clamp(2.45rem, 13vw, 3.6rem) !important;
-        line-height: 1 !important;
-        white-space: nowrap !important;
-    }
+    font-size: clamp(3.7rem, 18vw, 5.2rem) !important;
+    line-height: 0.95 !important;
+    white-space: nowrap !important;
+}
+
+body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentTimerDisplay + span {
+    font-size: 13px !important;
+    letter-spacing: 0.18em !important;
+}
 
     body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentPeriodLabel {
         font-size: 12px !important;
