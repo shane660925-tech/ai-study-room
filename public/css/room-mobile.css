@@ -486,25 +486,49 @@
 =========================================================== */
 
 @media (max-width: 768px) {
-    #tutorReconnectQRModal,
-    #tutorReconnectFailModal {
-        padding: 18px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
+    #tutorReconnectQRModal {
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+}
 
-    #tutorReconnectQRModal > div,
-    #tutorReconnectFailModal > div {
-        width: 100% !important;
-        max-width: 360px !important;
-        margin: 0 auto !important;
-        padding: 22px 18px !important;
-        border-radius: 24px !important;
-        max-height: calc(100dvh - 48px) !important;
-        overflow-y: auto !important;
-    }
+#tutorReconnectFailModal {
+    padding: 18px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+    #tutorReconnectQRModal > div {
+    width: 100vw !important;
+    height: 100dvh !important;
+
+    max-width: none !important;
+    max-height: none !important;
+
+    margin: 0 !important;
+
+    border-radius: 0 !important;
+
+    padding: 24px 20px !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+#tutorReconnectFailModal > div {
+    width: 100% !important;
+    max-width: 360px !important;
+    margin: 0 auto !important;
+    padding: 22px 18px !important;
+    border-radius: 24px !important;
+    max-height: calc(100dvh - 48px) !important;
+    overflow-y: auto !important;
+}
 
     #tutorReconnectQRModal i,
     #tutorReconnectFailModal i {
@@ -526,13 +550,13 @@
     }
 
     #tutorReconnectQR {
-        transform: scale(0.82) !important;
-        transform-origin: center !important;
-        width: 128px !important;
-        height: 128px !important;
-        overflow: hidden !important;
-        margin: 0 auto !important;
-    }
+    width: 170px !important;
+    height: 170px !important;
+    transform: none !important;
+    transform-origin: center !important;
+    overflow: hidden !important;
+    margin: 0 auto !important;
+}
 
     #tutorReconnectQRModal .bg-white {
         padding: 8px !important;
