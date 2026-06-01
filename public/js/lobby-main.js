@@ -1386,6 +1386,27 @@ async function refreshCourseList() {
     const container = document.getElementById('course-list-container');
     if (!container) return;
 
+    const currentRole = localStorage.getItem('studyVerseRole');
+
+    if (currentRole === 'teacher' || currentRole === 'teacher_pending') {
+        container.innerHTML = `
+            <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden min-h-[200px] teacher-lobby-card-locked">
+                <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">教師帳號已鎖定</div>
+                <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 text-2xl mb-4">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h3 class="text-xl font-black text-gray-400 mb-1">線上課程</h3>
+                <p class="text-gray-600 text-xs mb-4 flex-1">
+                    教師帳號不可使用學生課程入口。請使用「專屬導師開局」或「課程商店」。
+                </p>
+                <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">
+                    教師帳號不可進入
+                </div>
+            </div>
+        `;
+        return;
+    }
+
     const dimmedCardHTML = `
         <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden min-h-[200px]">
             <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">尚未解鎖</div>
@@ -2458,3 +2479,119 @@ window.enterPurchasedCourse = function(courseId, courseRoomCode, googleMeetUrl) 
 
     alert('此課程尚未設定教室入口，請聯繫教師或平台管理員。');
 };
+
+// =========================================================
+// Teacher Lobby Guard
+// 教師登入後，只保留「專屬導師開局」與「課程商店」可用
+// 不動 server.js、不動 roomMode、不動特約教室生命週期
+// =========================================================
+
+window.isTeacherLobbyRole = function() {
+    const role = localStorage.getItem('studyVerseRole');
+    return role === 'teacher' || role === 'teacher_pending';
+};
+
+window.showTeacherLobbyLockedAlert = function() {
+    alert('教師帳號僅能使用「專屬導師開局」與「課程商店」。學生自習、主題教室、組隊與單機翻轉功能已鎖定。');
+};
+
+window.lockTeacherLobbyFeatureCard = function(card, label = '教師帳號已鎖定') {
+    if (!card || card.dataset.teacherLocked === 'true') return;
+
+    card.dataset.teacherLocked = 'true';
+    card.dataset.lockLabel = label;
+
+    card.classList.add('teacher-lobby-card-locked');
+
+    card.removeAttribute('onclick');
+
+    if (card.tagName === 'A') {
+        card.dataset.originalHref = card.getAttribute('href') || '';
+        card.removeAttribute('href');
+        card.setAttribute('role', 'button');
+    }
+
+    card.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        window.showTeacherLobbyLockedAlert();
+        return false;
+    }, true);
+};
+
+window.applyTeacherLobbyRestrictions = function() {
+    if (!window.isTeacherLobbyRole()) return;
+
+    document.body.classList.add('teacher-lobby-locked');
+
+    // Header：鎖住「切換至組隊大廳」，避免從上方直接進 team-lobby
+    const teamLobbyHeaderLink = document.querySelector('header a[href="team-lobby.html"]');
+    if (teamLobbyHeaderLink && teamLobbyHeaderLink.dataset.teacherLocked !== 'true') {
+        teamLobbyHeaderLink.dataset.teacherLocked = 'true';
+        teamLobbyHeaderLink.removeAttribute('href');
+        teamLobbyHeaderLink.classList.add('teacher-lobby-link-locked');
+        teamLobbyHeaderLink.innerHTML = '<i class="fas fa-lock"></i> 組隊大廳已鎖定';
+
+        teamLobbyHeaderLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            window.showTeacherLobbyLockedAlert();
+            return false;
+        }, true);
+    }
+
+    // AI 自習空間：沉浸式自習室
+    window.lockTeacherLobbyFeatureCard(
+        document.querySelector('[onclick="handleRoomEntry(\'immersive-room.html\')"]'),
+        '教師帳號不可進入'
+    );
+
+    // AI 自習空間：限時主題教室
+    window.lockTeacherLobbyFeatureCard(
+        document.querySelector('[onclick="showThemeRoomModal()"]'),
+        '教師帳號不可進入'
+    );
+
+    // 社群組隊：小組競賽大廳
+    window.lockTeacherLobbyFeatureCard(
+        document.querySelector('[onclick="loadAndShowTeamModal(\'join\')"]'),
+        '教師帳號不可使用'
+    );
+
+    // 社群組隊：創建專屬小隊
+    window.lockTeacherLobbyFeatureCard(
+        document.querySelector('[onclick="loadAndShowTeamModal(\'create\')"]'),
+        '教師帳號不可使用'
+    );
+
+    // VIP 特約指導：學生輸入邀請碼入口
+    const vipStudentEntryCard = document.querySelector('#intro-vip-system > div:first-child');
+    window.lockTeacherLobbyFeatureCard(vipStudentEntryCard, '教師帳號不可進入');
+
+    if (vipStudentEntryCard) {
+        vipStudentEntryCard.querySelectorAll('input, button').forEach(el => {
+            el.disabled = true;
+            el.classList.add('cursor-not-allowed', 'opacity-60');
+        });
+    }
+
+    // 單機翻轉模式
+    window.lockTeacherLobbyFeatureCard(
+        document.getElementById('intro-standalone-mode'),
+        '教師帳號不可使用'
+    );
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 第一次：DOM 載入後鎖定靜態卡片
+    setTimeout(() => {
+        window.applyTeacherLobbyRestrictions();
+    }, 300);
+
+    // 第二次：等待課程 / 元件動態渲染後再補鎖一次
+    setTimeout(() => {
+        window.applyTeacherLobbyRestrictions();
+    }, 1500);
+});

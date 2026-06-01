@@ -99,3 +99,60 @@
     color: #3b82f6; 
     text-shadow: 0 0 5px rgba(59, 130, 246, 0.5); 
 }
+
+/* ===========================================================
+   Teacher Lobby Guard
+   教師帳號大廳功能鎖定視覺
+=========================================================== */
+
+.teacher-lobby-card-locked {
+    position: relative !important;
+    cursor: not-allowed !important;
+    opacity: 0.45 !important;
+    filter: grayscale(0.85) !important;
+    transform: none !important;
+}
+
+.teacher-lobby-card-locked:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.teacher-lobby-card-locked * {
+    pointer-events: none !important;
+}
+
+.teacher-lobby-card-locked::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.38);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.teacher-lobby-card-locked::after {
+    content: attr(data-lock-label);
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 50;
+    background: rgba(15, 23, 42, 0.92);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    pointer-events: none;
+}
+
+.teacher-lobby-link-locked {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+    border-color: rgba(148, 163, 184, 0.25) !important;
+    color: #94a3b8 !important;
+    background: rgba(148, 163, 184, 0.08) !important;
+}
