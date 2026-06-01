@@ -1386,27 +1386,6 @@ async function refreshCourseList() {
     const container = document.getElementById('course-list-container');
     if (!container) return;
 
-    const currentRole = localStorage.getItem('studyVerseRole');
-
-    if (currentRole === 'teacher' || currentRole === 'teacher_pending') {
-        container.innerHTML = `
-            <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden min-h-[200px] teacher-lobby-card-locked">
-                <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">教師帳號已鎖定</div>
-                <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 text-2xl mb-4">
-                    <i class="fas fa-lock"></i>
-                </div>
-                <h3 class="text-xl font-black text-gray-400 mb-1">線上課程</h3>
-                <p class="text-gray-600 text-xs mb-4 flex-1">
-                    教師帳號不可使用學生課程入口。請使用「專屬導師開局」或「課程商店」。
-                </p>
-                <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">
-                    教師帳號不可進入
-                </div>
-            </div>
-        `;
-        return;
-    }
-
     const dimmedCardHTML = `
         <div class="glass-panel p-6 rounded-3xl flex flex-col border border-white/5 opacity-40 grayscale-[0.5] cursor-not-allowed relative overflow-hidden min-h-[200px]">
             <div class="absolute top-2 right-4 text-[10px] font-bold text-gray-500 tracking-widest">尚未解鎖</div>
@@ -1415,7 +1394,7 @@ async function refreshCourseList() {
             </div>
             <h3 class="text-xl font-black text-gray-400 mb-1">線上課程</h3>
             <p class="text-gray-600 text-xs mb-4 flex-1">
-                此專區僅限已購買課程的學生使用。請先至課程商店購買課程。
+                此專區僅限已購買課程的帳號使用。請先至課程商店購買課程。
             </p>
             <div class="w-full text-center bg-white/5 py-2 rounded-lg text-xs font-bold text-gray-500 border border-white/5">
                 未獲得授權
