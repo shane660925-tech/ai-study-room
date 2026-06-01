@@ -390,7 +390,31 @@
         </div>
 
         <div id="bubbleContainer" class="absolute bottom-8 right-8 flex flex-col items-end gap-3 z-50 pointer-events-none"></div>
+        <div id="mobileRoomStatsMount" class="mobile-room-mount hidden md:hidden"></div>
     </main>
+
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.innerWidth > 768) return;
+
+    const statsMount = document.getElementById('mobileRoomStatsMount');
+    const tabHeader = document.querySelector('aside > div:nth-child(3)');
+    const tabContent = document.querySelector('aside > div:nth-child(4)');
+    const sidebarProfile = document.querySelector('aside > div:nth-child(5)');
+
+    if (statsMount && tabHeader) {
+        statsMount.appendChild(tabHeader);
+    }
+
+    if (statsMount && tabContent) {
+        statsMount.appendChild(tabContent);
+    }
+
+    if (statsMount && sidebarProfile) {
+        statsMount.appendChild(sidebarProfile);
+    }
+});
+</script>
 
     <script src="/js/study-timer.js"></script>
     <script src="/js/tutor-client.js"></script>
