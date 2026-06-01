@@ -861,14 +861,16 @@ body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentTimerDisplay + span {
 }
 
     body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentPeriodLabel {
-        font-size: 12px !important;
-        line-height: 1.2 !important;
-    }
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0.08em !important;
+}
 
-    body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentStatusBadge {
-        font-size: 10px !important;
-        white-space: nowrap !important;
-    }
+body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentStatusBadge {
+    font-size: 13px !important;
+    padding: 5px 12px !important;
+    white-space: nowrap !important;
+}
 
     body:has(#tutorEndSessionBtn) #mobileRoomTopMount #studentProgressBar {
         min-width: 0 !important;
