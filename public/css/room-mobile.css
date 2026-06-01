@@ -558,38 +558,44 @@
 }
 
 /* ===========================================================
-   Tutor Room Mobile Phase 2-4
-   手機翻開警告彈窗手機版
+   Tutor Room Mobile Phase 2-4 Revised
+   手機翻開警告彈窗手機通用版
 =========================================================== */
 
 @media (max-width: 768px) {
     #flipWarningOverlay {
         padding: 24px 18px !important;
         text-align: center !important;
+        gap: 12px !important;
     }
 
     #flipWarningOverlay i {
-        font-size: 4.5rem !important;
-        margin-bottom: 24px !important;
+        font-size: clamp(3rem, 14vw, 4.2rem) !important;
+        margin-bottom: 14px !important;
     }
 
     #flipWarningOverlay h1 {
-        font-size: 2rem !important;
-        line-height: 1.2 !important;
-        letter-spacing: 0.08em !important;
-        margin-bottom: 12px !important;
+        font-size: clamp(1.55rem, 8vw, 2.15rem) !important;
+        line-height: 1.18 !important;
+        letter-spacing: 0.04em !important;
+        margin-bottom: 10px !important;
+        max-width: 340px !important;
     }
 
     #flipWarningOverlay p {
-        font-size: 1.05rem !important;
-        line-height: 1.5 !important;
+        font-size: clamp(0.95rem, 4.8vw, 1.15rem) !important;
+        line-height: 1.55 !important;
         max-width: 320px !important;
+        margin-top: 4px !important;
     }
 
-    #warningNum {
-        font-size: 5rem !important;
+    #flipWarningOverlay p span,
+    #flipWarningOverlay .text-yellow-400,
+    #flipWarningOverlay .text-6xl,
+    #flipWarningOverlay .text-7xl,
+    #flipWarningOverlay .text-8xl,
+    #flipWarningOverlay .text-9xl {
+        font-size: clamp(3rem, 18vw, 4.5rem) !important;
         line-height: 1 !important;
-        margin-top: 18px !important;
-        margin-bottom: 18px !important;
     }
 }
