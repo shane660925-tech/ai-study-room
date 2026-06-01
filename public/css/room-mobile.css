@@ -556,3 +556,40 @@
         font-size: 14px !important;
     }
 }
+
+/* ===========================================================
+   Tutor Room Mobile Phase 2-4
+   手機翻開警告彈窗手機版
+=========================================================== */
+
+@media (max-width: 768px) {
+    #flipWarningOverlay {
+        padding: 24px 18px !important;
+        text-align: center !important;
+    }
+
+    #flipWarningOverlay i {
+        font-size: 4.5rem !important;
+        margin-bottom: 24px !important;
+    }
+
+    #flipWarningOverlay h1 {
+        font-size: 2rem !important;
+        line-height: 1.2 !important;
+        letter-spacing: 0.08em !important;
+        margin-bottom: 12px !important;
+    }
+
+    #flipWarningOverlay p {
+        font-size: 1.05rem !important;
+        line-height: 1.5 !important;
+        max-width: 320px !important;
+    }
+
+    #warningNum {
+        font-size: 5rem !important;
+        line-height: 1 !important;
+        margin-top: 18px !important;
+        margin-bottom: 18px !important;
+    }
+}
