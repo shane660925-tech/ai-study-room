@@ -828,23 +828,19 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
 
 @media (max-width: 640px) {
     #tutor-setup-modal {
-        padding: 10px !important;
-        align-items: flex-start !important;
-        justify-content: flex-start !important;
-        padding-top: 18px !important;
-        padding-bottom: 80px !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
+    padding: 12px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding-top: 24px !important;
+    padding-bottom: 24px !important;
+}
 
     #tutor-setup-modal > div {
-        width: 100% !important;
-        max-width: 360px !important;
-        margin: 0 auto !important;
-        padding: 16px 14px !important;
-        border-radius: 22px !important;
-        max-height: none !important;
-    }
+    width: 100% !important;
+    max-width: 380px !important;
+    margin: 0 auto !important;
+    padding: 22px 18px !important;
+}
 
     #tutor-setup-modal h2 {
         font-size: 1.2rem !important;
@@ -881,8 +877,9 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
     }
 
     #tutor-qrcode-container {
-        margin-bottom: 10px !important;
-    }
+    margin-top: 18px !important;
+    margin-bottom: 22px !important;
+}
 
     #tutor-qrcode-container > div {
         padding: 8px !important;
@@ -890,7 +887,7 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
     }
 
     #tutor-qrcode {
-        transform: scale(0.82) !important;
+        transform: scale(0.9) !important;
         transform-origin: center !important;
         width: 116px !important;
         height: 116px !important;
