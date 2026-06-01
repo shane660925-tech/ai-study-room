@@ -599,3 +599,146 @@
         line-height: 1 !important;
     }
 }
+
+/* ===========================================================
+   Tutor Room Mobile Phase 2-5
+   喝水 / 上廁所彈窗手機版
+   共用教室彈窗，保守處理
+=========================================================== */
+
+@media (max-width: 768px) {
+    #breakModal,
+    #break-modal,
+    #restModal,
+    #rest-modal {
+        padding: 16px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #breakModal > div,
+    #break-modal > div,
+    #restModal > div,
+    #rest-modal > div {
+        width: 100% !important;
+        max-width: 360px !important;
+        padding: 22px 16px !important;
+        border-radius: 24px !important;
+        max-height: calc(100dvh - 48px) !important;
+        overflow-y: auto !important;
+    }
+
+    #breakModal h2,
+    #breakModal h3,
+    #break-modal h2,
+    #break-modal h3,
+    #restModal h2,
+    #restModal h3,
+    #rest-modal h2,
+    #rest-modal h3 {
+        font-size: 1.45rem !important;
+        line-height: 1.25 !important;
+    }
+
+    #breakModal p,
+    #break-modal p,
+    #restModal p,
+    #rest-modal p {
+        font-size: 1rem !important;
+        line-height: 1.55 !important;
+    }
+
+    #breakModal button,
+    #break-modal button,
+    #restModal button,
+    #rest-modal button {
+        width: 100% !important;
+        padding: 13px !important;
+        border-radius: 16px !important;
+        font-size: 14px !important;
+    }
+}
+
+/* ===========================================================
+   Tutor Room Mobile Phase 2-6
+   線上巡堂 / 導師巡堂跑馬燈手機版
+=========================================================== */
+
+@media (max-width: 768px) {
+    .tutor-marquee-container {
+        top: 12px !important;
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: none !important;
+        height: 54px !important;
+        padding: 0 12px !important;
+        border-radius: 16px !important;
+        gap: 10px !important;
+        z-index: 10020 !important;
+    }
+
+    .tutor-marquee-container img {
+        width: 34px !important;
+        height: 34px !important;
+        padding: 3px !important;
+    }
+
+    .tutor-marquee-container div {
+        min-width: 0 !important;
+    }
+
+    .tutor-marquee-container div div {
+        font-size: 0.95rem !important;
+        line-height: 1.2 !important;
+    }
+}
+
+/* ===========================================================
+   Tutor Room Mobile Phase 2-7
+   離座警告彈窗手機版
+=========================================================== */
+
+@media (max-width: 768px) {
+
+    .leave-seat-alert,
+    .absence-alert,
+    .away-alert,
+    #leaveSeatAlert,
+    #absenceAlert {
+        width: calc(100% - 24px) !important;
+        max-width: 420px !important;
+        margin: 0 auto !important;
+        border-radius: 24px !important;
+        padding: 22px 18px !important;
+    }
+
+    .leave-seat-alert i,
+    .absence-alert i,
+    .away-alert i,
+    #leaveSeatAlert i,
+    #absenceAlert i {
+        font-size: 3rem !important;
+        margin-bottom: 14px !important;
+    }
+
+    .leave-seat-alert h2,
+    .absence-alert h2,
+    .away-alert h2,
+    #leaveSeatAlert h2,
+    #absenceAlert h2 {
+        font-size: 1.6rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .leave-seat-alert p,
+    .absence-alert p,
+    .away-alert p,
+    #leaveSeatAlert p,
+    #absenceAlert p {
+        font-size: 1rem !important;
+        line-height: 1.55 !important;
+    }
+}
