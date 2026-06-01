@@ -324,3 +324,54 @@
     padding: 12px 16px !important;
 }
 }
+
+/* ===========================================================
+   Tutor Room Mobile Phase 1-2
+   特約教室：結束自習移到標題列右側
+=========================================================== */
+
+@media (max-width: 768px) {
+    body:has(#tutorEndSessionBtn) main > header {
+        position: relative !important;
+        padding: 24px 150px 18px 18px !important;
+        min-height: 150px !important;
+        height: auto !important;
+        align-items: flex-start !important;
+    }
+
+    body:has(#tutorEndSessionBtn) main > header > div:first-child {
+        width: 100% !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
+    }
+
+    body:has(#tutorEndSessionBtn) main > header h2 {
+        font-size: 1.7rem !important;
+        line-height: 1.15 !important;
+        white-space: nowrap !important;
+    }
+
+    body:has(#tutorEndSessionBtn) #modeLabel {
+        font-size: 12px !important;
+        padding: 5px 12px !important;
+        border-radius: 999px !important;
+    }
+
+    body:has(#tutorEndSessionBtn) #status-bar {
+        margin-left: 0 !important;
+        width: auto !important;
+        max-width: 100% !important;
+    }
+
+    body:has(#tutorEndSessionBtn) #tutorEndSessionBtn {
+        position: absolute !important;
+        top: 28px !important;
+        right: 18px !important;
+        z-index: 50 !important;
+        padding: 10px 14px !important;
+        border-radius: 16px !important;
+        font-size: 14px !important;
+        white-space: nowrap !important;
+    }
+}
