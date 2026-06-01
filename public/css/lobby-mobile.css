@@ -1044,3 +1044,27 @@ main.max-w-6xl > .grid.grid-cols-1.lg\:grid-cols-3 > aside > *:nth-child(2)::-we
         max-width: 520px !important;
     }
 }
+
+/* ===========================================================
+   Tutor Room Mobile Phase 1-2
+   特約教室：結束自習移到標題列右側
+=========================================================== */
+
+@media (max-width: 768px) {
+    #tutorEndSessionBtn {
+        position: absolute !important;
+        top: 28px !important;
+        right: 18px !important;
+        z-index: 30 !important;
+
+        padding: 10px 14px !important;
+        border-radius: 16px !important;
+        font-size: 14px !important;
+        white-space: nowrap !important;
+    }
+
+    main > header {
+        position: relative !important;
+        padding-right: 130px !important;
+    }
+}
