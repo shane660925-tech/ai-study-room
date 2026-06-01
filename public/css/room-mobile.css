@@ -481,100 +481,130 @@
 }
 
 /* ===========================================================
-   Tutor Room Mobile Phase 2-3 Revised
+   Tutor Room Mobile Phase 2-3 Final
    中間下課手機重新連線 / 未完成翻轉彈窗手機版
 =========================================================== */
 
 @media (max-width: 768px) {
     #tutorReconnectQRModal {
-    padding: 0 !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow: hidden !important;
-}
-
-#tutorReconnectFailModal {
-    padding: 18px !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-}
+        padding: 0 !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+    }
 
     #tutorReconnectQRModal > div {
-    width: 100vw !important;
-    height: 100dvh !important;
+        width: 100vw !important;
+        height: 100dvh !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        padding: 22px 18px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        overflow: hidden !important;
+    }
 
-    max-width: none !important;
-    max-height: none !important;
+    #tutorReconnectQRModal i {
+        font-size: 2.6rem !important;
+        margin-bottom: 10px !important;
+        flex-shrink: 0 !important;
+    }
 
-    margin: 0 !important;
+    #tutorReconnectQRModal h2 {
+        font-size: clamp(1.55rem, 7vw, 2rem) !important;
+        line-height: 1.2 !important;
+        margin-bottom: 10px !important;
+        text-align: center !important;
+        flex-shrink: 0 !important;
+    }
 
-    border-radius: 0 !important;
+    #tutorReconnectQRModal p {
+        font-size: 0.95rem !important;
+        line-height: 1.45 !important;
+        max-width: 320px !important;
+        text-align: center !important;
+        margin-bottom: 12px !important;
+        flex-shrink: 0 !important;
+    }
 
-    padding: 24px 20px !important;
+    #tutorReconnectCountdown {
+        font-size: clamp(2.8rem, 15vw, 4rem) !important;
+        line-height: 1 !important;
+        margin: 4px 0 10px !important;
+        flex-shrink: 0 !important;
+    }
 
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    align-items: center !important;
-}
+    #tutorReconnectQRModal .bg-white {
+        width: 210px !important;
+        height: 210px !important;
+        padding: 10px !important;
+        border-radius: 22px !important;
+        margin: 10px auto 14px !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
+    }
 
-#tutorReconnectFailModal > div {
-    width: 100% !important;
-    max-width: 360px !important;
-    margin: 0 auto !important;
-    padding: 22px 18px !important;
-    border-radius: 24px !important;
-    max-height: calc(100dvh - 48px) !important;
-    overflow-y: auto !important;
-}
+    #tutorReconnectQR {
+        width: 190px !important;
+        height: 190px !important;
+        transform: none !important;
+        margin: 0 auto !important;
+        overflow: hidden !important;
+    }
 
-    #tutorReconnectQRModal i,
+    #tutorReconnectStatus {
+        max-width: 280px !important;
+        margin: 0 auto !important;
+        font-size: 0.95rem !important;
+        line-height: 1.45 !important;
+        padding: 12px 14px !important;
+        border-radius: 999px !important;
+        flex-shrink: 0 !important;
+    }
+
+    #tutorReconnectQRModal > div > p:last-child,
+    #tutorReconnectQRModal a,
+    #tutorReconnectQRModal .text-gray-500,
+    #tutorReconnectQRModal .text-gray-400 {
+        display: none !important;
+    }
+
+    #tutorReconnectFailModal {
+        padding: 18px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #tutorReconnectFailModal > div {
+        width: 100% !important;
+        max-width: 360px !important;
+        margin: 0 auto !important;
+        padding: 22px 18px !important;
+        border-radius: 24px !important;
+        max-height: calc(100dvh - 48px) !important;
+        overflow-y: auto !important;
+    }
+
     #tutorReconnectFailModal i {
         font-size: 3rem !important;
         margin-bottom: 16px !important;
     }
 
-    #tutorReconnectQRModal h2,
     #tutorReconnectFailModal h2 {
         font-size: 1.55rem !important;
         line-height: 1.25 !important;
         margin-bottom: 12px !important;
     }
 
-    #tutorReconnectQRModal p,
     #tutorReconnectFailModal p {
         font-size: 0.95rem !important;
         line-height: 1.6 !important;
-    }
-
-    #tutorReconnectQR {
-    width: 170px !important;
-    height: 170px !important;
-    transform: none !important;
-    transform-origin: center !important;
-    overflow: hidden !important;
-    margin: 0 auto !important;
-}
-
-    #tutorReconnectQRModal .bg-white {
-        padding: 8px !important;
-        border-radius: 16px !important;
-        margin: 12px auto !important;
-    }
-
-    #tutorReconnectCountdown {
-        font-size: 2.4rem !important;
-        line-height: 1 !important;
-        margin: 10px 0 !important;
-    }
-
-    #tutorReconnectStatus {
-        font-size: 0.9rem !important;
-        line-height: 1.45 !important;
-        padding: 12px !important;
-        border-radius: 16px !important;
     }
 
     #tutorReconnectFailModal button {
