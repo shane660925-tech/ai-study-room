@@ -92,12 +92,38 @@ function generateFinalReport(seconds) {
 
     let details = detailsArr.length > 0 ? detailsArr.join("\n") : "   無違規紀錄，表現優異！✨";
 
-    // 產生評價
+        // 產生評價
+    // 優先判斷特殊退出原因；沒有特殊原因時，才走原本分數評語
+    const violationReasons = Object.keys(violations);
+
+    const hasTutorReconnectFailed = violationReasons.some(reason =>
+        reason.includes("手機未重新連線") ||
+        reason.includes("未完成翻轉") ||
+        reason.includes("第二堂課開始自動退出")
+    );
+
+    const hasPhoneFlipKickout = violationReasons.some(reason =>
+        reason.includes("手機翻轉中斷") ||
+        reason.includes("超過5秒") ||
+        reason.includes("強制踢出") ||
+        reason.includes("翻開手機")
+    );
+
     let comment = "";
-    if (integrityScore >= 90) comment = "太不可思議了！你的專注力簡直就像是黑洞，AI 老師為你感到驕傲！👑";
-    else if (integrityScore >= 70) comment = "做得好！雖然中間有一點點小分神，但你調整的速度非常快處理得很好。💪";
-    else if (integrityScore >= 50) comment = "今天辛苦了！學習的路途難免有分心的時候，休息一下再出發吧。🌿";
-    else comment = "感覺你今天的心情有點浮躁呢？沒關係，調整好狀態，下次我們再一起努力。🔥";
+
+    if (hasTutorReconnectFailed) {
+        comment = "這次系統偵測到你在下一堂課開始前，沒有完成手機重新連線與翻轉驗證，因此提前結束本次專注。特約教室的手機連動是為了讓導師確認你已準備好進入下一段學習；下次休息時間結束前，記得提早掃描 QR Code 並完成翻轉，讓學習節奏順利銜接。📱";
+    } else if (hasPhoneFlipKickout) {
+        comment = "這次系統偵測到手機翻開超過限制時間，因此提前結束本次專注。你已經累積了一段學習時間，代表你其實有進入狀態；下次只要在警告倒數內立刻把手機蓋回桌面，就能保住完整專注紀錄。重新整理一下，我們下次再穩穩完成一回合。🛡️";
+    } else if (integrityScore >= 90) {
+        comment = "太不可思議了！你的專注力簡直就像是黑洞，AI 老師為你感到驕傲！👑";
+    } else if (integrityScore >= 70) {
+        comment = "做得好！雖然中間有一點點小分神，但你調整的速度非常快處理得很好。💪";
+    } else if (integrityScore >= 50) {
+        comment = "今天辛苦了！學習的路途難免有分心的時候，休息一下再出發吧。🌿";
+    } else {
+        comment = "感覺你今天的心情有點浮躁呢？沒關係，調整好狀態，下次我們再一起努力。🔥";
+    }
 
     return {
         integrity: integrityScore,
