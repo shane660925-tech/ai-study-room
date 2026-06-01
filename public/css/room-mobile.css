@@ -479,3 +479,80 @@
         font-size: 14px !important;
     }
 }
+
+/* ===========================================================
+   Tutor Room Mobile Phase 2-3
+   中間下課掃碼重新連線手機彈窗手機版
+=========================================================== */
+
+@media (max-width: 768px) {
+    #tutorReconnectQRModal,
+    #tutorReconnectFailModal {
+        padding: 14px !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        padding-top: 28px !important;
+        padding-bottom: 80px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #tutorReconnectQRModal > div,
+    #tutorReconnectFailModal > div {
+        width: 100% !important;
+        max-width: 360px !important;
+        margin: 0 auto !important;
+        padding: 20px 16px !important;
+        border-radius: 24px !important;
+        max-height: none !important;
+    }
+
+    #tutorReconnectQRModal h2,
+    #tutorReconnectFailModal h2 {
+        font-size: 1.35rem !important;
+        line-height: 1.25 !important;
+        margin-bottom: 10px !important;
+    }
+
+    #tutorReconnectQRModal p,
+    #tutorReconnectFailModal p {
+        font-size: 12px !important;
+        line-height: 1.55 !important;
+    }
+
+    #tutorReconnectQR {
+        transform: scale(0.86) !important;
+        transform-origin: center !important;
+        width: 132px !important;
+        height: 132px !important;
+        overflow: hidden !important;
+        margin: 0 auto !important;
+    }
+
+    #tutorReconnectQRModal .bg-white {
+        padding: 8px !important;
+        border-radius: 16px !important;
+        margin: 12px auto !important;
+    }
+
+    #tutorReconnectCountdown {
+        font-size: 2.5rem !important;
+        line-height: 1 !important;
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    #tutorReconnectStatus {
+        font-size: 12px !important;
+        line-height: 1.45 !important;
+        padding: 12px !important;
+        border-radius: 16px !important;
+    }
+
+    #tutorReconnectFailModal button {
+        width: 100% !important;
+        padding: 13px !important;
+        border-radius: 16px !important;
+        font-size: 14px !important;
+    }
+}
