@@ -3350,6 +3350,62 @@ app.get('/api/user-stats', async (req, res) => {
 });
 
 // ==========================================
+// 今日累積專注時間 API
+// 統計台灣時間今天 00:00 ~ 明天 00:00 的所有教室專注秒數
+// ==========================================
+app.get('/api/focus/today', async (req, res) => {
+    const username = req.query.username;
+
+    if (!username) {
+        return res.status(400).json({
+            success: false,
+            error: '缺少 username'
+        });
+    }
+
+    try {
+        // 以台灣時間計算今天日期
+        const taipeiToday = new Date().toLocaleDateString('en-CA', {
+            timeZone: 'Asia/Taipei'
+        });
+
+        const startAt = new Date(`${taipeiToday}T00:00:00+08:00`);
+        const endAt = new Date(startAt.getTime() + 24 * 60 * 60 * 1000);
+
+        const { data, error } = await supabase
+            .from('focus_records')
+            .select('focus_seconds, room_type, created_at')
+            .eq('username', username)
+            .gte('created_at', startAt.toISOString())
+            .lt('created_at', endAt.toISOString());
+
+        if (error) throw error;
+
+        const totalSeconds = (data || []).reduce((sum, record) => {
+            return sum + Number(record.focus_seconds || 0);
+        }, 0);
+
+        res.json({
+            success: true,
+            username,
+            date: taipeiToday,
+            totalSeconds,
+            totalMinutes: Math.floor(totalSeconds / 60),
+            records: data || []
+        });
+
+    } catch (err) {
+        console.error('取得今日累積專注時間失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '取得今日累積專注時間失敗',
+            detail: err.message
+        });
+    }
+});
+
+// ==========================================
 // [合併版] 虛擬白名單與課程資料庫
 // ==========================================
 

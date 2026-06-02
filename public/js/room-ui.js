@@ -7,6 +7,44 @@
 let warningCheckTimer = null; 
 
 // ==========================================
+// 個人資訊：今日累積專注時間
+// 顯示在左下角原本 Streak 的位置
+// ==========================================
+window.loadTodayFocusMinutes = async function(userName) {
+    if (!userName) return;
+
+    const valueEl = document.getElementById('myStreakNum');
+    if (!valueEl) return;
+
+    const labelEl = valueEl.previousElementSibling;
+    if (labelEl) {
+        labelEl.innerText = '今日累積';
+        labelEl.title = '今日所有教室完成後累積的專注時間';
+    }
+
+    valueEl.innerText = '--';
+
+    try {
+        const res = await fetch(`/api/focus/today?username=${encodeURIComponent(userName)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            console.warn('讀取今日累積失敗:', data);
+            valueEl.innerText = '0 min';
+            return;
+        }
+
+        const minutes = Number(data.totalMinutes || 0);
+        valueEl.innerText = `${minutes} min`;
+        valueEl.title = `今日已完成累積 ${minutes} 分鐘`;
+
+    } catch (err) {
+        console.warn('讀取今日累積發生錯誤:', err);
+        valueEl.innerText = '0 min';
+    }
+};
+
+// ==========================================
 // [新增] 集中管理違規畫面與警告 UI (接管自 ai-core)
 // ==========================================
 window.RoomUI = {
@@ -301,7 +339,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('welcomeMsg').innerText = `歡迎回來，${userName}`;
     
     document.getElementById('mySidebarName').innerText = userName;
-    document.getElementById('mySidebarAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${userName}`;
+document.getElementById('mySidebarAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${userName}`;
+
+// 左下角原本 Streak 改為「今日累積」
+if (typeof window.loadTodayFocusMinutes === 'function') {
+    window.loadTodayFocusMinutes(userName);
+}
 
     silentlyStartCamera();
 
