@@ -157,10 +157,11 @@ class StudyTimerManager {
 
         const activeSocket = window.appSocket || window.socket;
 
-        if (studentName && activeSocket && activeSocket.connected) {
+                if (studentName && activeSocket && activeSocket.connected) {
             activeSocket.emit('mobile_sync_update', {
                 type: 'FORCE_DISCONNECT',
                 studentName: studentName,
+                syncToken: activeSocket.id,
                 reason: 'NORMAL_TIMER_COMPLETED'
             });
         }

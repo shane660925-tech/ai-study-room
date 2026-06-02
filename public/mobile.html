@@ -285,12 +285,21 @@ let hasForceDisconnected = false;
     urlParams.get('token'); 
 
         if(name) {
-            studentName = name; 
-            setupArea.classList.add('hidden');
+            studentName = name;
+hasForceDisconnected = false;
+
+setupArea.classList.add('hidden');
             syncArea.classList.remove('hidden');
             document.getElementById('displayName').innerText = name;
             
-            if (syncToken) {
+                        if (syncToken) {
+                // ✅ 讓手機加入電腦端 syncToken 專用房間
+                // 之後普通教室時間結束時，電腦端送 FORCE_DISCONNECT，手機才收得到
+                socket.emit('join_mobile_sync_room', {
+                    syncToken: syncToken,
+                    studentName: name
+                });
+
                 const tutorRoomCode =
     urlParams.get('room') ||
     urlParams.get('roomId') ||

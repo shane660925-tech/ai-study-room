@@ -92,21 +92,21 @@ function generateFinalReport(seconds) {
 
     let details = detailsArr.length > 0 ? detailsArr.join("\n") : "   無違規紀錄，表現優異！✨";
 
-        // 產生評價
+            // 產生評價
     // 優先判斷特殊退出原因；沒有特殊原因時，才走原本分數評語
-    const violationReasons = Object.keys(violations);
+    // 注意：只判斷 count > 0 的違規，避免 0 次紀錄或「5 秒內蓋回」誤觸發特殊評語
+    const activeViolationEntries = Object.entries(violations).filter(([, count]) => Number(count) > 0);
 
-    const hasTutorReconnectFailed = violationReasons.some(reason =>
+    const hasTutorReconnectFailed = activeViolationEntries.some(([reason]) =>
         reason.includes("手機未重新連線") ||
         reason.includes("未完成翻轉") ||
         reason.includes("第二堂課開始自動退出")
     );
 
-    const hasPhoneFlipKickout = violationReasons.some(reason =>
+    const hasPhoneFlipKickout = activeViolationEntries.some(([reason]) =>
         reason.includes("手機翻轉中斷") ||
         reason.includes("超過5秒") ||
-        reason.includes("強制踢出") ||
-        reason.includes("翻開手機")
+        reason.includes("強制踢出")
     );
 
     let comment = "";
@@ -232,7 +232,12 @@ window.endSession = async function() {
 
     if(window.appSocket && window.appSocket.connected) {
         window.appSocket.emit("update_status", { status: "IDLE", name: window.myUsername, isFlipped: false });
-        window.appSocket.emit('mobile_sync_update', { type: 'FORCE_DISCONNECT', studentName: window.myUsername });
+                window.appSocket.emit('mobile_sync_update', {
+            type: 'FORCE_DISCONNECT',
+            studentName: window.myUsername,
+            syncToken: window.appSocket.id,
+            reason: 'SESSION_ENDED'
+        });
 
         if (window.myUsername) {
             window.appSocket.emit('mobile_sync', { 

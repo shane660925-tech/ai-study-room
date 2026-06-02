@@ -4382,6 +4382,31 @@ socket.on('get_attendance', (data) => {
     // 原有功能與連動邏輯
     // ==========================================
 
+        // ==========================================
+    // 手機加入電腦端 syncToken 房間
+    // 用於普通教室時間結束後，讓 FORCE_DISCONNECT 能送到手機
+    // ==========================================
+    socket.on('join_mobile_sync_room', (data) => {
+        const syncToken = data?.syncToken;
+        const studentName = data?.studentName || data?.username || '';
+
+        if (!syncToken) {
+            console.warn('⚠️ join_mobile_sync_room 缺少 syncToken:', data);
+            return;
+        }
+
+        socket.join(syncToken);
+
+if (studentName) {
+    socket.join(`mobile_user_${studentName}`);
+}
+
+socket.mobileSyncToken = syncToken;
+socket.mobileStudentName = studentName;
+
+console.log(`📱 手機 ${studentName || '未知學員'} 已加入 sync room: ${syncToken}`);
+    });
+
     socket.on('request_link_device', (data) => {
     console.log(`收到連動請求！手機(${data.studentName}) 要求連動大廳(${data.syncToken})`);
 
@@ -4785,9 +4810,20 @@ if (targetTutorRoom) {
     io.to(targetTutorRoom).emit('mobile_sync_update', data);
 }
 
-    // 手機 QR 連動：優先送回掃 QR 的那台電腦
-    if (data?.syncToken) {
-        io.to(data.syncToken).emit('mobile_sync_update', data);
+    // 手機 QR 連動：優先送回掃 QR 的那台電腦 / 手機 sync room
+if (data?.syncToken) {
+    io.to(data.syncToken).emit('mobile_sync_update', data);
+}
+
+// ✅ 保險：也送給該學生手機房間
+// 避免普通教室換頁後 socket.id 改變，手機收不到 FORCE_DISCONNECT
+const targetStudentName =
+    data?.studentName ||
+    data?.name ||
+    data?.username;
+
+    if (targetStudentName) {
+    io.to(`mobile_user_${targetStudentName}`).emit('mobile_sync_update', data);
     }
 
     // 一般教室同步：如果有 roomMode，再送給同教室
