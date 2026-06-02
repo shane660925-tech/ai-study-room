@@ -9,7 +9,44 @@ let warningCheckTimer = null;
 // ==========================================
 // 個人資訊：今日累積專注時間
 // 顯示在左下角原本 Streak 的位置
+// 今日已完成紀錄 + 本次正在讀的時間
 // ==========================================
+
+window.todayFocusCompletedSeconds = 0;
+window.todayFocusLiveTimer = null;
+
+window.getCurrentSessionElapsedSeconds = function() {
+    // 優先使用 StudyTimer，沉浸式 / 主題教室最準
+    if (
+        window.StudyTimer &&
+        Number(window.StudyTimer.totalSeconds || 0) > 0
+    ) {
+        const total = Number(window.StudyTimer.totalSeconds || 0);
+        const remaining = Number(window.StudyTimer.remainingSeconds || 0);
+        return Math.max(0, total - remaining);
+    }
+
+    // 特約教室或其他模式保底：用 sessionStartTime 粗略計算
+    if (window.sessionStartTime) {
+        return Math.max(0, Math.floor((Date.now() - window.sessionStartTime) / 1000));
+    }
+
+    return 0;
+};
+
+window.renderTodayFocusMinutes = function() {
+    const valueEl = document.getElementById('myStreakNum');
+    if (!valueEl) return;
+
+    const completedSeconds = Number(window.todayFocusCompletedSeconds || 0);
+    const currentSessionSeconds = Number(window.getCurrentSessionElapsedSeconds?.() || 0);
+
+    const totalMinutes = Math.floor((completedSeconds + currentSessionSeconds) / 60);
+
+    valueEl.innerText = `${totalMinutes} min`;
+    valueEl.title = `今日累積 ${totalMinutes} 分鐘（含本次進行中）`;
+};
+
 window.loadTodayFocusMinutes = async function(userName) {
     if (!userName) return;
 
@@ -19,7 +56,7 @@ window.loadTodayFocusMinutes = async function(userName) {
     const labelEl = valueEl.previousElementSibling;
     if (labelEl) {
         labelEl.innerText = '今日累積';
-        labelEl.title = '今日所有教室完成後累積的專注時間';
+        labelEl.title = '今日所有教室加總，隔天歸零';
     }
 
     valueEl.innerText = '--';
@@ -30,17 +67,28 @@ window.loadTodayFocusMinutes = async function(userName) {
 
         if (!res.ok || !data.success) {
             console.warn('讀取今日累積失敗:', data);
-            valueEl.innerText = '0 min';
+            window.todayFocusCompletedSeconds = 0;
+            window.renderTodayFocusMinutes();
             return;
         }
 
-        const minutes = Number(data.totalMinutes || 0);
-        valueEl.innerText = `${minutes} min`;
-        valueEl.title = `今日已完成累積 ${minutes} 分鐘`;
+        window.todayFocusCompletedSeconds = Number(data.totalSeconds || 0);
+        window.renderTodayFocusMinutes();
+
+        // 避免重複建立 interval
+        if (window.todayFocusLiveTimer) {
+            clearInterval(window.todayFocusLiveTimer);
+        }
+
+        // 每 15 秒刷新一次，但顯示仍以分鐘為單位
+        window.todayFocusLiveTimer = setInterval(() => {
+            window.renderTodayFocusMinutes();
+        }, 15000);
 
     } catch (err) {
         console.warn('讀取今日累積發生錯誤:', err);
-        valueEl.innerText = '0 min';
+        window.todayFocusCompletedSeconds = 0;
+        window.renderTodayFocusMinutes();
     }
 };
 
