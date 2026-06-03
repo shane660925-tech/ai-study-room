@@ -87,6 +87,26 @@ function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
 }
 
+function buildNewStudentTrialFields() {
+    const trialStartedAt = new Date();
+    const trialEndsAt = new Date(
+        trialStartedAt.getTime() + 14 * 24 * 60 * 60 * 1000
+    );
+
+    return {
+        // 注意：資料庫欄位先維持舊系統相容值
+        // 真正的 trial 權限由 trial_ends_at 判斷
+        membership_level: 'free',
+        is_subscribed: false,
+        subscription_status: 'none',
+        subscription_started_at: null,
+        subscription_end_date: null,
+        trial_started_at: trialStartedAt.toISOString(),
+        trial_ends_at: trialEndsAt.toISOString(),
+        has_seen_subscription_intro: false
+    };
+}
+
 // ==========================================
 // [新增功能] 產生 6 位數唯一且不可重複的代碼
 // ==========================================
@@ -494,8 +514,8 @@ async function createTeacherDiscountCodeIfNotExists(username) {
         .insert([{
             code: newCode,
             teacher_username: username,
-            discount_type: 'percent',
-            discount_value: 100,
+            discount_type: 'fixed',
+discount_value: 150,
             is_active: true
         }])
         .select()
@@ -1098,17 +1118,20 @@ app.post('/api/register', async (req, res) => {
         // --- [新增] 註冊時產生代碼 ---
         const newLinkCode = await generateUniqueLinkCode();
 
-        const { error } = await supabase.from('users').insert([{ 
-            username: String(username), 
-            account: String(account),
-            password: String(password),
-            total_seconds: 0, 
-            streak: 1, 
-            last_login: today, 
-            role: 'student', 
-            integrity_score: 100,
-            link_code: newLinkCode // [新增欄位]
-        }]);
+        const trialFields = buildNewStudentTrialFields();
+
+const { error } = await supabase.from('users').insert([{ 
+    username: String(username), 
+    account: String(account),
+    password: String(password),
+    total_seconds: 0, 
+    streak: 1, 
+    last_login: today, 
+    role: 'student', 
+    integrity_score: 100,
+    link_code: newLinkCode,
+    ...trialFields
+}]);
 
         if (error) throw error;
         res.json({ message: '註冊成功！', username: username });
@@ -1664,6 +1687,61 @@ app.post('/api/intro-complete', async (req, res) => {
     }
 });
 
+app.post('/api/subscription/intro-seen', async (req, res) => {
+    const { username } = req.body;
+
+    if (!username) {
+        return res.status(400).json({
+            error: '缺少 username'
+        });
+    }
+
+    try {
+        const { data: user, error: findError } = await supabase
+            .from('users')
+            .select('username, role, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (findError) throw findError;
+
+        if (!user) {
+            return res.status(404).json({
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                error: '此帳號已被停用'
+            });
+        }
+
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({
+                has_seen_subscription_intro: true
+            })
+            .eq('username', username);
+
+        if (updateError) throw updateError;
+
+        res.json({
+            success: true,
+            message: '訂閱方案介紹已標記為看過',
+            username
+        });
+
+    } catch (err) {
+        console.error('訂閱方案介紹紀錄失敗:', err);
+
+        res.status(500).json({
+            error: '訂閱方案介紹紀錄失敗',
+            detail: err.message
+        });
+    }
+});
+
 function generateOrderNo() {
     const datePart = new Date()
         .toISOString()
@@ -1694,8 +1772,57 @@ function calculateDiscount(originalAmount, discountCode) {
     return 0;
 }
 
-const SUBSCRIPTION_PRICE = 300;
-const SUBSCRIPTION_MONTHS = 1;
+const SUBSCRIPTION_PLANS = {
+    monthly: {
+        id: 'monthly',
+        name: '月繳方案',
+        amount: 300,
+        months: 1
+    },
+    two_months: {
+        id: 'two_months',
+        name: '2 個月方案',
+        amount: 500,
+        months: 2
+    },
+    half_year: {
+        id: 'half_year',
+        name: '半年方案',
+        amount: 1400,
+        months: 6
+    },
+    yearly: {
+        id: 'yearly',
+        name: '年繳方案',
+        amount: 2500,
+        months: 12
+    }
+};
+
+const SUBSCRIPTION_TEACHER_DISCOUNT_AMOUNT = 150;
+
+const PAYMENT_PROVIDERS = {
+    mock: 'mock',
+    linepay: 'linepay',
+    jkopay: 'jkopay',
+    credit_card: 'credit_card'
+};
+
+function getSubscriptionPlan(planId) {
+    const cleanPlanId = String(planId || 'monthly').trim();
+
+    return SUBSCRIPTION_PLANS[cleanPlanId] || SUBSCRIPTION_PLANS.monthly;
+}
+
+function normalizePaymentProvider(provider) {
+    const cleanProvider = String(provider || 'mock').trim();
+
+    if (PAYMENT_PROVIDERS[cleanProvider]) {
+        return cleanProvider;
+    }
+
+    return 'mock';
+}
 
 app.get('/api/subscription/status', async (req, res) => {
     try {
@@ -1704,13 +1831,27 @@ app.get('/api/subscription/status', async (req, res) => {
         if (!username) {
             return res.status(400).json({
                 is_subscribed: false,
+                accessLevel: 'free',
+                canUseFullFeatures: false,
                 error: '缺少 username'
             });
         }
 
         const { data: user, error } = await supabase
             .from('users')
-            .select('username, is_subscribed, subscription_status, subscription_end_date')
+            .select(`
+                username,
+                role,
+                membership_level,
+                is_subscribed,
+                subscription_status,
+                subscription_started_at,
+                subscription_end_date,
+                trial_started_at,
+                trial_ends_at,
+                has_seen_subscription_intro,
+                is_blocked
+            `)
             .eq('username', username)
             .maybeSingle();
 
@@ -1719,31 +1860,145 @@ app.get('/api/subscription/status', async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 is_subscribed: false,
+                accessLevel: 'free',
+                canUseFullFeatures: false,
                 error: '找不到使用者'
             });
         }
 
+        if (user.is_blocked) {
+            return res.status(403).json({
+                username: user.username,
+                is_subscribed: false,
+                accessLevel: 'free',
+                canUseFullFeatures: false,
+                is_blocked: true,
+                error: '此帳號已被停用'
+            });
+        }
+
+        const role = user.role || 'student';
+
+        // 教師 / 管理員 / 審核中教師先維持原本邏輯，不受學生訂閱權限影響
+        if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+            return res.json({
+                username: user.username,
+                role,
+                membership_level: user.membership_level || 'staff',
+                is_subscribed: true,
+                subscription_status: user.subscription_status || 'role_bypass',
+                subscription_started_at: user.subscription_started_at,
+                subscription_end_date: user.subscription_end_date,
+                trial_started_at: user.trial_started_at,
+                trial_ends_at: user.trial_ends_at,
+                has_seen_subscription_intro: user.has_seen_subscription_intro === true,
+                accessLevel: 'pro',
+                canUseFullFeatures: true,
+                role_bypass: true
+            });
+        }
+
         const now = Date.now();
-        const endDate = user.subscription_end_date
+
+        const subscriptionEndTime = user.subscription_end_date
             ? new Date(user.subscription_end_date).getTime()
             : 0;
 
-        const active =
+        const trialEndTime = user.trial_ends_at
+            ? new Date(user.trial_ends_at).getTime()
+            : 0;
+
+        const hasActiveSubscription =
             user.is_subscribed === true &&
             user.subscription_status === 'active' &&
-            endDate > now;
+            subscriptionEndTime > now;
+
+        const hasActiveTrial =
+            trialEndTime > now;
+
+        const hasAnyExpiredAccessRecord =
+    !!user.trial_ends_at ||
+    !!user.subscription_end_date ||
+    user.subscription_status === 'active' ||
+    user.subscription_status === 'expired';
+
+const shouldSyncExpiredToDatabase =
+    !hasActiveSubscription &&
+    !hasActiveTrial &&
+    hasAnyExpiredAccessRecord &&
+    (
+        user.membership_level !== 'free' ||
+        user.is_subscribed !== false ||
+        user.subscription_status !== 'expired'
+    );
+
+if (shouldSyncExpiredToDatabase) {
+    const { error: syncExpiredError } = await supabase
+        .from('users')
+        .update({
+            membership_level: 'free',
+            is_subscribed: false,
+            subscription_status: 'expired'
+        })
+        .eq('username', user.username);
+
+    if (syncExpiredError) {
+        console.error('同步過期訂閱狀態失敗:', syncExpiredError);
+    } else {
+        console.log(`✅ 已同步過期訂閱狀態為免費版: ${user.username}`);
+    }
+}
+
+        let accessLevel = 'free';
+        let canUseFullFeatures = false;
+
+        if (hasActiveSubscription) {
+            accessLevel = 'pro';
+            canUseFullFeatures = true;
+        } else if (hasActiveTrial) {
+            accessLevel = 'trial';
+            canUseFullFeatures = true;
+        } else if (user.trial_ends_at || user.subscription_end_date) {
+            accessLevel = 'expired';
+            canUseFullFeatures = false;
+        } else {
+            accessLevel = 'free';
+            canUseFullFeatures = false;
+        }
 
         res.json({
             username: user.username,
-            is_subscribed: active,
-            subscription_status: active ? 'active' : 'expired',
-            subscription_end_date: user.subscription_end_date
+            role,
+            membership_level: accessLevel === 'pro'
+                ? 'pro'
+                : accessLevel === 'trial'
+                    ? 'trial'
+                    : 'free',
+
+            is_subscribed: hasActiveSubscription,
+            subscription_status: hasActiveSubscription
+    ? 'active'
+    : shouldSyncExpiredToDatabase || accessLevel === 'expired'
+        ? 'expired'
+        : (user.subscription_status || 'none'),
+
+            subscription_started_at: user.subscription_started_at,
+            subscription_end_date: user.subscription_end_date,
+            trial_started_at: user.trial_started_at,
+            trial_ends_at: user.trial_ends_at,
+            has_seen_subscription_intro: user.has_seen_subscription_intro === true,
+
+            accessLevel,
+            canUseFullFeatures
         });
 
     } catch (err) {
         console.error('取得訂閱狀態失敗:', err);
+
         res.status(500).json({
             is_subscribed: false,
+            accessLevel: 'free',
+            canUseFullFeatures: false,
             error: '取得訂閱狀態失敗',
             detail: err.message
         });
@@ -1752,7 +2007,12 @@ app.get('/api/subscription/status', async (req, res) => {
 
 app.post('/api/subscription/create-order', async (req, res) => {
     try {
-        const { username, discountCode } = req.body;
+        const {
+            username,
+            discountCode,
+            planId = 'monthly',
+            provider = 'mock'
+        } = req.body;
 
         if (!username) {
             return res.status(400).json({
@@ -1760,9 +2020,20 @@ app.post('/api/subscription/create-order', async (req, res) => {
             });
         }
 
+        const selectedPlan = getSubscriptionPlan(planId);
+        const paymentProvider = normalizePaymentProvider(provider);
+
+        // 真實金流尚未串接，現階段只允許 mock 建立測試訂單
+        if (paymentProvider !== 'mock') {
+            return res.status(400).json({
+                error: '此付款方式尚未開放，請先使用 mock 測試流程',
+                provider: paymentProvider
+            });
+        }
+
         const { data: user, error: userError } = await supabase
             .from('users')
-            .select('username, is_subscribed, subscription_status, subscription_end_date, is_blocked')
+            .select('username, role, is_blocked')
             .eq('username', username)
             .maybeSingle();
 
@@ -1812,8 +2083,12 @@ app.post('/api/subscription/create-order', async (req, res) => {
             validDiscountCode = codeData;
         }
 
-        const originalAmount = SUBSCRIPTION_PRICE;
-        let discountAmount = calculateDiscount(originalAmount, validDiscountCode);
+        const originalAmount = Number(selectedPlan.amount || 0);
+
+        // 教師優惠碼規則：不管選哪個方案，一律折 150 元
+        let discountAmount = validDiscountCode
+            ? SUBSCRIPTION_TEACHER_DISCOUNT_AMOUNT
+            : 0;
 
         if (discountAmount > originalAmount) {
             discountAmount = originalAmount;
@@ -1834,7 +2109,13 @@ app.post('/api/subscription/create-order', async (req, res) => {
                 amount,
                 status: 'pending',
                 order_type: 'subscription',
-                subscription_months: SUBSCRIPTION_MONTHS
+                subscription_plan: selectedPlan.id,
+                subscription_months: selectedPlan.months,
+                provider: paymentProvider,
+                provider_order_id: null,
+                provider_payment_id: null,
+                payment_url: null,
+                paid_at: null
             }])
             .select()
             .single();
@@ -1845,16 +2126,24 @@ app.post('/api/subscription/create-order', async (req, res) => {
             success: true,
             order,
             subscription: {
-                months: SUBSCRIPTION_MONTHS,
+                planId: selectedPlan.id,
+                planName: selectedPlan.name,
+                months: selectedPlan.months,
                 originalAmount,
                 discountAmount,
                 amount,
                 isFreeCheckout: amount === 0
+            },
+            payment: {
+                provider: paymentProvider,
+                paymentUrl: null,
+                nextAction: 'mock_confirm'
             }
         });
 
     } catch (err) {
         console.error('建立訂閱訂單失敗:', err);
+
         res.status(500).json({
             error: '建立訂閱訂單失敗',
             detail: err.message
@@ -1883,14 +2172,46 @@ async function activateSubscriptionByOrder(orderId) {
         throw new Error('這不是訂閱訂單');
     }
 
+    if (order.status === 'paid') {
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('username, is_subscribed, subscription_status, subscription_end_date')
+            .eq('username', order.username)
+            .maybeSingle();
+
+        return {
+            alreadyPaid: true,
+            order,
+            user: existingUser
+        };
+    }
+
     const now = new Date();
-    const endDate = new Date(now);
+
+    const { data: currentUser, error: currentUserError } = await supabase
+        .from('users')
+        .select('username, subscription_started_at, subscription_end_date')
+        .eq('username', order.username)
+        .maybeSingle();
+
+    if (currentUserError) throw currentUserError;
+
+    const currentEndTime = currentUser?.subscription_end_date
+        ? new Date(currentUser.subscription_end_date).getTime()
+        : 0;
+
+    const baseDate = currentEndTime > now.getTime()
+        ? new Date(currentEndTime)
+        : now;
+
+    const endDate = new Date(baseDate);
     endDate.setMonth(endDate.getMonth() + Number(order.subscription_months || 1));
 
     const { error: orderUpdateError } = await supabase
         .from('orders')
         .update({
             status: 'paid',
+            paid_at: now.toISOString(),
             updated_at: now.toISOString()
         })
         .eq('id', order.id);
@@ -1900,21 +2221,24 @@ async function activateSubscriptionByOrder(orderId) {
     const { data: updatedUser, error: userUpdateError } = await supabase
         .from('users')
         .update({
+            membership_level: 'pro',
             is_subscribed: true,
             subscription_status: 'active',
-            subscription_started_at: now.toISOString(),
+            subscription_started_at: currentUser?.subscription_started_at || now.toISOString(),
             subscription_end_date: endDate.toISOString()
         })
         .eq('username', order.username)
-        .select('username, is_subscribed, subscription_status, subscription_end_date')
+        .select('username, membership_level, is_subscribed, subscription_status, subscription_started_at, subscription_end_date')
         .maybeSingle();
 
     if (userUpdateError) throw userUpdateError;
 
     return {
+        alreadyPaid: false,
         order: {
             ...order,
-            status: 'paid'
+            status: 'paid',
+            paid_at: now.toISOString()
         },
         user: updatedUser
     };
@@ -1957,7 +2281,12 @@ app.post('/api/subscription/free-complete', async (req, res) => {
             });
         }
 
-        const result = await activateSubscriptionByOrder(orderId);
+        const completed = await completePaidOrderByType({
+    orderId,
+    expectedUsername: username
+});
+
+const result = completed.result;
 
         res.json({
             success: true,
@@ -1975,6 +2304,79 @@ app.post('/api/subscription/free-complete', async (req, res) => {
     }
 });
 
+app.post('/api/subscription/mock-paid', async (req, res) => {
+    try {
+        const { username, orderId } = req.body;
+
+        if (!username || !orderId) {
+            return res.status(400).json({
+                error: '缺少 username 或 orderId'
+            });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .eq('username', username)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({
+                error: '找不到訂閱訂單'
+            });
+        }
+
+        if (order.order_type !== 'subscription') {
+            return res.status(400).json({
+                error: '這不是訂閱訂單'
+            });
+        }
+
+        if (order.provider !== 'mock') {
+            return res.status(400).json({
+                error: '此訂單不是 mock 付款訂單'
+            });
+        }
+
+        await markOrderProviderStatus({
+    orderId,
+    providerStatus: 'confirmed',
+    providerPayload: {
+        provider: 'mock',
+        type: 'subscription',
+        confirmedAt: new Date().toISOString()
+    }
+});
+
+const completed = await completePaidOrderByType({
+    orderId,
+    expectedUsername: username,
+    expectedProvider: 'mock',
+    providerPaymentId: `mock-sub-${orderId}`,
+    paidAmount: Number(order.amount || 0)
+});
+
+const result = completed.result;
+
+        res.json({
+            success: true,
+            message: 'mock 訂閱付款成功，已開通訂閱',
+            result
+        });
+
+    } catch (err) {
+        console.error('mock 訂閱付款失敗:', err);
+
+        res.status(500).json({
+            error: 'mock 訂閱付款失敗',
+            detail: err.message
+        });
+    }
+});
+
 app.post('/api/checkout/create-order', async (req, res) => {
     try {
         const { username, courseId } = req.body;
@@ -1987,7 +2389,7 @@ app.post('/api/checkout/create-order', async (req, res) => {
 
         const { data: user, error: userError } = await supabase
             .from('users')
-            .select('username, is_blocked, is_subscribed, subscription_status, subscription_end_date')
+            .select('username, is_blocked')
             .eq('username', username)
             .maybeSingle();
 
@@ -2001,22 +2403,9 @@ app.post('/api/checkout/create-order', async (req, res) => {
             return res.status(403).json({ error: '此帳號已被停用，無法結帳' });
         }
 
-        const now = Date.now();
-        const subEnd = user.subscription_end_date
-            ? new Date(user.subscription_end_date).getTime()
-            : 0;
-
-        const isSubscribed =
-            user.is_subscribed === true &&
-            user.subscription_status === 'active' &&
-            subEnd > now;
-
-        if (!isSubscribed) {
-            return res.status(403).json({
-                error: '請先完成全站訂閱，才能購買單堂課程',
-                needSubscription: true
-            });
-        }
+        // 課程購買目前開放給 free / trial / pro。
+// 只要帳號存在、未被停用，且課程開放，就可以建立課程訂單。
+// 主題教室、小隊共學、特約教室仍由前端訂閱鎖控制。
 
         const { data: course, error: courseError } = await supabase
             .from('courses')
@@ -2066,7 +2455,13 @@ app.post('/api/checkout/create-order', async (req, res) => {
                 amount,
                 status: 'pending',
                 order_type: 'course',
-                subscription_months: null
+subscription_plan: null,
+subscription_months: null,
+provider: 'mock',
+provider_order_id: null,
+provider_payment_id: null,
+payment_url: null,
+paid_at: null
             }])
             .select()
             .single();
@@ -2184,6 +2579,136 @@ async function handlePaymentSuccess(orderId) {
     };
 }
 
+async function completePaidOrderByType({
+    orderId,
+    expectedUsername = null,
+    expectedProvider = null,
+    providerOrderId = null,
+    providerPaymentId = null,
+    paidAmount = null
+}) {
+    if (!orderId) {
+        throw new Error('缺少 orderId');
+    }
+
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+
+    if (orderError) throw orderError;
+
+    if (!order) {
+        throw new Error('找不到訂單');
+    }
+
+    if (expectedUsername && order.username !== expectedUsername) {
+        throw new Error('訂單使用者不符');
+    }
+
+    if (expectedProvider && order.provider !== expectedProvider) {
+        throw new Error(`訂單付款 provider 不符，預期 ${expectedProvider}，實際 ${order.provider || '未設定'}`);
+    }
+
+    if (paidAmount !== null && paidAmount !== undefined) {
+        const expectedAmount = Number(order.amount || 0);
+        const actualAmount = Number(paidAmount);
+
+        if (!Number.isFinite(actualAmount)) {
+            throw new Error('付款金額格式錯誤');
+        }
+
+        if (actualAmount !== expectedAmount) {
+            throw new Error(`付款金額不符，訂單金額 ${expectedAmount}，實付金額 ${actualAmount}`);
+        }
+    }
+
+    const providerUpdates = {
+        updated_at: new Date().toISOString()
+    };
+
+    if (providerOrderId) {
+        providerUpdates.provider_order_id = String(providerOrderId);
+    }
+
+    if (providerPaymentId) {
+        providerUpdates.provider_payment_id = String(providerPaymentId);
+    }
+
+    if (providerOrderId || providerPaymentId) {
+        const { error: providerUpdateError } = await supabase
+            .from('orders')
+            .update(providerUpdates)
+            .eq('id', order.id);
+
+        if (providerUpdateError) throw providerUpdateError;
+    }
+
+    if (order.order_type === 'subscription') {
+        const result = await activateSubscriptionByOrder(order.id);
+
+        return {
+            orderType: 'subscription',
+            result
+        };
+    }
+
+    if (order.order_type === 'course') {
+        const result = await handlePaymentSuccess(order.id);
+
+        return {
+            orderType: 'course',
+            result
+        };
+    }
+
+    throw new Error(`不支援的訂單類型：${order.order_type}`);
+}
+
+async function markOrderProviderStatus({
+    orderId,
+    providerStatus,
+    providerPayload = null,
+    paymentError = null
+}) {
+    if (!orderId) {
+        throw new Error('缺少 orderId');
+    }
+
+    const updates = {
+        provider_status: providerStatus,
+        updated_at: new Date().toISOString()
+    };
+
+    if (providerPayload !== null && providerPayload !== undefined) {
+        updates.provider_payload = providerPayload;
+    }
+
+    if (paymentError) {
+        updates.payment_error = String(paymentError);
+    }
+
+    if (providerStatus === 'confirmed') {
+        updates.payment_confirmed_at = new Date().toISOString();
+    }
+
+    const { data, error } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId)
+        .select('*')
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+        throw new Error('找不到要更新 provider 狀態的訂單');
+    }
+
+    return data;
+}
+
 app.post('/api/checkout/mock-course-paid', async (req, res) => {
     try {
         const { username, orderId } = req.body;
@@ -2215,7 +2740,24 @@ app.post('/api/checkout/mock-course-paid', async (req, res) => {
             });
         }
 
-        const result = await handlePaymentSuccess(orderId);
+        await markOrderProviderStatus({
+    orderId,
+    providerStatus: 'confirmed',
+    providerPayload: {
+        provider: 'mock',
+        type: 'course',
+        confirmedAt: new Date().toISOString()
+    }
+});
+
+const completed = await completePaidOrderByType({
+    orderId,
+    expectedUsername: username,
+    providerPaymentId: `mock-course-${orderId}`,
+    paidAmount: Number(order.amount || 0)
+});
+
+const result = completed.result;
 
         res.json({
             success: true,
@@ -2264,7 +2806,12 @@ app.post('/api/checkout/free-complete', async (req, res) => {
             });
         }
 
-        const result = await handlePaymentSuccess(orderId);
+        const completed = await completePaidOrderByType({
+            orderId,
+            expectedUsername: username
+        });
+
+        const result = completed.result;
 
         res.json({
             success: true,
@@ -2814,6 +3361,19 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
             const newLinkCode = await generateUniqueLinkCode();
 
+            const trialFields = state === 'teacher_apply'
+    ? {
+        membership_level: 'free',
+        is_subscribed: false,
+        subscription_status: 'none',
+        subscription_started_at: null,
+        subscription_end_date: null,
+        trial_started_at: null,
+        trial_ends_at: null,
+        has_seen_subscription_intro: true
+    }
+    : buildNewStudentTrialFields();
+
             const { data: newUser, error: insErr } = await supabase
                 .from('users')
                 .insert([{
@@ -2827,7 +3387,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
     ? 'teacher_pending'
     : 'student',
                     integrity_score: 100,
-                    link_code: newLinkCode
+link_code: newLinkCode,
+...trialFields
                 }])
                 .select()
                 .single();
@@ -3061,17 +3622,19 @@ if (state) {
             // --- [新增] 註冊時產生 6 位數代碼 ---
             const newLinkCode = await generateUniqueLinkCode();
 
+            const trialFields = buildNewStudentTrialFields();
             const { data: newUser, error } = await supabase.from('users').insert([{
-                username: String(finalUsername),
-                account: String(lineId),
-                password: String(lineId), // 用 LINE ID 當作密碼欄位佔位
-                total_seconds: 0,
-                streak: 1,
-                last_login: today,
-                role: 'student',
-                integrity_score: 100,
-                link_code: newLinkCode // [新增]
-            }]).select().single();
+    username: String(finalUsername),
+    account: String(lineId),
+    password: String(lineId), // 用 LINE ID 當作密碼欄位佔位
+    total_seconds: 0,
+    streak: 1,
+    last_login: today,
+    role: 'student',
+    integrity_score: 100,
+    link_code: newLinkCode,
+    ...trialFields
+}]).select().single();
 
             if (error) throw error;
             existingUser = newUser;
@@ -5269,6 +5832,50 @@ async function broadcastWeeklyRank() {
     } catch (err) { console.error("更新排行榜失敗:", err); }
 }
 setInterval(broadcastWeeklyRank, 30000);
+
+// ==========================================
+// Payment Provider Callback Skeleton
+// 真實金流 callback 骨架
+// 目前不串正式 API，只保留乾淨入口
+// ==========================================
+
+app.post('/api/payment/:provider/callback', async (req, res) => {
+    try {
+        const provider = String(req.params.provider || '').trim();
+
+        const supportedProviders = ['linepay', 'jkopay', 'credit_card'];
+
+        if (!supportedProviders.includes(provider)) {
+            return res.status(400).json({
+                success: false,
+                error: '不支援的付款 provider',
+                provider
+            });
+        }
+
+        // 目前還沒有串接正式金流，所以不在這裡開通訂閱或課程
+        // 未來流程：
+        // 1. 從 req.body 解析 provider_order_id / provider_payment_id / amount
+        // 2. 向金流官方 API confirm / verify
+        // 3. 確認金額與訂單一致
+        // 4. 呼叫 completePaidOrderByType()
+        return res.status(501).json({
+            success: false,
+            provider,
+            error: '此付款 provider callback 尚未串接正式驗證流程',
+            next: '取得正式金鑰與官方 API 文件後，再實作 verify + completePaidOrderByType'
+        });
+
+    } catch (err) {
+        console.error('付款 provider callback 處理失敗:', err);
+
+        return res.status(500).json({
+            success: false,
+            error: '付款 provider callback 處理失敗',
+            detail: err.message
+        });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 

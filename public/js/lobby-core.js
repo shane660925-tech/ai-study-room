@@ -126,11 +126,30 @@ async function guardSubscriptionPaywall() {
     const username = localStorage.getItem('studyVerseUser');
     const role = localStorage.getItem('studyVerseRole') || 'student';
 
+    // 預設權限：未登入或查詢失敗時，先視為 free，但不阻擋進大廳
+    window.studyVerseAccess = {
+        accessLevel: 'free',
+        canUseFullFeatures: false,
+        isSubscribed: false,
+        role,
+        hasSeenSubscriptionIntro: true
+    };
+
     if (!username) {
         return true;
     }
 
+    // 教師 / 管理員 / 審核中教師維持原本邏輯，不受學生訂閱限制
     if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        window.studyVerseAccess = {
+            accessLevel: 'pro',
+            canUseFullFeatures: true,
+            isSubscribed: true,
+            role,
+            roleBypass: true,
+            hasSeenSubscriptionIntro: true
+        };
+
         return true;
     }
 
@@ -141,21 +160,61 @@ async function guardSubscriptionPaywall() {
 
         const data = await res.json();
 
-        if (!data.is_subscribed) {
-            window.location.href =
-                `/subscribe.html?username=${encodeURIComponent(username)}`;
-            return false;
+        if (!res.ok) {
+            console.warn('訂閱狀態 API 回傳非成功狀態:', data);
         }
 
+        window.studyVerseAccess = {
+            username: data.username || username,
+            accessLevel: data.accessLevel || 'free',
+            canUseFullFeatures: data.canUseFullFeatures === true,
+            isSubscribed: data.is_subscribed === true,
+            role: data.role || role,
+            membershipLevel: data.membership_level || 'free',
+            subscriptionStatus: data.subscription_status || 'none',
+            trialStartedAt: data.trial_started_at || null,
+            trialEndsAt: data.trial_ends_at || null,
+            subscriptionStartedAt: data.subscription_started_at || null,
+            subscriptionEndDate: data.subscription_end_date || null,
+            hasSeenSubscriptionIntro: data.has_seen_subscription_intro === true
+        };
+
+        localStorage.setItem(
+    'studyVerseAccessUsername',
+    window.studyVerseAccess.username || username
+);
+
+        localStorage.setItem(
+            'studyVerseAccessLevel',
+            window.studyVerseAccess.accessLevel
+        );
+
+        localStorage.setItem(
+            'studyVerseCanUseFullFeatures',
+            window.studyVerseAccess.canUseFullFeatures ? 'true' : 'false'
+        );
+
+        console.log('訂閱權限狀態:', window.studyVerseAccess);
+
+        // 重要：不再導向 subscribe.html，免費版也可以進大廳
         return true;
 
     } catch (err) {
         console.error('訂閱狀態檢查失敗:', err);
 
-        window.location.href =
-            `/subscribe.html?username=${encodeURIComponent(username)}`;
+        // 查詢失敗時也不擋大廳，先當 free，避免使用者卡死
+        window.studyVerseAccess = {
+            accessLevel: 'free',
+            canUseFullFeatures: false,
+            isSubscribed: false,
+            role,
+            hasSeenSubscriptionIntro: true
+        };
 
-        return false;
+        localStorage.setItem('studyVerseAccessLevel', 'free');
+        localStorage.setItem('studyVerseCanUseFullFeatures', 'false');
+
+        return true;
     }
 }
 

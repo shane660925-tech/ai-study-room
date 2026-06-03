@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>訂閱結帳｜STUDY VERSE</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(250, 204, 21, 0.12), transparent 30%),
+        #05070a;
+      color: white;
+      font-family: Arial, "Noto Sans TC", sans-serif;
+      padding: 32px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 720px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(96, 165, 250, 0.25);
+      border-radius: 30px;
+      padding: 32px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      font-size: 18px;
+      font-weight: 900;
+      color: #60a5fa;
+      letter-spacing: 0.12em;
+    }
+
+    .back-btn {
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(2, 6, 23, 0.5);
+      color: #cbd5e1;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .back-btn:hover {
+      color: white;
+      border-color: rgba(96, 165, 250, 0.55);
+    }
+
+    .kicker {
+      color: #facc15;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+    }
+
+    .desc {
+      color: #cbd5e1;
+      line-height: 1.8;
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+
+    .summary {
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 22px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .row strong {
+      color: white;
+    }
+
+    .amount {
+      font-size: 32px;
+      font-weight: 900;
+      color: #facc15;
+      letter-spacing: -0.04em;
+    }
+
+    label {
+      display: block;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+      margin: 18px 0 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(2, 6, 23, 0.78);
+      color: white;
+      font-size: 15px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: rgba(96, 165, 250, 0.75);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    button.primary {
+      width: 100%;
+      padding: 15px;
+      border: 0;
+      border-radius: 18px;
+      background: #2563eb;
+      color: white;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    button.primary:hover {
+      background: #1d4ed8;
+    }
+
+    button.pay {
+      width: 100%;
+      padding: 15px;
+      border: 0;
+      border-radius: 18px;
+      background: #facc15;
+      color: #111827;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      display: none;
+    }
+
+    button.pay:hover {
+      background: #fde047;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .paybox {
+      margin-top: 18px;
+      padding: 18px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 20px;
+      color: #cbd5e1;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .hint {
+      margin-top: 16px;
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .success {
+      color: #4ade80;
+      font-weight: 800;
+    }
+
+    .error {
+      color: #f87171;
+      font-weight: 800;
+    }
+
+    .warning {
+      color: #facc15;
+      font-weight: 800;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 18px;
+        align-items: flex-start;
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="topbar">
+      <div class="brand">STUDY VERSE</div>
+      <button class="back-btn" onclick="goBack()">← 返回方案頁</button>
+    </div>
+
+    <div class="kicker">Checkout</div>
+    <h1>訂閱結帳</h1>
+    <p class="desc">
+      請確認你選擇的方案。若有教師優惠碼，可在下方輸入，系統會直接折抵 NT$150。
+      目前為 mock 付款流程，正式金流會在後續串接。
+    </p>
+
+    <div class="summary">
+      <div class="row">
+        <span>使用者</span>
+        <strong id="usernameText">讀取中...</strong>
+      </div>
+      <div class="row">
+        <span>方案</span>
+        <strong id="planNameText">讀取中...</strong>
+      </div>
+      <div class="row">
+        <span>開通月數</span>
+        <strong id="monthsText">-</strong>
+      </div>
+      <div class="row">
+        <span>原價</span>
+        <strong id="originalAmountText">-</strong>
+      </div>
+      <div class="row">
+        <span>教師優惠碼折扣</span>
+        <strong id="discountAmountText">尚未套用</strong>
+      </div>
+      <div class="row">
+        <span>應付金額</span>
+        <strong class="amount" id="amountText">-</strong>
+      </div>
+    </div>
+
+    <label for="discountCodeInput">教師優惠碼</label>
+    <input id="discountCodeInput" placeholder="例如：TEACHER-XXXX-XXXX，可不填" />
+
+    <div class="button-row">
+      <button class="primary" id="createOrderBtn" onclick="createOrder()">
+        套用優惠碼 / 建立訂單
+      </button>
+
+      <button class="pay" id="mockPayBtn" onclick="mockPayOrder()">
+        使用 mock 付款並開通訂閱
+      </button>
+    </div>
+
+    <div class="paybox" id="paymentInfo">
+      尚未建立訂單。
+    </div>
+
+    <p class="hint">
+      未來接 LINE Pay / 街口支付 / 信用卡時，這裡會改成導向真實付款頁。
+      現階段 mock 付款成功後，會直接將訂閱狀態改為 pro。
+    </p>
+
+    <p id="message"></p>
+  </div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+
+const username =
+  params.get('username') ||
+  localStorage.getItem('studyVerseUser') ||
+  localStorage.getItem('username') ||
+  '';
+
+const planId = params.get('plan') || 'monthly';
+
+const PLAN_INFO = {
+  monthly: {
+    name: '月繳方案',
+    amount: 300,
+    months: 1
+  },
+  two_months: {
+    name: '2 個月方案',
+    amount: 500,
+    months: 2
+  },
+  half_year: {
+    name: '半年方案',
+    amount: 1400,
+    months: 6
+  },
+  yearly: {
+    name: '年繳方案',
+    amount: 2500,
+    months: 12
+  }
+};
+
+const selectedPlan = PLAN_INFO[planId] || PLAN_INFO.monthly;
+
+let currentOrder = null;
+
+function goBack() {
+  window.location.href = `/subscribe.html?username=${encodeURIComponent(username)}`;
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function setMessage(html) {
+  document.getElementById('message').innerHTML = html;
+}
+
+function initPage() {
+  if (!username) {
+    setMessage('<span class="error">缺少 username，請重新登入。</span>');
+  }
+
+  setText('usernameText', username || '未登入');
+  setText('planNameText', selectedPlan.name);
+  setText('monthsText', `${selectedPlan.months} 個月`);
+  setText('originalAmountText', `NT$${selectedPlan.amount}`);
+  setText('discountAmountText', '尚未套用');
+  setText('amountText', `NT$${selectedPlan.amount}`);
+}
+
+async function createOrder() {
+  const btn = document.getElementById('createOrderBtn');
+  const payBtn = document.getElementById('mockPayBtn');
+  const paymentInfo = document.getElementById('paymentInfo');
+  const discountCode = document.getElementById('discountCodeInput').value.trim();
+
+  setMessage('');
+  payBtn.style.display = 'none';
+  currentOrder = null;
+
+  if (!username) {
+    setMessage('<span class="error">缺少 username，請重新登入。</span>');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '建立訂單中...';
+
+  try {
+    const res = await fetch('/api/subscription/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        planId,
+        provider: 'mock',
+        discountCode
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '建立訂單失敗');
+    }
+
+    currentOrder = data.order;
+
+    setText('planNameText', data.subscription.planName);
+    setText('monthsText', `${data.subscription.months} 個月`);
+    setText('originalAmountText', `NT$${data.subscription.originalAmount}`);
+    setText('discountAmountText', `-NT$${data.subscription.discountAmount}`);
+    setText('amountText', `NT$${data.subscription.amount}`);
+
+    paymentInfo.innerHTML = `
+      <strong>訂單已建立</strong><br>
+      訂單編號：${data.order.order_no || data.order.id}<br>
+      付款方式：${data.payment.provider}<br>
+      訂單狀態：${data.order.status}<br>
+      下一步：mock 付款確認
+    `;
+
+    payBtn.style.display = 'block';
+    setMessage('<span class="success">訂單建立成功，請按下 mock 付款完成開通。</span>');
+
+  } catch (err) {
+    console.error('建立訂單失敗:', err);
+    paymentInfo.textContent = '建立訂單失敗。';
+    setMessage(`<span class="error">${err.message}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '套用優惠碼 / 建立訂單';
+  }
+}
+
+async function mockPayOrder() {
+  const payBtn = document.getElementById('mockPayBtn');
+
+  if (!currentOrder) {
+    setMessage('<span class="error">尚未建立訂單。</span>');
+    return;
+  }
+
+  payBtn.disabled = true;
+  payBtn.textContent = 'mock 付款處理中...';
+
+  try {
+    const res = await fetch('/api/subscription/mock-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        orderId: currentOrder.id
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'mock 付款失敗');
+    }
+
+    localStorage.setItem('studyVerseAccessUsername', username);
+    localStorage.setItem('studyVerseAccessLevel', 'pro');
+    localStorage.setItem('studyVerseCanUseFullFeatures', 'true');
+
+    setMessage('<span class="success">訂閱開通成功，正在返回大廳...</span>');
+
+    setTimeout(() => {
+      window.location.href = `/index.html?subscription=active&username=${encodeURIComponent(username)}`;
+    }, 900);
+
+  } catch (err) {
+    console.error('mock 付款失敗:', err);
+    setMessage(`<span class="error">${err.message}</span>`);
+    payBtn.disabled = false;
+    payBtn.textContent = '使用 mock 付款並開通訂閱';
+  }
+}
+
+initPage();
+</script>
+
+</body>
+</html>

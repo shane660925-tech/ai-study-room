@@ -159,11 +159,133 @@
         let targetStandaloneRoomUrl = '';
         let isRedirecting = false; // 防止連續觸發跳轉的鎖
 
+        window.standaloneSubscriptionAccess = {
+    username,
+    accessLevel: 'free',
+    canUseFullFeatures: false
+};
+
+async function loadStandaloneSubscriptionAccess() {
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        window.standaloneSubscriptionAccess = {
+            username,
+            accessLevel: 'pro',
+            canUseFullFeatures: true,
+            roleBypass: true
+        };
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/subscription/status?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        window.standaloneSubscriptionAccess = {
+            username: data.username || username,
+            accessLevel: data.accessLevel || 'free',
+            canUseFullFeatures: data.canUseFullFeatures === true
+        };
+
+    } catch (err) {
+        console.error('單機翻轉訂閱權限讀取失敗:', err);
+
+        window.standaloneSubscriptionAccess = {
+            username,
+            accessLevel: 'free',
+            canUseFullFeatures: false
+        };
+    }
+}
+
+function isStandaloneFullFeatureUnlocked() {
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return true;
+    }
+
+    return window.standaloneSubscriptionAccess?.canUseFullFeatures === true;
+}
+
+function showStandaloneSubscriptionPrompt(featureName = '此功能') {
+    const goSubscribe = confirm(
+        `🔒 ${featureName} 是訂閱版功能。\n\n` +
+        `免費版單機模式目前只能使用「沉浸式自習室」。\n` +
+        `14 天體驗期或訂閱中可使用主題教室與組隊共學。\n\n` +
+        `是否前往查看方案？`
+    );
+
+    if (goSubscribe) {
+        window.location.href = `/subscribe.html?username=${encodeURIComponent(username)}`;
+    }
+}
+
+function requireStandaloneFullFeatures(featureName = '此功能') {
+    if (isStandaloneFullFeatureUnlocked()) {
+        return true;
+    }
+
+    showStandaloneSubscriptionPrompt(featureName);
+    return false;
+}
+
+function lockStandaloneFeatureButton(button, label = '訂閱版功能') {
+    if (!button || button.dataset.subscriptionLocked === 'true') return;
+
+    button.dataset.subscriptionLocked = 'true';
+
+    button.classList.add(
+        'opacity-40',
+        'grayscale',
+        'cursor-not-allowed',
+        'relative'
+    );
+
+    button.style.position = 'relative';
+    button.style.overflow = 'hidden';
+
+    const lockBadge = document.createElement('div');
+    lockBadge.className =
+        'absolute top-3 right-3 z-20 bg-black/80 border border-yellow-400/50 text-yellow-300 text-[10px] font-black px-3 py-1 rounded-full shadow-lg';
+    lockBadge.innerHTML = '<i class="fas fa-lock mr-1"></i> 訂閱版';
+
+    button.appendChild(lockBadge);
+
+    const title = button.querySelector('h3');
+    if (title) {
+        title.innerHTML = `${title.innerHTML} <span class="text-xs text-yellow-300 ml-1">LOCKED</span>`;
+    }
+
+    button.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        showStandaloneSubscriptionPrompt(label);
+        return false;
+    }, true);
+}
+
+function applyStandaloneSubscriptionLocks() {
+    if (isStandaloneFullFeatureUnlocked()) return;
+
+    const themeButton = document.querySelector('button[onclick="openStandaloneThemeRoomModal()"]');
+    lockStandaloneFeatureButton(themeButton, '單機主題教室');
+
+    const teamButton = document.querySelector('button[onclick="loadAndShowTeamModal(\'join\')"]');
+    lockStandaloneFeatureButton(teamButton, '單機組隊與競賽');
+}
+
         document.addEventListener('DOMContentLoaded', async () => {
-            document.getElementById('welcomeName').innerText = username;
-            document.getElementById('userAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${username}`;
-            socket.emit("join_room", { name: username, roomMode: 'lobby', status: 'LOBBY' });
-        });
+    document.getElementById('welcomeName').innerText = username;
+    document.getElementById('userAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${username}`;
+    socket.emit("join_room", { name: username, roomMode: 'lobby', status: 'LOBBY' });
+
+    await loadStandaloneSubscriptionAccess();
+    applyStandaloneSubscriptionLocks();
+});
 
         socket.on("update_rank", (users) => {
             const flipCount = users.filter(u => u.isFlipped === true).length;
@@ -189,6 +311,8 @@
         // 單機翻轉 核心邏輯 (新版：略過大廳翻轉，直接跳轉教室)
         // ==========================================
 async function openStandaloneThemeRoomModal() {
+if (!requireStandaloneFullFeatures('單機主題教室')) return;
+
 let oldModal = document.getElementById('standaloneThemeRoomModal');
 if (oldModal) oldModal.remove();
 const modal = document.createElement('div');
@@ -288,6 +412,8 @@ list.innerHTML = `
 }
 }
 function selectStandaloneThemeRoom(targetUrl) {
+if (!requireStandaloneFullFeatures('單機主題教室')) return;
+
 const modal = document.getElementById('standaloneThemeRoomModal');
 if (modal) modal.remove();
 if (window.pendingThemeTeamJoinData) {
@@ -404,7 +530,9 @@ let finalUrl = `/${targetRoom}${separator}username=${encodeURIComponent(currentU
         }
 
         window.loadAndShowTeamModal = async function(modalType) {
-            try {
+    if (!requireStandaloneFullFeatures('單機組隊與競賽')) return;
+
+    try {
                 if (!document.getElementById('team-css-link')) {
                     const link = document.createElement('link');
 link.id = 'team-css-link';

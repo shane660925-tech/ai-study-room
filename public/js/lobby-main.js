@@ -92,6 +92,319 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
+// =========================================================
+// Student Subscription Guard
+// free / expired：只能使用沉浸式教室
+// trial / pro：可使用完整功能
+// 教師 / admin / teacher_pending：不受學生訂閱限制
+// =========================================================
+window.isStudentFullFeatureUnlocked = function() {
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+    const username = localStorage.getItem('studyVerseUser') || '';
+
+    // 教師 / 管理員 / 審核中教師不受學生訂閱限制
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return true;
+    }
+
+    const access = window.studyVerseAccess || {};
+
+    // 優先相信本頁剛從 API 拿到的權限，而且必須是同一個 username
+    if (access.username && access.username === username) {
+        return access.canUseFullFeatures === true;
+    }
+
+    // 備援讀 localStorage，但也必須確認是同一個 username，避免上一個帳號殘留 true
+    const storedAccessUsername = localStorage.getItem('studyVerseAccessUsername');
+    const storedCanUseFullFeatures =
+        localStorage.getItem('studyVerseCanUseFullFeatures') === 'true';
+
+    if (storedAccessUsername && storedAccessUsername === username) {
+        return storedCanUseFullFeatures === true;
+    }
+
+    // 沒有明確權限資料時，學生一律先當免費版
+    return false;
+};
+
+window.openSubscriptionPage = function() {
+    const username =
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        '';
+
+    if (username) {
+        window.location.href = `/subscribe.html?username=${encodeURIComponent(username)}`;
+    } else {
+        window.location.href = '/subscribe.html';
+    }
+};
+
+window.markSubscriptionIntroSeen = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) return;
+
+    try {
+        const res = await fetch('/api/subscription/intro-seen', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error('訂閱介紹已看過同步失敗:', data);
+        }
+
+        localStorage.setItem(`studyVerseSubscriptionIntroSeen:${username}`, 'true');
+
+        if (window.studyVerseAccess) {
+            window.studyVerseAccess.hasSeenSubscriptionIntro = true;
+        }
+
+    } catch (err) {
+        console.error('訂閱介紹已看過同步失敗:', err);
+        localStorage.setItem(`studyVerseSubscriptionIntroSeen:${username}`, 'true');
+    }
+};
+
+window.showSubscriptionIntroModalOnce = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (!username) return;
+
+    // 教師 / admin / 審核中教師不跳學生訂閱介紹
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return;
+    }
+
+    const localSeenKey = `studyVerseSubscriptionIntroSeen:${username}`;
+
+    if (localStorage.getItem(localSeenKey) === 'true') {
+        return;
+    }
+
+    try {
+        const res = await fetch(
+            `/api/subscription/status?username=${encodeURIComponent(username)}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error('讀取訂閱介紹狀態失敗:', data);
+            return;
+        }
+
+        if (data.has_seen_subscription_intro === true) {
+            localStorage.setItem(localSeenKey, 'true');
+            return;
+        }
+
+        let oldModal = document.getElementById('subscriptionIntroModal');
+        if (oldModal) oldModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'subscriptionIntroModal';
+        modal.className = 'fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4';
+
+        modal.innerHTML = `
+            <div class="w-full max-w-lg bg-[#0f172a] border border-yellow-400/30 rounded-3xl shadow-2xl overflow-hidden">
+                <div class="p-7 border-b border-white/10 bg-gradient-to-b from-yellow-500/10 to-transparent">
+                    <div class="text-yellow-300 text-xs font-black tracking-[0.2em] uppercase mb-3">
+                        Study Verse Plan
+                    </div>
+
+                    <h2 class="text-3xl font-black text-white mb-3">
+                        你的 14 天完整體驗已啟用
+                    </h2>
+
+                    <p class="text-gray-300 text-sm leading-relaxed">
+                        免費體驗期間可以使用完整功能。體驗結束後，免費版仍可使用
+                        <b class="text-white">沉浸式自習室</b> 與
+                        <b class="text-white">線上課程</b>；
+                        若想繼續使用主題教室、小隊共學與特約教室，可選擇訂閱方案。
+                    </p>
+                </div>
+
+                <div class="p-7 grid gap-3">
+                    <button
+                        id="btnViewSubscriptionPlans"
+                        class="w-full bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-black py-4 rounded-2xl transition-all">
+                        查看我的方案
+                    </button>
+
+                    <button
+                        id="btnCloseSubscriptionIntro"
+                        class="w-full bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-4 rounded-2xl transition-all">
+                        稍後再說，先進入大廳
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const btnViewPlans = document.getElementById('btnViewSubscriptionPlans');
+        const btnClose = document.getElementById('btnCloseSubscriptionIntro');
+
+        if (btnViewPlans) {
+            btnViewPlans.addEventListener('click', async () => {
+                await window.markSubscriptionIntroSeen();
+                window.openSubscriptionPage();
+            });
+        }
+
+        if (btnClose) {
+            btnClose.addEventListener('click', async () => {
+                await window.markSubscriptionIntroSeen();
+                modal.remove();
+            });
+        }
+
+    } catch (err) {
+        console.error('顯示訂閱方案介紹失敗:', err);
+    }
+};
+
+window.showSubscriptionUpgradePrompt = function(featureName = '此功能') {
+    const username = localStorage.getItem('studyVerseUser') || '';
+
+    const goSubscribe = confirm(
+        `🔒 ${featureName} 是訂閱版功能。\n\n` +
+        `免費版目前可以使用「沉浸式自習室」。\n` +
+        `14 天體驗期或訂閱中可使用主題教室、小隊共學、特約教室與課程功能。\n\n` +
+        `是否前往查看方案？`
+    );
+
+    if (goSubscribe) {
+        window.openSubscriptionPage();
+    }
+};
+
+window.requireFullFeaturesForStudent = function(featureName = '此功能') {
+    if (window.isStudentFullFeatureUnlocked()) {
+        return true;
+    }
+
+    window.showSubscriptionUpgradePrompt(featureName);
+    return false;
+};
+
+// =========================================================
+// Free Plan Visual Locks
+// 免費版：進階功能卡片變暗、上鎖、點擊顯示升級提示
+// 注意：課程商店目前不鎖，因為免費版也開放課程功能
+// =========================================================
+window.lockLobbyFeatureElement = function(element, featureName = '此功能') {
+    if (!element || element.dataset.subscriptionVisualLocked === 'true') return;
+
+    element.dataset.subscriptionVisualLocked = 'true';
+
+    const isHeaderTeamLink =
+        element.matches &&
+        element.matches('header a[href="team-lobby.html"], header a[data-original-href="team-lobby.html"]');
+
+    // Header 的「切換至組隊大廳」只鎖那顆按鈕，不往上鎖整個 header
+    const card = isHeaderTeamLink
+        ? element
+        : (
+            element.closest('.room-card') ||
+            element.closest('.glass-panel') ||
+            element
+        );
+
+    if (!card || card.dataset.subscriptionCardLocked === 'true') return;
+
+    card.dataset.subscriptionCardLocked = 'true';
+
+    card.classList.add(
+        'opacity-40',
+        'grayscale',
+        'cursor-not-allowed',
+        'relative'
+    );
+
+    card.style.position = 'relative';
+
+    // 只有一般功能卡需要 overflow hidden；header 按鈕不要亂改版面
+    if (!isHeaderTeamLink) {
+        card.style.overflow = 'hidden';
+    }
+
+    if (isHeaderTeamLink) {
+        element.dataset.originalHref = element.getAttribute('href') || 'team-lobby.html';
+        element.removeAttribute('href');
+        element.setAttribute('role', 'button');
+        element.innerHTML = '<i class="fas fa-lock"></i> 組隊大廳';
+        element.title = '訂閱版功能';
+        element.classList.add(
+            'border-yellow-400/30',
+            'text-yellow-300',
+            'bg-yellow-500/10'
+        );
+    } else {
+        const lockBadge = document.createElement('div');
+        lockBadge.className =
+            'absolute top-3 right-3 z-20 bg-black/80 border border-yellow-400/50 text-yellow-300 text-[10px] font-black px-3 py-1 rounded-full shadow-lg backdrop-blur-md';
+        lockBadge.innerHTML = '<i class="fas fa-lock mr-1"></i> 訂閱版';
+
+        card.appendChild(lockBadge);
+
+        const actionText = card.querySelector('button, .w-full.text-center, a');
+        if (actionText) {
+            actionText.classList.add('bg-gray-700', 'text-gray-400');
+        }
+    }
+
+    const blockClick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        window.showSubscriptionUpgradePrompt(featureName);
+        return false;
+    };
+
+    card.addEventListener('click', blockClick, true);
+};
+
+window.applyLobbySubscriptionVisualLocks = function() {
+    if (window.isStudentFullFeatureUnlocked()) {
+        return;
+    }
+
+    const lockTargets = [
+        {
+            selector: '[onclick*="showThemeRoomModal"]',
+            featureName: '限時主題教室'
+        },
+        {
+            selector: '[onclick*="loadAndShowTeamModal"]',
+            featureName: '小隊共學'
+        },
+        {
+            selector: '[onclick*="verifyAndEnterTutorRoom"]',
+            featureName: 'VIP 特約指導'
+        },
+        {
+            selector: 'header a[href="team-lobby.html"]',
+            featureName: '組隊大廳'
+        }
+    ];
+
+    lockTargets.forEach(item => {
+        document.querySelectorAll(item.selector).forEach(el => {
+            window.lockLobbyFeatureElement(el, item.featureName);
+        });
+    });
+};
+
 function handleRoomEntry(url) {
     targetRoomUrl = url;
     
@@ -234,6 +547,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+        const teamLobbyHeaderLink = document.querySelector('header a[href="team-lobby.html"]');
+    if (teamLobbyHeaderLink) {
+        teamLobbyHeaderLink.addEventListener('click', function(e) {
+            if (!window.requireFullFeaturesForStudent('組隊大廳')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+    }
+
     const btnRoleMain = document.getElementById('btn-role-main');
     if (btnRoleMain) {
         btnRoleMain.addEventListener('click', showSyncPromptModal);
@@ -286,7 +610,11 @@ window.pageSpecificInit = async function() {
     if (!canContinue) return;
 
     initSyncQRCode();
-    initLineBindQRCode();
+initLineBindQRCode();
+
+if (typeof window.applyLobbySubscriptionVisualLocks === 'function') {
+    window.applyLobbySubscriptionVisualLocks();
+}
 };
 
 async function checkPrivacyConsent() {
@@ -418,6 +746,8 @@ async function initLineBindQRCode() {
 }
 
 async function showThemeRoomModal() {
+    if (!window.requireFullFeaturesForStudent('限時主題教室')) return;
+
     let oldModal = document.getElementById('themeRoomModal');
     if (oldModal) oldModal.remove();
 
@@ -549,6 +879,8 @@ async function loadThemeRoomModalList() {
 }
 
 window.enterThemeRoom = function(targetUrl, slug, name) {
+    if (!window.requireFullFeaturesForStudent('限時主題教室')) return;
+
     const modal = document.getElementById('themeRoomModal');
     if (modal) modal.remove();
 
@@ -616,6 +948,8 @@ window.cancelDeviceSync = function() {
 };
 
 window.loadAndShowTeamModal = async function(modalType) {
+    if (!window.requireFullFeaturesForStudent('小隊共學')) return;
+
     const btn = window.event ? window.event.currentTarget : null;
     let originalText = '';
     
@@ -1240,7 +1574,9 @@ window.generateTeacherRoom = async function() {
 
 // ================= 新增：VIP 特約教室代碼驗證與專屬跳轉 =================
 window.verifyAndEnterTutorRoom = async function() {
-    const codeInput = document.getElementById('tutorRoomCode');
+    if (!window.requireFullFeaturesForStudent('VIP 特約指導')) return;
+
+    const input = document.getElementById('tutorRoomCode');
     const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
 
     if (!roomCode) {
@@ -1819,6 +2155,12 @@ async function finishIntroTutorial() {
     }
 
     clearIntroHighlight();
+
+setTimeout(() => {
+    if (typeof window.showSubscriptionIntroModalOnce === 'function') {
+        window.showSubscriptionIntroModalOnce();
+    }
+}, 500);
 }
 
 setTimeout(() => {

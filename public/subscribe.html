@@ -2,235 +2,529 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>啟用訂閱｜STUDY VERSE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的方案｜STUDY VERSE</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
-      background: #05070a;
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 34%),
+        radial-gradient(circle at top right, rgba(250, 204, 21, 0.10), transparent 30%),
+        #05070a;
       color: white;
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      font-family: Arial, "Noto Sans TC", sans-serif;
       padding: 32px;
     }
 
-    .card {
+    .page {
       width: 100%;
-      max-width: 520px;
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 22px;
-      padding: 30px;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      font-size: 22px;
+      font-weight: 900;
+      color: #60a5fa;
+      letter-spacing: 0.08em;
+    }
+
+    .back-btn {
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15, 23, 42, 0.72);
+      color: #cbd5e1;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .back-btn:hover {
+      border-color: rgba(96, 165, 250, 0.55);
+      color: white;
+    }
+
+    .hero {
+      border: 1px solid rgba(96, 165, 250, 0.22);
+      background: rgba(15, 23, 42, 0.78);
+      border-radius: 30px;
+      padding: 32px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+      margin-bottom: 24px;
+    }
+
+    .hero-kicker {
+      color: #facc15;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
     }
 
     h1 {
-      margin-top: 0;
-      color: #60a5fa;
+      margin: 0;
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1.1;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-desc {
+      max-width: 740px;
+      color: #cbd5e1;
+      line-height: 1.8;
+      margin-top: 16px;
+      font-size: 15px;
+    }
+
+    .status-card {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.14);
+      border: 1px solid rgba(59, 130, 246, 0.28);
+      color: #93c5fd;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status-text {
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .plan-compare {
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 26px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .plan-compare.pro {
+      border-color: rgba(250, 204, 21, 0.42);
+      background:
+        linear-gradient(135deg, rgba(250, 204, 21, 0.10), transparent 35%),
+        rgba(15, 23, 42, 0.76);
+    }
+
+    .compare-label {
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .compare-title {
+      font-size: 26px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .compare-price {
+      color: #cbd5e1;
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 11px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: #dbeafe;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .feature-list .muted {
+      color: #64748b;
+    }
+
+    .check {
+      color: #4ade80;
+      font-weight: 900;
+    }
+
+    .lock {
+      color: #facc15;
+      font-weight: 900;
+    }
+
+    .section-title {
+      margin: 30px 0 14px;
+      font-size: 22px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .price-card {
+      background: rgba(15, 23, 42, 0.76);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 24px;
+      padding: 22px;
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .price-card.highlight {
+      border-color: rgba(250, 204, 21, 0.55);
+      box-shadow: 0 0 35px rgba(250, 204, 21, 0.08);
+    }
+
+    .badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: #facc15;
+      color: #111827;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 5px 9px;
+      border-radius: 999px;
+    }
+
+    .price-name {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 8px;
     }
 
     .price {
       font-size: 34px;
-      font-weight: bold;
-      margin: 18px 0;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
     }
 
-    .desc {
-      color: #cbd5e1;
-      line-height: 1.7;
+    .price small {
+      font-size: 13px;
+      color: #94a3b8;
+      letter-spacing: 0;
     }
 
-    label {
-      display: block;
-      margin-top: 20px;
-      color: #cbd5e1;
+    .price-note {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      min-height: 42px;
     }
 
-    input {
+    .discount-note {
+      color: #facc15;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: auto;
+      margin-bottom: 14px;
+    }
+
+    .checkout-btn {
       width: 100%;
-      padding: 13px;
-      margin-top: 8px;
-      border-radius: 12px;
-      border: 1px solid #475569;
-      background: #020617;
-      color: white;
-      box-sizing: border-box;
-    }
-
-    button {
-      width: 100%;
-      margin-top: 20px;
-      padding: 14px;
-      border: none;
-      border-radius: 14px;
+      border: 0;
+      border-radius: 16px;
+      padding: 13px 14px;
       background: #2563eb;
       color: white;
-      font-size: 16px;
+      font-size: 14px;
+      font-weight: 900;
       cursor: pointer;
     }
 
-    button:hover {
+    .checkout-btn:hover {
       background: #1d4ed8;
     }
 
-    .paybox {
-      margin-top: 20px;
-      padding: 16px;
-      background: #020617;
-      border-radius: 14px;
-      line-height: 1.9;
+    .highlight .checkout-btn {
+      background: #facc15;
+      color: #111827;
+    }
+
+    .highlight .checkout-btn:hover {
+      background: #fde047;
     }
 
     .hint {
-      margin-top: 14px;
+      margin-top: 18px;
       color: #94a3b8;
-      font-size: 14px;
-    }
-
-    .success {
-      color: #4ade80;
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(2, 6, 23, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.12);
     }
 
     .error {
       color: #f87171;
     }
+
+    @media (max-width: 920px) {
+      body {
+        padding: 20px;
+      }
+
+      .compare-grid,
+      .plans-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 24px;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <div class="card">
-    <h1>啟用 STUDY VERSE 訂閱</h1>
-
-    <p class="desc">
-      完成訂閱後，你就可以解鎖大廳、主題教室、自習功能與後續課程購買入口。
-    </p>
-
-    <div class="price">NT$300 / 月</div>
-
-    <label>優惠碼</label>
-    <input id="discountCodeInput" placeholder="請輸入教師封測優惠碼" />
-
-    <button onclick="createSubscriptionOrder()">
-      套用優惠碼 / 建立訂閱訂單
-    </button>
-
-    <div class="paybox" id="paymentInfo">
-      尚未建立訂單
+  <div class="page">
+    <div class="topbar">
+      <div class="brand">STUDY VERSE</div>
+      <button class="back-btn" onclick="goBackToLobby()">← 返回大廳</button>
     </div>
 
-    <button id="freeCompleteButton" onclick="completeFreeSubscription()" style="display:none;">
-      免費啟用訂閱
-    </button>
+    <section class="hero">
+      <div class="hero-kicker">My Plan</div>
+      <h1>選擇你的學習方案</h1>
+      <p class="hero-desc">
+        免費版可以使用沉浸式自習室與線上課程功能；訂閱版則解鎖主題教室、小隊共學、特約教室等完整共學功能。
+        新註冊學生享有 14 天免費體驗，體驗期間可使用完整功能。
+      </p>
 
-    <p class="hint">
-      目前為封測流程。若優惠碼折抵後金額為 0，可直接啟用訂閱；正式金流將於之後串接。
-    </p>
+      <div class="status-card">
+        <div id="currentPlanPill" class="status-pill">讀取方案中...</div>
+        <div id="currentPlanText" class="status-text">正在確認你的目前方案狀態。</div>
+      </div>
+    </section>
 
-    <p id="message"></p>
+    <section class="compare-grid">
+      <div class="plan-compare">
+        <div class="compare-label">Free</div>
+        <div class="compare-title">免費版</div>
+        <div class="compare-price">NT$0，可持續使用基本功能</div>
+
+        <ul class="feature-list">
+          <li><span class="check">✓</span><span>沉浸式自習室</span></li>
+          <li><span class="check">✓</span><span>線上課程商店 / 購買課程 / 已購課程</span></li>
+          <li class="muted"><span class="lock">X</span><span>限時主題教室</span></li>
+          <li class="muted"><span class="lock">X</span><span>小隊共學與組隊大廳</span></li>
+          <li class="muted"><span class="lock">X</span><span>VIP 特約指導教室</span></li>
+        </ul>
+      </div>
+
+      <div class="plan-compare pro">
+        <div class="compare-label">Subscription</div>
+        <div class="compare-title">訂閱版</div>
+        <div class="compare-price">解鎖完整 STUDY VERSE 共學體驗</div>
+
+        <ul class="feature-list">
+          <li><span class="check">✓</span><span>沉浸式自習室</span></li>
+          <li><span class="check">✓</span><span>線上課程商店 / 購買課程 / 已購課程</span></li>
+          <li><span class="check">✓</span><span>限時主題教室</span></li>
+          <li><span class="check">✓</span><span>小隊共學與組隊大廳</span></li>
+          <li><span class="check">✓</span><span>VIP 特約指導教室</span></li>
+          <li><span class="check">✓</span><span>完整 LINE 學習總結與進階共學功能</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <h2 class="section-title">訂閱方案</h2>
+
+    <section class="plans-grid">
+      <div class="price-card">
+        <div class="price-name">月繳方案</div>
+        <div class="price">NT$300 <small>/ 1 個月</small></div>
+        <div class="price-note">適合先短期使用完整功能的學生。</div>
+        <div class="discount-note">教師優惠碼可折 NT$150，結帳頁輸入。</div>
+        <button class="checkout-btn" onclick="goCheckout('monthly')">前往結帳</button>
+      </div>
+
+      <div class="price-card highlight">
+        <div class="badge">推薦</div>
+        <div class="price-name">2 個月方案</div>
+        <div class="price">NT$500 <small>/ 2 個月</small></div>
+        <div class="price-note">適合段考、學測、長期衝刺準備。</div>
+        <div class="discount-note">教師優惠碼可折 NT$150，結帳頁輸入。</div>
+        <button class="checkout-btn" onclick="goCheckout('two_months')">前往結帳</button>
+      </div>
+
+      <div class="price-card">
+        <div class="price-name">半年方案</div>
+        <div class="price">NT$1400 <small>/ 6 個月</small></div>
+        <div class="price-note">適合固定使用主題教室與小隊共學。</div>
+        <div class="discount-note">教師優惠碼可折 NT$150，結帳頁輸入。</div>
+        <button class="checkout-btn" onclick="goCheckout('half_year')">前往結帳</button>
+      </div>
+
+      <div class="price-card">
+        <div class="price-name">年繳方案</div>
+        <div class="price">NT$2500 <small>/ 12 個月</small></div>
+        <div class="price-note">適合全年長期使用與完整學習規劃。</div>
+        <div class="discount-note">教師優惠碼可折 NT$150，結帳頁輸入。</div>
+        <button class="checkout-btn" onclick="goCheckout('yearly')">前往結帳</button>
+      </div>
+    </section>
+
+    <div class="hint">
+      目前先保留 mock 付款流程，正式金流之後可接 LINE Pay、街口支付、信用卡或 Apple Pay。
+      下一步會進入結帳頁，輸入教師優惠碼後建立 pending 訂單。
+    </div>
   </div>
 
 <script>
 const params = new URLSearchParams(window.location.search);
+
 const username =
   params.get('username') ||
-  localStorage.getItem('username');
+  localStorage.getItem('studyVerseUser') ||
+  localStorage.getItem('username') ||
+  '';
 
-let currentOrder = null;
+const PLAN_LABELS = {
+  free: '免費版',
+  trial: '14 天免費體驗',
+  pro: '訂閱版',
+  expired: '免費版'
+};
 
-if (!username) {
-  document.getElementById('message').innerHTML =
-    '<span class="error">缺少 username，請重新登入。</span>';
+function goBackToLobby() {
+  window.location.href = '/index.html';
 }
 
-async function createSubscriptionOrder() {
-  const discountCode = document.getElementById('discountCodeInput').value.trim();
-  const paymentInfoEl = document.getElementById('paymentInfo');
-  const messageEl = document.getElementById('message');
-  const freeButton = document.getElementById('freeCompleteButton');
+function goCheckout(planId) {
+  if (!username) {
+    alert('缺少登入資訊，請重新登入後再選擇方案。');
+    window.location.href = '/index.html';
+    return;
+  }
 
-  messageEl.textContent = '';
-  freeButton.style.display = 'none';
+  window.location.href =
+    `/subscription-checkout.html?username=${encodeURIComponent(username)}&plan=${encodeURIComponent(planId)}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleDateString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+}
+
+async function loadCurrentPlan() {
+  const pill = document.getElementById('currentPlanPill');
+  const text = document.getElementById('currentPlanText');
 
   if (!username) {
-    messageEl.innerHTML = '<span class="error">缺少 username，請重新登入。</span>';
+    pill.innerHTML = '尚未登入';
+    text.innerHTML = '<span class="error">請先登入後查看你的方案狀態。</span>';
     return;
   }
 
   try {
-    const res = await fetch('/api/subscription/create-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        discountCode
-      })
-    });
-
+    const res = await fetch(`/api/subscription/status?username=${encodeURIComponent(username)}`);
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || '建立訂閱訂單失敗');
+      throw new Error(data.error || '讀取方案狀態失敗');
     }
 
-    currentOrder = data.order;
+    const accessLevel = data.accessLevel || 'free';
+    const label = PLAN_LABELS[accessLevel] || '免費版';
 
-    paymentInfoEl.innerHTML = `
-      原價：${data.subscription.originalAmount} 元<br>
-      折扣：-${data.subscription.discountAmount} 元<br>
-      <strong>應付金額：${data.subscription.amount} 元</strong><br>
-      訂單狀態：${data.order.status}
-    `;
+    pill.innerHTML = `${label}`;
 
-    if (data.subscription.isFreeCheckout) {
-      freeButton.style.display = 'block';
-      messageEl.innerHTML =
-        '<span class="success">此訂閱可免費啟用。</span>';
-    } else {
-      messageEl.innerHTML =
-        '<span class="success">訂閱訂單已建立。正式金流會在之後串接。</span>';
+    if (accessLevel === 'pro') {
+      text.textContent =
+        `你目前是訂閱版，可使用完整功能。到期日：${formatDateTime(data.subscription_end_date) || '未設定'}`;
+      return;
     }
+
+    if (accessLevel === 'trial') {
+      text.textContent =
+        `你目前在 14 天免費體驗期間，可使用完整功能。體驗到期日：${formatDateTime(data.trial_ends_at) || '未設定'}`;
+      return;
+    }
+
+    if (accessLevel === 'expired') {
+      text.textContent =
+        '你的體驗或訂閱已到期，目前可使用免費版功能：沉浸式自習室與線上課程。';
+      return;
+    }
+
+    text.textContent =
+      '你目前是免費版，可使用沉浸式自習室與線上課程。訂閱後可解鎖主題教室、小隊共學與特約教室。';
 
   } catch (err) {
-    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+    console.error('讀取方案狀態失敗:', err);
+    pill.innerHTML = '讀取失敗';
+    text.innerHTML = `<span class="error">${err.message}</span>`;
   }
 }
 
-async function completeFreeSubscription() {
-  const messageEl = document.getElementById('message');
-
-  if (!currentOrder) {
-    messageEl.innerHTML = '<span class="error">尚未建立訂閱訂單。</span>';
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/subscription/free-complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        orderId: currentOrder.id
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || '免費啟用訂閱失敗');
-    }
-
-    messageEl.innerHTML =
-      '<span class="success">訂閱啟用成功，正在前往大廳...</span>';
-
-    setTimeout(() => {
-      window.location.href = `/?username=${encodeURIComponent(username)}&subscription=active`;
-    }, 800);
-
-  } catch (err) {
-    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
-  }
-}
+loadCurrentPlan();
 </script>
 
 </body>

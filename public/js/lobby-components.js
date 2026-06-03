@@ -516,21 +516,42 @@ window.handleRealLogin = async function() {
         localStorage.setItem('studyVerseSessionId', data.sessionId);
         localStorage.setItem('studyVerseRole', role);
 
+        // 教師 / 管理員 / 審核中教師維持原本流程
         if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
             location.reload();
             return;
         }
 
-        const statusRes = await fetch(
-            `/api/subscription/status?username=${encodeURIComponent(data.username)}`
-        );
+        // 學生登入後只讀取權限，不再強制導向 subscribe.html
+        try {
+            const statusRes = await fetch(
+                `/api/subscription/status?username=${encodeURIComponent(data.username)}`
+            );
 
-        const statusData = await statusRes.json();
+            const statusData = await statusRes.json();
 
-        if (!statusData.is_subscribed) {
-            window.location.href =
-                `/subscribe.html?username=${encodeURIComponent(data.username)}`;
-            return;
+            localStorage.setItem(
+    'studyVerseAccessUsername',
+    statusData.username || data.username
+);
+
+            localStorage.setItem(
+                'studyVerseAccessLevel',
+                statusData.accessLevel || 'free'
+            );
+
+            localStorage.setItem(
+                'studyVerseCanUseFullFeatures',
+                statusData.canUseFullFeatures === true ? 'true' : 'false'
+            );
+
+            console.log('登入後訂閱權限:', statusData);
+
+        } catch (statusErr) {
+            console.error('登入後訂閱狀態讀取失敗:', statusErr);
+
+            localStorage.setItem('studyVerseAccessLevel', 'free');
+            localStorage.setItem('studyVerseCanUseFullFeatures', 'false');
         }
 
         location.reload();
