@@ -247,38 +247,175 @@ window.fetch = async function() {
     return originalFetch.apply(this, arguments);
 };
 
+async function verifyTutorRoomAccessBeforeJoin(roomCode, studentName, isStandalone) {
+    // 線上課程 standalone 先不走特約教室白名單，避免破壞 course_enrollments / 線上課程入口
+    if (isStandalone) {
+        return {
+            ok: true,
+            roomCode
+        };
+    }
+
+    const username =
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        studentName ||
+        '';
+
+    if (!roomCode) {
+        alert('缺少特約教室代碼，請重新從大廳進入。');
+        window.location.href = '/index.html';
+        return {
+            ok: false
+        };
+    }
+
+    try {
+        const res = await fetch(
+            `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success || !data.schedule) {
+            alert(data.error || '你目前無法進入此特約教室。');
+            window.location.href = '/index.html';
+            return {
+                ok: false
+            };
+        }
+
+        const schedule = data.schedule;
+        const actualRoomCode = schedule.room_code;
+
+        if (!actualRoomCode) {
+            alert('特約教室資料缺少實際房間代碼，請重新從大廳進入。');
+            window.location.href = '/index.html';
+            return {
+                ok: false
+            };
+        }
+
+        const scheduleData = {
+            roomCode: actualRoomCode,
+            room_code: actualRoomCode,
+
+            inputCode: roomCode,
+            input_code: roomCode,
+
+            resolvedFrom: data.resolved_from || 'schedule_code',
+            resolved_from: data.resolved_from || 'schedule_code',
+
+            programId: data.program?.id || schedule.program_id || null,
+            program_id: data.program?.id || schedule.program_id || null,
+            programRoomCode: data.program?.room_code || null,
+            program_room_code: data.program?.room_code || null,
+
+            teacherUsername: schedule.teacher_username,
+            teacher_username: schedule.teacher_username,
+
+            roomTitle: schedule.room_title || data.program?.title || '特約教室',
+            roomNote: schedule.room_note || data.program?.room_note || '',
+
+            roomSize: schedule.room_size,
+
+            periods: Number(schedule.periods || 1),
+            periodTime: Number(schedule.class_minutes || 50),
+            classMinutes: Number(schedule.class_minutes || 50),
+
+            restTime: Number(schedule.rest_minutes || 10),
+            restMinutes: Number(schedule.rest_minutes || 10),
+
+            startTime: schedule.start_time,
+            scheduledDate: schedule.scheduled_date,
+            scheduled_date: schedule.scheduled_date,
+
+            requiresWhitelist: schedule.requires_whitelist === true,
+            requires_whitelist: schedule.requires_whitelist === true,
+
+            status: schedule.status,
+            id: schedule.id
+        };
+
+        sessionStorage.setItem('currentTutorRoomCode', actualRoomCode);
+        localStorage.setItem(`tutor_schedule_${actualRoomCode}`, JSON.stringify(scheduleData));
+
+        window.currentTutorRoomCode = actualRoomCode;
+        window.currentScheduleData = scheduleData;
+
+        // 如果學生直接用 program room_code 進來，網址改成實際房間代碼，避免後續 timer / mobile sync 用錯 room
+        if (actualRoomCode !== roomCode) {
+            const nextUrl = `/tutor-room.html?room=${encodeURIComponent(actualRoomCode)}`;
+            window.history.replaceState(null, '', nextUrl);
+        }
+
+        return {
+            ok: true,
+            roomCode: actualRoomCode,
+            schedule,
+            program: data.program || null
+        };
+
+    } catch (err) {
+        console.error('特約教室進入驗證失敗:', err);
+        alert('特約教室進入驗證失敗，請稍後再試。');
+        window.location.href = '/index.html';
+
+        return {
+            ok: false
+        };
+    }
+}
+
 // ==========================================
 // 3. 頁面初始化與 Socket 監聽
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const isStandalone = urlParams.get('standalone') === 'true';
 
-    const roomCode = urlParams.get('room') || urlParams.get('roomId'); 
-if (typeof socket !== 'undefined') {
-    if (roomCode) {
+    let roomCode =
+        urlParams.get('room') ||
+        urlParams.get('roomId') ||
+        urlParams.get('roomCode');
 
-        const tutorName =
-            urlParams.get('username') ||
-            localStorage.getItem('studyVerseUser') ||
-            document.getElementById('inputName')?.value ||
-            '特約學員';
+    if (typeof socket !== 'undefined') {
+        if (roomCode) {
+            const tutorName =
+                urlParams.get('username') ||
+                localStorage.getItem('studyVerseUser') ||
+                document.getElementById('inputName')?.value ||
+                '特約學員';
 
-        socket.emit('join_tutor_room', {
-    username: tutorName,
-    name: tutorName,
-    roomId: roomCode,
-    room: roomCode,
-    roomCode: roomCode,
-    deviceType: 'pc',
-    role: 'student'
-});
+            const accessResult = await verifyTutorRoomAccessBeforeJoin(
+                roomCode,
+                tutorName,
+                isStandalone
+            );
 
-        console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
-        socket.emit('request_tutor_schedule', roomCode);
-socket.emit('request_tutor_timer_sync', roomCode);
-console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
-    }
+            if (!accessResult.ok) {
+                return;
+            }
+
+            roomCode = accessResult.roomCode;
+
+            socket.emit('join_tutor_room', {
+                username: tutorName,
+                name: tutorName,
+                roomId: roomCode,
+                room: roomCode,
+                roomCode: roomCode,
+                deviceType: 'pc',
+                role: 'student'
+            });
+
+            console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
+
+            socket.emit('request_tutor_schedule', roomCode);
+            socket.emit('request_tutor_timer_sync', roomCode);
+
+            console.log("⏱️ [TutorClient] 已請求課表與 timer sync:", roomCode);
+        }
 
         // 🚀 新增：攔截手機的即時狀態
         socket.on('update_status', (data) => {

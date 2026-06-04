@@ -587,72 +587,130 @@
     </script>
     
     <div id="teacher-setup-modal" class="fixed inset-0 z-[9999] bg-[#05070a]/95 backdrop-blur-md hidden items-center justify-center p-4">
-        <div class="bg-[#0a0e17] w-full max-w-md rounded-3xl border border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.2)] p-6 relative">
-            <button onclick="document.getElementById('teacher-setup-modal').classList.add('hidden');document.getElementById('teacher-setup-modal').classList.remove('flex');" class="absolute top-4 right-4 text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
-            
-            <h2 class="text-2xl font-black text-blue-500 mb-6 text-center">建立導師教室</h2>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs text-gray-400 font-bold mb-1 block">1. 教室人數上限</label>
-                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-                        <div class="px-3 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">人數</div>
-                        <select id="teacherRoomSize" class="w-full bg-transparent text-white p-2 text-sm outline-none">
-                            <option value="10">10 人</option>
-                            <option value="30">30 人</option>
-                            <option value="50">50 人</option>
-                        </select>
-                    </div>
-                </div>
+    <div class="bg-[#0a0e17] w-full max-w-2xl rounded-3xl border border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.2)] p-6 relative max-h-[92vh] overflow-y-auto">
+        <button
+            onclick="document.getElementById('teacher-setup-modal').classList.add('hidden');document.getElementById('teacher-setup-modal').classList.remove('flex');"
+            class="absolute top-4 right-4 text-gray-500 hover:text-white">
+            <i class="fas fa-times"></i>
+        </button>
 
-                <div>
-                    <label class="text-xs text-gray-400 font-bold mb-1 block">2. 課程排程設定</label>
-<div class="mb-3">
-                        <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">日期</div>
-<input type="date" id="teacherScheduledDate" class="w-full bg-black text-white p-2 text-sm text-center outline-none rounded-lg border border-blue-500/30 cursor-pointer [color-scheme:dark]">
-                        </div>
-                        </div>
-<div class="mb-3">
-                        <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">備註</div>
-<input type="text" id="teacherRoomNote" maxlength="24" placeholder="例：國三數學段考班" class="w-full bg-transparent text-white p-2 text-sm outline-none">
-                        </div>
-                        </div>
-<div class="grid grid-cols-2 gap-3 mb-3">
-<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">總節數</div>
-<input type="number" id="teacherPeriods" placeholder="例: 3" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
-                    </div>
-<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">每節(分)</div>
-<input type="number" id="teacherPeriodTime" placeholder="例: 50" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
-                </div>
-</div>
-<div class="grid grid-cols-2 gap-3">
-<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">休息(分)</div>
-<input type="number" id="teacherRestTime" placeholder="例: 10" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
-</div>
-<div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
-<div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">首節時間</div>
-<input type="time" id="teacherStartTime" value="08:00" class="bg-black border border-blue-500/30 text-white rounded-lg p-2 text-sm text-center [&::-webkit-calendar-picker-indicator]:hidden">
-</div>
-</div>
-</div>
+        <h2 class="text-2xl font-black text-blue-500 mb-2 text-center">
+            建立週期特約教室
+        </h2>
 
-                <div id="endTimeDisplayContainer" class="hidden mt-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl flex items-center justify-center gap-2 transition-all">
-                    <i class="fas fa-clock text-blue-400"></i>
-                    <span class="text-xs text-gray-400 font-bold">預計下課時間：</span>
-                    <span id="calculatedEndTime" class="text-lg font-black text-blue-400 tracking-widest">--:--</span>
+        <p class="text-xs text-gray-500 text-center mb-6 leading-relaxed">
+            設定一段日期區間與每週上課日，系統會自動產生每次上課的特約教室代碼。
+        </p>
+
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs text-gray-400 font-bold mb-1 block">1. 教室人數上限</label>
+                <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                    <div class="px-3 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">人數</div>
+                    <select id="teacherRoomSize" class="w-full bg-black text-white p-2 text-sm outline-none [color-scheme:dark]">
+    <option class="bg-black text-white" value="10">10 人</option>
+    <option class="bg-black text-white" value="30">30 人</option>
+    <option class="bg-black text-white" value="50">50 人</option>
+</select>
                 </div>
-                
-                <button onclick="generateTeacherRoom()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl mt-4 transition-all">
-                    產生教室代碼並進入儀表板
-                </button>
             </div>
+
+            <div>
+                <label class="text-xs text-gray-400 font-bold mb-1 block">2. 週期日期區間</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">開始</div>
+                        <input
+                            type="date"
+                            id="teacherProgramStartDate"
+                            class="w-full bg-black text-white p-2 text-sm text-center outline-none rounded-lg border border-blue-500/30 cursor-pointer [color-scheme:dark]">
+                    </div>
+
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">結束</div>
+                        <input
+                            type="date"
+                            id="teacherProgramEndDate"
+                            class="w-full bg-black text-white p-2 text-sm text-center outline-none rounded-lg border border-blue-500/30 cursor-pointer [color-scheme:dark]">
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs text-gray-400 font-bold mb-2 block">3. 每週上課日，可複選</label>
+                <div id="teacherWeekdayGroup" class="grid grid-cols-7 gap-2">
+                    <button type="button" data-weekday="1" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">一</button>
+                    <button type="button" data-weekday="2" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">二</button>
+                    <button type="button" data-weekday="3" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">三</button>
+                    <button type="button" data-weekday="4" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">四</button>
+                    <button type="button" data-weekday="5" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">五</button>
+                    <button type="button" data-weekday="6" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">六</button>
+                    <button type="button" data-weekday="0" onclick="toggleTeacherWeekday(this)" class="teacher-weekday-btn bg-black border border-blue-500/30 text-gray-400 hover:text-white hover:border-blue-400 rounded-xl py-2 text-xs font-black transition-all">日</button>
+                </div>
+                <p class="text-[10px] text-gray-600 mt-2">
+                    例如選一、三、五，代表日期區間內每週一三五都會開課。
+                </p>
+            </div>
+
+            <div>
+                <label class="text-xs text-gray-400 font-bold mb-1 block">4. 教師備註 / 課程名稱</label>
+                <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                    <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">備註</div>
+                    <input
+                        type="text"
+                        id="teacherRoomNote"
+                        maxlength="40"
+                        placeholder="例：國三數學段考班"
+                        class="w-full bg-transparent text-white p-2 text-sm outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs text-gray-400 font-bold mb-1 block">5. 課程排程設定</label>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">總節數</div>
+                        <input type="number" id="teacherPeriods" placeholder="例: 2" value="2" min="1" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+                    </div>
+
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">每節(分)</div>
+                        <input type="number" id="teacherPeriodTime" placeholder="例: 50" value="50" min="1" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">休息(分)</div>
+                        <input type="number" id="teacherRestTime" placeholder="例: 10" value="10" min="0" class="w-full bg-transparent text-white p-2 text-sm text-center outline-none">
+                    </div>
+
+                    <div class="flex items-center bg-black border border-blue-500/30 rounded-lg focus-within:border-blue-500 transition-colors">
+                        <div class="px-2 py-2 bg-blue-900/30 border-r border-blue-500/30 text-[10px] font-bold text-blue-300 whitespace-nowrap">開始</div>
+                        <input type="time" id="teacherStartTime" value="20:00" class="w-full bg-black text-white p-2 text-sm text-center outline-none rounded-lg border border-blue-500/30 cursor-pointer [color-scheme:dark]">
+                    </div>
+                </div>
+            </div>
+
+            <div id="endTimeDisplayContainer" class="hidden items-center justify-between bg-blue-950/40 border border-blue-500/30 rounded-xl px-4 py-3">
+                <span class="text-xs text-blue-300 font-bold">預估每次下課時間</span>
+                <span id="calculatedEndTime" class="text-blue-100 font-mono font-black">--:--</span>
+            </div>
+
+            <div class="bg-yellow-500/10 border border-yellow-400/30 rounded-2xl p-4 text-xs text-yellow-100 leading-relaxed">
+                <b class="text-yellow-300">提醒：</b>
+                這裡建立的是「報名制週期特約教室」。學生之後會在課程商店報名，報名成功後才會加入白名單。
+            </div>
+
+            <button
+                onclick="generateTeacherRoom()"
+                class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-white transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+                建立週期特約教室
+            </button>
         </div>
     </div>
+</div>
 
     <script>
 function toggleNotificationPanel() {

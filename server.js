@@ -253,6 +253,765 @@ async function generateUniqueTutorRoomCode() {
     return code;
 }
 
+// ==========================================
+// Tutor Programs API - 週期特約教室
+// ==========================================
+
+async function generateUniqueTutorGlobalRoomCode() {
+    let code;
+    let isUnique = false;
+
+    while (!isUnique) {
+        code = generateTutorRoomCode();
+
+        const { data: existingSchedule, error: scheduleError } = await supabase
+            .from('tutor_schedules')
+            .select('room_code')
+            .eq('room_code', code)
+            .maybeSingle();
+
+        if (scheduleError) throw scheduleError;
+
+        const { data: existingProgram, error: programError } = await supabase
+            .from('tutor_programs')
+            .select('room_code')
+            .eq('room_code', code)
+            .maybeSingle();
+
+        if (programError) throw programError;
+
+        if (!existingSchedule && !existingProgram) {
+            isUnique = true;
+        }
+    }
+
+    return code;
+}
+
+function normalizeTutorWeekdays(rawWeekdays) {
+    if (!Array.isArray(rawWeekdays)) {
+        return [];
+    }
+
+    return [...new Set(
+        rawWeekdays
+            .map(day => Number(day))
+            .filter(day => Number.isInteger(day) && day >= 0 && day <= 6)
+    )];
+}
+
+function buildTutorProgramDates(startDate, endDate, weekdays) {
+    const dates = [];
+
+    const start = new Date(`${startDate}T00:00:00.000Z`);
+    const end = new Date(`${endDate}T00:00:00.000Z`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return dates;
+    }
+
+    for (
+        let cursor = new Date(start);
+        cursor <= end;
+        cursor.setUTCDate(cursor.getUTCDate() + 1)
+    ) {
+        const weekday = cursor.getUTCDay();
+
+        if (weekdays.includes(weekday)) {
+            dates.push(cursor.toISOString().slice(0, 10));
+        }
+    }
+
+    return dates;
+}
+
+// 建立一個週期特約教室，並自動產生多筆 tutor_schedules
+app.post('/api/tutor-programs', async (req, res) => {
+    try {
+        const {
+            teacherUsername,
+            roomTitle,
+            title,
+            startDate,
+            endDate,
+            weekdays,
+            startTime,
+            periods,
+            classMinutes,
+            restMinutes,
+            roomSize,
+            maxStudents,
+            roomNote
+        } = req.body;
+
+        if (!teacherUsername) {
+            return res.status(400).json({ error: '缺少 teacherUsername' });
+        }
+
+        const finalTitle = String(roomTitle || title || '特約教室').trim();
+        const finalRoomNote = String(roomNote || '').trim();
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: '請選擇開始日期與結束日期' });
+        }
+
+        const finalWeekdays = normalizeTutorWeekdays(weekdays);
+
+        if (finalWeekdays.length === 0) {
+            return res.status(400).json({ error: '請至少選擇一個上課星期' });
+        }
+
+        if (!startTime) {
+            return res.status(400).json({ error: '請選擇固定開始時間' });
+        }
+
+        const finalPeriods = Number(periods || 1);
+        const finalClassMinutes = Number(classMinutes || 50);
+        const finalRestMinutes = Number(restMinutes || 10);
+        const finalMaxStudents = Number(maxStudents || roomSize || 0);
+
+        if (!Number.isInteger(finalPeriods) || finalPeriods <= 0) {
+            return res.status(400).json({ error: '堂數格式錯誤' });
+        }
+
+        if (!Number.isInteger(finalClassMinutes) || finalClassMinutes <= 0) {
+            return res.status(400).json({ error: '每堂課分鐘數格式錯誤' });
+        }
+
+        if (!Number.isInteger(finalRestMinutes) || finalRestMinutes < 0) {
+            return res.status(400).json({ error: '休息分鐘數格式錯誤' });
+        }
+
+        if (!Number.isInteger(finalMaxStudents) || finalMaxStudents < 0) {
+            return res.status(400).json({ error: '人數上限格式錯誤' });
+        }
+
+        const scheduleDates = buildTutorProgramDates(startDate, endDate, finalWeekdays);
+
+        if (scheduleDates.length === 0) {
+            return res.status(400).json({
+                error: '此日期區間內沒有符合星期條件的上課日期'
+            });
+        }
+
+        const { data: teacher, error: teacherError } = await supabase
+            .from('users')
+            .select('username, role, teacher_status, is_blocked')
+            .eq('username', teacherUsername)
+            .maybeSingle();
+
+        if (teacherError) throw teacherError;
+
+        if (!teacher) {
+            return res.status(404).json({ error: '找不到教師帳號' });
+        }
+
+        if (teacher.is_blocked) {
+            return res.status(403).json({ error: '此教師帳號已被停用' });
+        }
+
+        if (teacher.role !== 'teacher' && teacher.role !== 'admin') {
+            return res.status(403).json({ error: '此帳號不是教師或管理員' });
+        }
+
+        if (teacher.role === 'teacher' && teacher.teacher_status !== 'approved') {
+            return res.status(403).json({ error: '教師資格尚未通過審核' });
+        }
+
+        const programRoomCode = await generateUniqueTutorGlobalRoomCode();
+
+        const { data: program, error: programInsertError } = await supabase
+            .from('tutor_programs')
+            .insert([{
+                teacher_username: teacherUsername,
+                room_code: programRoomCode,
+                title: finalTitle || '特約教室',
+                room_note: finalRoomNote || null,
+                start_date: startDate,
+                end_date: endDate,
+                weekdays: finalWeekdays,
+                start_time: startTime,
+                periods: finalPeriods,
+                class_minutes: finalClassMinutes,
+                rest_minutes: finalRestMinutes,
+                max_students: finalMaxStudents,
+                enrolled_count: 0,
+                is_public: true,
+                requires_subscription: true,
+                status: 'open'
+            }])
+            .select()
+            .single();
+
+        if (programInsertError) throw programInsertError;
+
+        const scheduleRows = [];
+
+        for (const scheduledDate of scheduleDates) {
+            const scheduleRoomCode = await generateUniqueTutorGlobalRoomCode();
+
+            scheduleRows.push({
+                teacher_username: teacherUsername,
+                room_code: scheduleRoomCode,
+                room_title: finalTitle || '特約教室',
+                room_note: finalRoomNote || null,
+                room_size: roomSize || String(finalMaxStudents || ''),
+                periods: finalPeriods,
+                class_minutes: finalClassMinutes,
+                rest_minutes: finalRestMinutes,
+                start_time: startTime,
+                scheduled_date: scheduledDate,
+                status: 'scheduled',
+                program_id: program.id,
+                requires_whitelist: true,
+                max_students: finalMaxStudents,
+                enrolled_count: 0
+            });
+        }
+
+        const { data: schedules, error: schedulesInsertError } = await supabase
+            .from('tutor_schedules')
+            .insert(scheduleRows)
+            .select();
+
+        if (schedulesInsertError) {
+            await supabase
+                .from('tutor_programs')
+                .delete()
+                .eq('id', program.id);
+
+            throw schedulesInsertError;
+        }
+
+        res.json({
+            success: true,
+            program,
+            schedules,
+            scheduleCount: schedules.length,
+            message: `已建立週期特約教室，共產生 ${schedules.length} 次上課房間`
+        });
+
+    } catch (err) {
+        console.error('建立週期特約教室失敗:', err);
+        res.status(500).json({
+            error: '建立週期特約教室失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
+
+function getTaipeiTodayDateString() {
+    return new Date().toLocaleDateString('en-CA', {
+        timeZone: 'Asia/Taipei'
+    });
+}
+
+function buildTutorScheduleStartAt(schedule) {
+    if (!schedule || !schedule.start_time) {
+        return null;
+    }
+
+    const dateText =
+        schedule.scheduled_date ||
+        getTaipeiTodayDateString();
+
+    const timeText = String(schedule.start_time).slice(0, 5);
+
+    if (!dateText || !timeText || !timeText.includes(':')) {
+        return null;
+    }
+
+    const startAt = new Date(`${dateText}T${timeText}:00+08:00`);
+
+    if (Number.isNaN(startAt.getTime())) {
+        return null;
+    }
+
+    return startAt;
+}
+
+function getTutorScheduleTotalMinutes(schedule) {
+    const periods = Number(schedule.periods || 1);
+    const classMinutes = Number(schedule.class_minutes || 50);
+    const restMinutes = Number(schedule.rest_minutes || 10);
+
+    return (
+        periods * classMinutes +
+        ((periods > 1) ? (periods - 1) * restMinutes : 0)
+    );
+}
+
+function getTutorProgramAccessFromUser(user) {
+    if (!user) {
+        return {
+            accessLevel: 'guest',
+            canEnrollTutorProgram: false,
+            roleBypass: false
+        };
+    }
+
+    const role = user.role || 'student';
+
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return {
+            accessLevel: 'pro',
+            canEnrollTutorProgram: true,
+            roleBypass: true
+        };
+    }
+
+    const now = Date.now();
+
+    const subscriptionEndTime = user.subscription_end_date
+        ? new Date(user.subscription_end_date).getTime()
+        : 0;
+
+    const trialEndTime = user.trial_ends_at
+        ? new Date(user.trial_ends_at).getTime()
+        : 0;
+
+    const hasActiveSubscription =
+        user.is_subscribed === true &&
+        user.subscription_status === 'active' &&
+        subscriptionEndTime > now;
+
+    const hasActiveTrial =
+        trialEndTime > now;
+
+    if (hasActiveSubscription) {
+        return {
+            accessLevel: 'pro',
+            canEnrollTutorProgram: true,
+            roleBypass: false
+        };
+    }
+
+    if (hasActiveTrial) {
+        return {
+            accessLevel: 'trial',
+            canEnrollTutorProgram: true,
+            roleBypass: false
+        };
+    }
+
+    const hasExpiredRecord =
+        !!user.trial_ends_at ||
+        !!user.subscription_end_date ||
+        user.subscription_status === 'expired';
+
+    return {
+        accessLevel: hasExpiredRecord ? 'expired' : 'free',
+        canEnrollTutorProgram: false,
+        roleBypass: false
+    };
+}
+
+function formatTutorProgramWeekdays(weekdays) {
+    const names = {
+        0: '日',
+        1: '一',
+        2: '二',
+        3: '三',
+        4: '四',
+        5: '五',
+        6: '六'
+    };
+
+    if (!Array.isArray(weekdays)) return '';
+
+    return weekdays
+        .map(day => names[Number(day)])
+        .filter(Boolean)
+        .join('、');
+}
+
+function parseTutorProgramTimeToMinutes(timeText) {
+    const raw = String(timeText || '').slice(0, 5);
+
+    if (!raw.includes(':')) return null;
+
+    const [hours, minutes] = raw.split(':').map(Number);
+
+    if (
+        Number.isNaN(hours) ||
+        Number.isNaN(minutes) ||
+        hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59
+    ) {
+        return null;
+    }
+
+    return hours * 60 + minutes;
+}
+
+function formatTutorProgramMinutes(totalMinutes) {
+    const minutesInDay = 24 * 60;
+    const safeTotal = ((Number(totalMinutes || 0) % minutesInDay) + minutesInDay) % minutesInDay;
+
+    const hours = Math.floor(safeTotal / 60);
+    const minutes = safeTotal % 60;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getTutorProgramTimeRangeTextForNotification(program) {
+    const startMinutes = parseTutorProgramTimeToMinutes(program?.start_time);
+
+    if (startMinutes === null) {
+        return '未設定';
+    }
+
+    const periods = Number(program?.periods || 1);
+    const classMinutes = Number(program?.class_minutes || 50);
+    const restMinutes = Number(program?.rest_minutes || 10);
+
+    const totalMinutes =
+        periods * classMinutes +
+        ((periods > 1) ? (periods - 1) * restMinutes : 0);
+
+    const endMinutes = startMinutes + totalMinutes;
+
+    return `${formatTutorProgramMinutes(startMinutes)} - ${formatTutorProgramMinutes(endMinutes)}`;
+}
+// 課程商店：取得可報名的週期特約教室
+app.get('/api/tutor-programs/store', async (req, res) => {
+    try {
+        const username = String(req.query.username || '').trim();
+
+        let user = null;
+        let access = {
+            accessLevel: 'guest',
+            canEnrollTutorProgram: false,
+            roleBypass: false
+        };
+
+        if (username) {
+            const { data: dbUser, error: userError } = await supabase
+                .from('users')
+                .select(`
+                    username,
+                    role,
+                    is_blocked,
+                    membership_level,
+                    is_subscribed,
+                    subscription_status,
+                    subscription_end_date,
+                    trial_ends_at
+                `)
+                .eq('username', username)
+                .maybeSingle();
+
+            if (userError) throw userError;
+
+            if (dbUser && dbUser.is_blocked) {
+                return res.status(403).json({
+                    success: false,
+                    error: '此帳號已被停用，無法查看特約教室報名。',
+                    accessLevel: 'blocked',
+                    canEnrollTutorProgram: false,
+                    programs: []
+                });
+            }
+
+            user = dbUser;
+            access = getTutorProgramAccessFromUser(user);
+        }
+
+        const { data: programs, error: programError } = await supabase
+            .from('tutor_programs')
+            .select('*')
+            .eq('is_public', true)
+            .eq('status', 'open')
+            .order('start_date', { ascending: true })
+            .order('start_time', { ascending: true });
+
+        if (programError) throw programError;
+
+        const programIds = (programs || []).map(program => program.id);
+
+        let enrolledProgramIdSet = new Set();
+
+        if (username && programIds.length > 0) {
+            const { data: enrollments, error: enrollmentError } = await supabase
+                .from('tutor_program_enrollments')
+                .select('program_id')
+                .eq('username', username)
+                .eq('status', 'active')
+                .in('program_id', programIds);
+
+            if (enrollmentError) throw enrollmentError;
+
+            enrolledProgramIdSet = new Set(
+                (enrollments || []).map(row => row.program_id)
+            );
+        }
+
+        const mappedPrograms = (programs || []).map(program => {
+            const maxStudents = Number(program.max_students || 0);
+            const enrolledCount = Number(program.enrolled_count || 0);
+            const isFull = maxStudents > 0 && enrolledCount >= maxStudents;
+            const isEnrolled = enrolledProgramIdSet.has(program.id);
+
+            return {
+                id: program.id,
+                teacher_username: program.teacher_username,
+                teacher_name: program.teacher_username,
+
+                room_code: program.room_code,
+                title: program.title || '特約教室',
+                room_note: program.room_note || '',
+
+                start_date: program.start_date,
+                end_date: program.end_date,
+                weekdays: program.weekdays || [],
+                weekdays_text: formatTutorProgramWeekdays(program.weekdays),
+
+                start_time: program.start_time,
+                periods: Number(program.periods || 1),
+                class_minutes: Number(program.class_minutes || 50),
+                rest_minutes: Number(program.rest_minutes || 10),
+
+                max_students: maxStudents,
+                enrolled_count: enrolledCount,
+                capacity_text: maxStudents > 0
+                    ? `${enrolledCount} / ${maxStudents}`
+                    : `${enrolledCount} / 不限`,
+
+                is_full: isFull,
+                is_enrolled: isEnrolled,
+
+                requires_subscription: program.requires_subscription === true,
+                can_enroll: access.canEnrollTutorProgram === true && !isFull && !isEnrolled,
+
+                status: program.status,
+                created_at: program.created_at
+            };
+        });
+
+        res.json({
+            success: true,
+            username: username || null,
+            accessLevel: access.accessLevel,
+            canEnrollTutorProgram: access.canEnrollTutorProgram,
+            roleBypass: access.roleBypass,
+            programs: mappedPrograms
+        });
+
+    } catch (err) {
+        console.error('取得課程商店特約教室列表失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '取得課程商店特約教室列表失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
+// 課程商店：報名週期特約教室，寫入白名單
+app.post('/api/tutor-programs/enroll', async (req, res) => {
+    try {
+        const username = String(req.body.username || '').trim();
+        const programId = String(req.body.programId || '').trim();
+
+        if (!username) {
+            return res.status(400).json({
+                success: false,
+                error: '缺少 username'
+            });
+        }
+
+        if (!programId) {
+            return res.status(400).json({
+                success: false,
+                error: '缺少 programId'
+            });
+        }
+
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select(`
+                username,
+                role,
+                is_blocked,
+                membership_level,
+                is_subscribed,
+                subscription_status,
+                subscription_end_date,
+                trial_ends_at
+            `)
+            .eq('username', username)
+            .maybeSingle();
+
+        if (userError) throw userError;
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                error: '此帳號已被停用，無法報名特約教室'
+            });
+        }
+
+        const access = getTutorProgramAccessFromUser(user);
+
+        if (!access.canEnrollTutorProgram) {
+            return res.status(403).json({
+                success: false,
+                error: '特約教室報名限 trial / pro 使用者。請先升級方案。',
+                accessLevel: access.accessLevel
+            });
+        }
+
+        const { data: program, error: programError } = await supabase
+            .from('tutor_programs')
+            .select('*')
+            .eq('id', programId)
+            .eq('is_public', true)
+            .eq('status', 'open')
+            .maybeSingle();
+
+        if (programError) throw programError;
+
+        if (!program) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到可報名的特約教室'
+            });
+        }
+
+        const maxStudents = Number(program.max_students || 0);
+        const currentEnrolledCount = Number(program.enrolled_count || 0);
+
+        if (maxStudents > 0 && currentEnrolledCount >= maxStudents) {
+            return res.status(409).json({
+                success: false,
+                error: '此特約教室已額滿'
+            });
+        }
+
+        const { data: existingEnrollment, error: existingError } = await supabase
+            .from('tutor_program_enrollments')
+            .select('*')
+            .eq('program_id', program.id)
+            .eq('username', username)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (existingEnrollment) {
+            return res.json({
+                success: true,
+                alreadyEnrolled: true,
+                enrollment: existingEnrollment,
+                program,
+                message: '你已經報名過此特約教室'
+            });
+        }
+
+        const { data: enrollment, error: insertError } = await supabase
+            .from('tutor_program_enrollments')
+            .insert([{
+                program_id: program.id,
+                username,
+                status: 'active',
+                source: 'course_store'
+            }])
+            .select()
+            .single();
+
+        if (insertError) {
+            if (
+                insertError.code === '23505' ||
+                String(insertError.message || '').includes('duplicate')
+            ) {
+                return res.json({
+                    success: true,
+                    alreadyEnrolled: true,
+                    program,
+                    message: '你已經報名過此特約教室'
+                });
+            }
+
+            throw insertError;
+        }
+
+        const { count: activeEnrollmentCount, error: countError } = await supabase
+            .from('tutor_program_enrollments')
+            .select('id', {
+                count: 'exact',
+                head: true
+            })
+            .eq('program_id', program.id)
+            .eq('status', 'active');
+
+        if (countError) throw countError;
+
+        const finalEnrolledCount = Number(activeEnrollmentCount || 0);
+
+        await supabase
+            .from('tutor_programs')
+            .update({
+                enrolled_count: finalEnrolledCount,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', program.id);
+
+        await supabase
+            .from('tutor_schedules')
+            .update({
+                enrolled_count: finalEnrolledCount,
+                updated_at: new Date().toISOString()
+            })
+            .eq('program_id', program.id);
+
+        const weekdaysText = formatTutorProgramWeekdays(program.weekdays);
+const timeRangeText = getTutorProgramTimeRangeTextForNotification(program);
+
+await createNotification({
+    username,
+    type: 'tutor_program_enrolled',
+    title: '特約教室報名成功',
+    message:
+        `你已成功報名 ${program.teacher_username} 教師的「${program.title || '特約教室'}」。\n` +
+        `日期：${program.start_date} ~ ${program.end_date}\n` +
+        `星期：${weekdaysText || '未設定'}\n` +
+        `時間：${timeRangeText}\n` +
+        `課程代碼：${program.room_code}`
+});
+
+        res.json({
+            success: true,
+            alreadyEnrolled: false,
+            enrollment,
+            program: {
+                ...program,
+                enrolled_count: finalEnrolledCount
+            },
+            message: '報名成功，已加入特約教室白名單'
+        });
+
+    } catch (err) {
+        console.error('報名週期特約教室失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '報名週期特約教室失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
 // 建立一間新的特約教室
 app.post('/api/tutor-schedules', async (req, res) => {
 try {
@@ -341,6 +1100,8 @@ app.get('/api/tutor-schedules', async (req, res) => {
             .select('*')
             .eq('teacher_username', teacherUsername)
             .in('status', ['scheduled', 'live'])
+            .order('scheduled_date', { ascending: true })
+            .order('start_time', { ascending: true })
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -350,38 +1111,34 @@ app.get('/api/tutor-schedules', async (req, res) => {
         const expiredIds = [];
 
         (schedules || []).forEach(schedule => {
-            const startText = schedule.start_time;
-            const periods = Number(schedule.periods || 1);
-            const classMinutes = Number(schedule.class_minutes || 50);
-            const restMinutes = Number(schedule.rest_minutes || 10);
+            const startAt = buildTutorScheduleStartAt(schedule);
 
-            if (!startText) {
+            if (!startAt) {
                 activeSchedules.push(schedule);
                 return;
             }
 
-            const [hh, mm] = String(startText).slice(0, 5).split(':').map(Number);
-
-            const startAt = new Date();
-            startAt.setHours(hh, mm, 0, 0);
-
-            const totalMinutes =
-                (periods * classMinutes) +
-                ((periods > 1) ? (periods - 1) * restMinutes : 0);
-
+            const totalMinutes = getTutorScheduleTotalMinutes(schedule);
             const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
 
             if (now > endAt) {
                 expiredIds.push(schedule.id);
             } else {
-                activeSchedules.push(schedule);
+                activeSchedules.push({
+                    ...schedule,
+                    computed_start_at: startAt.toISOString(),
+                    computed_end_at: endAt.toISOString()
+                });
             }
         });
 
         if (expiredIds.length > 0) {
             await supabase
                 .from('tutor_schedules')
-                .update({ status: 'ended' })
+                .update({
+                    status: 'ended',
+                    updated_at: new Date().toISOString()
+                })
                 .in('id', expiredIds);
         }
 
@@ -396,36 +1153,348 @@ app.get('/api/tutor-schedules', async (req, res) => {
     }
 });
 
+async function getTutorEntryUserAccess(username) {
+    if (!username) {
+        return {
+            user: null,
+            access: {
+                accessLevel: 'guest',
+                canEnrollTutorProgram: false,
+                roleBypass: false
+            }
+        };
+    }
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select(`
+            username,
+            role,
+            is_blocked,
+            membership_level,
+            is_subscribed,
+            subscription_status,
+            subscription_end_date,
+            trial_ends_at
+        `)
+        .eq('username', username)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    return {
+        user,
+        access: getTutorProgramAccessFromUser(user)
+    };
+}
+
+async function hasActiveTutorProgramEnrollment(programId, username) {
+    if (!programId || !username) return false;
+
+    const { data, error } = await supabase
+        .from('tutor_program_enrollments')
+        .select('id')
+        .eq('program_id', programId)
+        .eq('username', username)
+        .eq('status', 'active')
+        .maybeSingle();
+
+    if (error) throw error;
+
+    return !!data;
+}
+
+async function findNextAvailableTutorScheduleForProgram(programId) {
+    const { data: schedules, error } = await supabase
+        .from('tutor_schedules')
+        .select('*')
+        .eq('program_id', programId)
+        .in('status', ['scheduled', 'live'])
+        .order('scheduled_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+    if (error) throw error;
+
+    const now = new Date();
+    const expiredIds = [];
+    let nextSchedule = null;
+
+    for (const schedule of (schedules || [])) {
+        const startAt = buildTutorScheduleStartAt(schedule);
+
+        if (!startAt) {
+            if (!nextSchedule) nextSchedule = schedule;
+            continue;
+        }
+
+        const totalMinutes = getTutorScheduleTotalMinutes(schedule);
+        const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+        if (now > endAt) {
+            expiredIds.push(schedule.id);
+            continue;
+        }
+
+        if (!nextSchedule) {
+            nextSchedule = {
+                ...schedule,
+                computed_start_at: startAt.toISOString(),
+                computed_end_at: endAt.toISOString()
+            };
+        }
+    }
+
+    if (expiredIds.length > 0) {
+        await supabase
+            .from('tutor_schedules')
+            .update({
+                status: 'ended',
+                updated_at: new Date().toISOString()
+            })
+            .in('id', expiredIds);
+    }
+
+    return nextSchedule;
+}
+
+async function verifyTutorScheduleWhitelistAccess(schedule, username) {
+    if (!schedule || schedule.requires_whitelist !== true) {
+        return {
+            ok: true
+        };
+    }
+
+    if (!username) {
+        return {
+            ok: false,
+            status: 401,
+            error: '此特約教室需要登入後才能進入'
+        };
+    }
+
+    const { user, access } = await getTutorEntryUserAccess(username);
+
+    if (!user) {
+        return {
+            ok: false,
+            status: 404,
+            error: '找不到使用者'
+        };
+    }
+
+    if (user.is_blocked) {
+        return {
+            ok: false,
+            status: 403,
+            error: '此帳號已被停用，無法進入特約教室'
+        };
+    }
+
+    if (!access.canEnrollTutorProgram) {
+        return {
+            ok: false,
+            status: 403,
+            error: '特約教室限 trial / pro 使用者進入。請先升級方案。',
+            accessLevel: access.accessLevel
+        };
+    }
+
+    // 教師 / admin / teacher_pending 可略過學生白名單限制
+    if (access.roleBypass) {
+        return {
+            ok: true,
+            access
+        };
+    }
+
+    if (!schedule.program_id) {
+        return {
+            ok: false,
+            status: 403,
+            error: '此教室需要白名單，但缺少課程資料'
+        };
+    }
+
+    const isEnrolled = await hasActiveTutorProgramEnrollment(
+        schedule.program_id,
+        username
+    );
+
+    if (!isEnrolled) {
+        return {
+            ok: false,
+            status: 403,
+            error: '你尚未報名此特約教室，請先到課程商店報名'
+        };
+    }
+
+    return {
+        ok: true,
+        access
+    };
+}
+
 // 學生輸入代碼時，用 room_code 查教室
+// 支援兩種代碼：
+// 1. tutor_schedules.room_code：舊流程 / 實際房間代碼
+// 2. tutor_programs.room_code：新流程 / 課程報名代碼
 app.get('/api/tutor-schedules/by-code/:roomCode', async (req, res) => {
     try {
         const roomCode = String(req.params.roomCode || '').trim().toUpperCase();
+        const username = String(req.query.username || '').trim();
 
         if (!roomCode) {
             return res.status(400).json({ error: '缺少 roomCode' });
         }
 
-        const { data: schedule, error } = await supabase
+        // A. 先找舊流程 / 實際房間代碼
+        const { data: directSchedule, error: directScheduleError } = await supabase
             .from('tutor_schedules')
             .select('*')
             .eq('room_code', roomCode)
             .in('status', ['scheduled', 'live'])
             .maybeSingle();
 
-        if (error) throw error;
+        if (directScheduleError) throw directScheduleError;
 
-        if (!schedule) {
-            return res.status(404).json({ error: '找不到此特約教室，請確認代碼是否正確' });
+        if (directSchedule) {
+            const startAt = buildTutorScheduleStartAt(directSchedule);
+            const totalMinutes = getTutorScheduleTotalMinutes(directSchedule);
+
+            let computedSchedule = directSchedule;
+
+            if (startAt) {
+                const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+                if (new Date() > endAt) {
+                    await supabase
+                        .from('tutor_schedules')
+                        .update({
+                            status: 'ended',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', directSchedule.id);
+
+                    return res.status(410).json({
+                        success: false,
+                        error: '此特約教室已結束'
+                    });
+                }
+
+                computedSchedule = {
+                    ...directSchedule,
+                    computed_start_at: startAt.toISOString(),
+                    computed_end_at: endAt.toISOString()
+                };
+            }
+
+            const accessCheck = await verifyTutorScheduleWhitelistAccess(
+                computedSchedule,
+                username
+            );
+
+            if (!accessCheck.ok) {
+                return res.status(accessCheck.status || 403).json({
+                    success: false,
+                    error: accessCheck.error,
+                    accessLevel: accessCheck.accessLevel
+                });
+            }
+
+            return res.json({
+                success: true,
+                resolved_from: 'schedule_code',
+                schedule: computedSchedule
+            });
         }
 
-        res.json({
+        // B. 找新流程：週期特約教室課程代碼
+        const { data: program, error: programError } = await supabase
+            .from('tutor_programs')
+            .select('*')
+            .eq('room_code', roomCode)
+            .eq('is_public', true)
+            .eq('status', 'open')
+            .maybeSingle();
+
+        if (programError) throw programError;
+
+        if (!program) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到此特約教室，請確認代碼是否正確'
+            });
+        }
+
+        if (!username) {
+            return res.status(401).json({
+                success: false,
+                error: '此特約教室需要登入後才能進入'
+            });
+        }
+
+        const { user, access } = await getTutorEntryUserAccess(username);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                error: '此帳號已被停用，無法進入特約教室'
+            });
+        }
+
+        if (!access.canEnrollTutorProgram) {
+            return res.status(403).json({
+                success: false,
+                error: '特約教室限 trial / pro 使用者進入。請先升級方案。',
+                accessLevel: access.accessLevel
+            });
+        }
+
+        if (!access.roleBypass) {
+            const isEnrolled = await hasActiveTutorProgramEnrollment(
+                program.id,
+                username
+            );
+
+            if (!isEnrolled) {
+                return res.status(403).json({
+                    success: false,
+                    error: '你尚未報名此特約教室，請先到課程商店報名'
+                });
+            }
+        }
+
+        const nextSchedule = await findNextAvailableTutorScheduleForProgram(program.id);
+
+        if (!nextSchedule) {
+            return res.status(404).json({
+                success: false,
+                error: '此特約教室目前沒有可進入的上課房間'
+            });
+        }
+
+        return res.json({
             success: true,
-            schedule
+            resolved_from: 'program_code',
+            program,
+            schedule: nextSchedule
         });
 
     } catch (err) {
         console.error('查詢特約教室代碼失敗:', err);
-        res.status(500).json({ error: '查詢特約教室代碼失敗' });
+
+        res.status(500).json({
+            success: false,
+            error: '查詢特約教室代碼失敗',
+            detail: err.message || String(err)
+        });
     }
 });
 
@@ -4746,6 +5815,89 @@ roomCode: targetRoom
 }
 });
 
+async function verifyTutorSocketJoinAccess(roomId, username) {
+    if (!roomId) {
+        return {
+            ok: false,
+            error: '缺少特約教室代碼'
+        };
+    }
+
+    const { data: schedule, error } = await supabase
+        .from('tutor_schedules')
+        .select('*')
+        .eq('room_code', roomId)
+        .in('status', ['scheduled', 'live'])
+        .maybeSingle();
+
+    if (error) throw error;
+
+    // 找不到 tutor_schedules 的房間，先保留 legacy / standalone 相容
+    // 例如線上課程或舊流程可能不是 tutor_schedules 報名制房間
+    if (!schedule) {
+        return {
+            ok: true,
+            legacyOrStandalone: true
+        };
+    }
+
+    // 非報名制舊特約教室：照舊可進
+    if (schedule.requires_whitelist !== true) {
+        return {
+            ok: true,
+            schedule
+        };
+    }
+
+    // 報名制教室一定要有 username
+    if (!username || username === 'undefined' || username === '神秘學員') {
+        return {
+            ok: false,
+            error: '此特約教室需要登入後才能進入'
+        };
+    }
+
+    const startAt = buildTutorScheduleStartAt(schedule);
+
+    if (startAt) {
+        const totalMinutes = getTutorScheduleTotalMinutes(schedule);
+        const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+        if (new Date() > endAt) {
+            await supabase
+                .from('tutor_schedules')
+                .update({
+                    status: 'ended',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', schedule.id);
+
+            return {
+                ok: false,
+                error: '此特約教室已結束'
+            };
+        }
+    }
+
+    const accessCheck = await verifyTutorScheduleWhitelistAccess(
+        schedule,
+        username
+    );
+
+    if (!accessCheck.ok) {
+        return {
+            ok: false,
+            error: accessCheck.error || '你目前無法進入此特約教室',
+            accessLevel: accessCheck.accessLevel
+        };
+    }
+
+    return {
+        ok: true,
+        schedule
+    };
+}
+
     // 1. 學生進入特約教室 (雙機分開加入)
     socket.on('join_tutor_room', async (data) => {
     if (!data) return;
@@ -4755,13 +5907,52 @@ roomCode: targetRoom
     const username = data.username || data.userName || data.name;
 
     if (!roomId || roomId === 'undefined') {
-        console.log("❌ 特約教室連線缺少 roomId");
+    console.log("❌ 特約教室連線缺少 roomId");
+    return;
+}
+
+// 老師端先保留 legacy，相容目前 tutor-dashboard.js
+// 學生端才做報名制白名單守門
+if (role === 'student') {
+    try {
+        const accessResult = await verifyTutorSocketJoinAccess(roomId, username);
+
+        if (!accessResult.ok) {
+            console.log("⛔ 特約教室 socket join 被拒絕:", {
+                roomId,
+                username,
+                reason: accessResult.error
+            });
+
+            socket.emit('tutor_join_denied', {
+                success: false,
+                roomId,
+                room: roomId,
+                roomCode: roomId,
+                message: accessResult.error || '你目前無法進入此特約教室',
+                accessLevel: accessResult.accessLevel || null
+            });
+
+            return;
+        }
+    } catch (guardErr) {
+        console.error("❌ 特約教室 socket join 守門失敗:", guardErr);
+
+        socket.emit('tutor_join_denied', {
+            success: false,
+            roomId,
+            room: roomId,
+            roomCode: roomId,
+            message: '特約教室進入驗證失敗，請重新登入後再試'
+        });
+
         return;
     }
+}
 
-    socket.join(roomId);
-    socket.roomId = roomId;
-    socket.role = role;
+socket.join(roomId);
+socket.roomId = roomId;
+socket.role = role;
     socket.roomId = roomId;
 socket.currentRoom = roomId;
 socket.currentTutorRoom = roomId;

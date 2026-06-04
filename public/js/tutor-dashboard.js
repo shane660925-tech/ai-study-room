@@ -75,24 +75,15 @@ async function loadTutorRoomSwitcher() {
     try {
         const res = await fetch(`/api/tutor-schedules?teacherUsername=${encodeURIComponent(teacherUsername)}`);
         const data = await res.json();
-const now = new Date();
-const schedules = (data.schedules || []).filter(room => {
-if (!room || !room.room_code) return false;
-const startText = room.start_time;
-if (!startText) return true;
-const [hh, mm] = String(startText).slice(0, 5).split(':').map(Number);
-if (Number.isNaN(hh) || Number.isNaN(mm)) return true;
-const periods = Number(room.periods || 1);
-const classMinutes = Number(room.class_minutes || room.classMinutes || 50);
-const restMinutes = Number(room.rest_minutes || room.restMinutes || 10);
-const startAt = new Date();
-startAt.setHours(hh, mm, 0, 0);
-const totalMinutes =
-(periods * classMinutes) +
-((periods > 1) ? (periods - 1) * restMinutes : 0);
-const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
-return now <= endAt;
-});
+
+if (!res.ok || !data.success) {
+    throw new Error(data.error || '載入特約教室失敗');
+}
+
+// 過期判斷已交給 server.js 的 /api/tutor-schedules 處理
+// 前端只保留基本資料過濾，避免未來日期的週期教室被誤判消失
+const schedules = (data.schedules || [])
+    .filter(room => room && room.room_code);
         window.tutorRoomsCache = schedules;
         schedules.forEach(room => {
     if (!room.room_code) return;
@@ -111,7 +102,10 @@ return now <= endAt;
         switcher.innerHTML = schedules.map(room => {
             const code = room.room_code;
             const title = room.room_title || '特約教室';
-            return `<option value="${code}">${title}｜${code}</option>`;
+            const dateText = room.scheduled_date ? `｜${room.scheduled_date}` : '';
+            const timeText = room.start_time ? ` ${String(room.start_time).slice(0, 5)}` : '';
+            const whitelistText = room.requires_whitelist ? '｜報名制' : '';
+            return `<option value="${code}">${title}${dateText}${timeText}${whitelistText}｜${code}</option>`;
         }).join('');
         const urlRoom = new URLSearchParams(window.location.search).get('room');
 const hasUrlRoom = schedules.some(room => room.room_code === urlRoom);

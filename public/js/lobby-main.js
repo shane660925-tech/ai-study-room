@@ -1475,23 +1475,61 @@ window.openTeacherSetupModal = function() {
     modal.classList.add('flex');
 };
 
+window.toggleTeacherWeekday = function(button) {
+    if (!button) return;
+
+    const isSelected = button.dataset.selected === 'true';
+
+    if (isSelected) {
+        button.dataset.selected = 'false';
+        button.classList.remove('bg-blue-600', 'text-white', 'border-blue-300', 'shadow-[0_0_15px_rgba(59,130,246,0.35)]');
+        button.classList.add('bg-black', 'text-gray-400', 'border-blue-500/30');
+    } else {
+        button.dataset.selected = 'true';
+        button.classList.remove('bg-black', 'text-gray-400', 'border-blue-500/30');
+        button.classList.add('bg-blue-600', 'text-white', 'border-blue-300', 'shadow-[0_0_15px_rgba(59,130,246,0.35)]');
+    }
+};
+
+function getSelectedTeacherWeekdays() {
+    return Array.from(document.querySelectorAll('.teacher-weekday-btn'))
+        .filter(btn => btn.dataset.selected === 'true')
+        .map(btn => Number(btn.dataset.weekday))
+        .filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
+}
+
 // 教師生成房間並跳轉
 // 教師生成房間並跳轉
 window.generateTeacherRoom = async function() {
-    const size = document.getElementById('teacherRoomSize').value;
-    const periods = document.getElementById('teacherPeriods').value;
-    const periodTime = document.getElementById('teacherPeriodTime').value;
-    const restTime = document.getElementById('teacherRestTime').value;
-    const startTime = document.getElementById('teacherStartTime').value;
+    const size = document.getElementById('teacherRoomSize')?.value || '10';
+    const periods = document.getElementById('teacherPeriods')?.value;
+    const periodTime = document.getElementById('teacherPeriodTime')?.value;
+    const restTime = document.getElementById('teacherRestTime')?.value;
+    const startTime = document.getElementById('teacherStartTime')?.value;
 
-    const scheduledDateEl = document.getElementById('teacherScheduledDate');
-    const roomNoteEl = document.getElementById('teacherRoomNote');
+    const startDate = document.getElementById('teacherProgramStartDate')?.value || '';
+    const endDate = document.getElementById('teacherProgramEndDate')?.value || '';
+    const roomNote = document.getElementById('teacherRoomNote')?.value.trim() || '';
 
-    const scheduledDate = scheduledDateEl ? scheduledDateEl.value : '';
-    const roomNote = roomNoteEl ? roomNoteEl.value.trim() : '';
+    const weekdays = getSelectedTeacherWeekdays();
 
-    if (!periods || !periodTime || !restTime || !startTime || !scheduledDate) {
-        alert("請將排課日期、時間與課程設定填寫完整！");
+    if (!startDate || !endDate) {
+        alert('請選擇週期開始日期與結束日期。');
+        return;
+    }
+
+    if (endDate < startDate) {
+        alert('結束日期不能早於開始日期。');
+        return;
+    }
+
+    if (weekdays.length === 0) {
+        alert('請至少選擇一個每週上課日。');
+        return;
+    }
+
+    if (!periods || !periodTime || restTime === '' || !startTime) {
+        alert('請將時間、堂數、每堂分鐘與休息分鐘填寫完整。');
         return;
     }
 
@@ -1503,7 +1541,7 @@ window.generateTeacherRoom = async function() {
     }
 
     try {
-        const res = await fetch('/api/tutor-schedules', {
+        const res = await fetch('/api/tutor-programs', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1511,64 +1549,95 @@ window.generateTeacherRoom = async function() {
             body: JSON.stringify({
                 teacherUsername: username,
                 roomTitle: roomNote || '特約教室',
+                title: roomNote || '特約教室',
                 roomNote,
                 roomSize: size,
-                periods: parseInt(periods),
-                classMinutes: parseInt(periodTime),
-                restMinutes: parseInt(restTime),
-                startTime,
-                scheduledDate
+                maxStudents: Number(size),
+                startDate,
+                endDate,
+                weekdays,
+                periods: parseInt(periods, 10),
+                classMinutes: parseInt(periodTime, 10),
+                restMinutes: parseInt(restTime, 10),
+                startTime
             })
         });
 
         const data = await res.json();
 
-        if (!res.ok || !data.success || !data.schedule) {
-            alert(data.error || '建立特約教室失敗');
+        if (
+            !res.ok ||
+            !data.success ||
+            !data.program ||
+            !Array.isArray(data.schedules) ||
+            data.schedules.length === 0
+        ) {
+            alert(data.error || '建立週期特約教室失敗，請確認排程資料。');
             return;
         }
 
-        const schedule = data.schedule;
-        const roomCode = schedule.room_code;
+        const firstSchedule = data.schedules[0];
+        const roomCode = firstSchedule.room_code;
+
+        if (!roomCode) {
+            alert('週期教室已建立，但第一堂課缺少教室代碼，請重新整理後到教師端查看。');
+            return;
+        }
 
         const scheduleData = {
-            roomCode,
-            room_code: roomCode,
-            teacherUsername: username,
-            teacher_username: username,
-            roomTitle: schedule.room_title || '特約教室',
-            roomNote: schedule.room_note || roomNote,
-            scheduledDate: schedule.scheduled_date || scheduledDate,
-            roomSize: schedule.room_size || size,
-            periods: Number(schedule.periods || periods),
-            periodTime: Number(schedule.class_minutes || periodTime),
-            classMinutes: Number(schedule.class_minutes || periodTime),
-            restTime: Number(schedule.rest_minutes || restTime),
-            restMinutes: Number(schedule.rest_minutes || restTime),
-            startTime: schedule.start_time || startTime,
-            status: schedule.status || 'live',
-            id: schedule.id
-        };
+    roomCode,
+    room_code: roomCode,
+
+    programId: data.program?.id || firstSchedule.program_id || null,
+    program_id: data.program?.id || firstSchedule.program_id || null,
+    programRoomCode: data.program?.room_code || null,
+    program_room_code: data.program?.room_code || null,
+
+    teacherUsername: username,
+    teacher_username: username,
+    roomTitle: firstSchedule.room_title || data.program?.title || '特約教室',
+    roomNote: firstSchedule.room_note || data.program?.room_note || roomNote || '',
+    roomSize: firstSchedule.room_size || size,
+
+    periods: Number(firstSchedule.periods || periods || 1),
+    periodTime: Number(firstSchedule.class_minutes || periodTime || 50),
+    classMinutes: Number(firstSchedule.class_minutes || periodTime || 50),
+    restTime: Number(firstSchedule.rest_minutes || restTime || 10),
+    restMinutes: Number(firstSchedule.rest_minutes || restTime || 10),
+
+    startTime: firstSchedule.start_time || startTime,
+    scheduledDate: firstSchedule.scheduled_date,
+    scheduled_date: firstSchedule.scheduled_date,
+
+    requiresWhitelist: firstSchedule.requires_whitelist === true,
+    requires_whitelist: firstSchedule.requires_whitelist === true,
+
+    status: firstSchedule.status || 'scheduled',
+    id: firstSchedule.id
+};
 
         localStorage.setItem(`tutor_schedule_${roomCode}`, JSON.stringify(scheduleData));
 
-        if (typeof socket !== 'undefined') {
-            socket.emit('create_tutor_room', scheduleData);
+        const modal = document.getElementById('teacher-setup-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
 
-        try {
-            await navigator.clipboard.writeText(roomCode);
-            alert(`建立成功！您的教室代碼為：${roomCode}\n代碼已自動複製，請分享給學生。`);
-        } catch (e) {
-            alert(`建立成功！您的教室代碼為：${roomCode}\n請分享給學生。`);
-        }
+        alert(
+            `✅ 週期特約教室建立成功！\n\n` +
+            `共產生 ${data.scheduleCount || data.schedules.length} 次上課房間。\n` +
+            `課程報名代碼：${data.program.room_code}\n` +
+            `第一堂教室代碼：${roomCode}\n\n` +
+            `接下來會進入教師端，你也可以從下拉選單切換其他日期的教室。`
+        );
 
         window.location.href =
             `/tutor-dashboard.html?room=${encodeURIComponent(roomCode)}&teacher=${encodeURIComponent(username)}`;
 
     } catch (err) {
-        console.error('建立特約教室失敗:', err);
-        alert('建立特約教室失敗，請稍後再試。');
+        console.error('建立週期特約教室失敗:', err);
+        alert('建立週期特約教室失敗，請稍後再試。');
     }
 };
 
@@ -1576,8 +1645,8 @@ window.generateTeacherRoom = async function() {
 window.verifyAndEnterTutorRoom = async function() {
     if (!window.requireFullFeaturesForStudent('VIP 特約指導')) return;
 
-    const input = document.getElementById('tutorRoomCode');
-    const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
+    const codeInput = document.getElementById('tutorRoomCode');
+const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
 
     if (!roomCode) {
         alert("請先輸入教師提供的教室代碼！");
@@ -1585,7 +1654,14 @@ window.verifyAndEnterTutorRoom = async function() {
     }
 
     try {
-        const res = await fetch(`/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}`);
+        const username =
+    localStorage.getItem('studyVerseUser') ||
+    localStorage.getItem('username') ||
+    '';
+
+const res = await fetch(
+    `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`
+);
         const data = await res.json();
 
         if (!res.ok || !data.success || !data.schedule) {
@@ -1594,28 +1670,50 @@ window.verifyAndEnterTutorRoom = async function() {
         }
 
         const schedule = data.schedule;
+        const actualRoomCode = schedule.room_code;
 
         const scheduleData = {
-            roomCode: schedule.room_code,
-            room_code: schedule.room_code,
-            teacherUsername: schedule.teacher_username,
-            teacher_username: schedule.teacher_username,
-            roomTitle: schedule.room_title || '特約教室',
-            roomSize: schedule.room_size,
-            periods: Number(schedule.periods || 1),
-            periodTime: Number(schedule.class_minutes || 50),
-            classMinutes: Number(schedule.class_minutes || 50),
-            restTime: Number(schedule.rest_minutes || 10),
-            restMinutes: Number(schedule.rest_minutes || 10),
-            startTime: schedule.start_time,
-            status: schedule.status,
-            id: schedule.id
-        };
+    roomCode: actualRoomCode,
+    room_code: actualRoomCode,
 
-        sessionStorage.setItem('currentTutorRoomCode', schedule.room_code);
-        localStorage.setItem(`tutor_schedule_${schedule.room_code}`, JSON.stringify(scheduleData));
+    inputCode: roomCode,
+    input_code: roomCode,
 
-        targetRoomUrl = `/tutor-room.html?room=${encodeURIComponent(schedule.room_code)}`;
+    resolvedFrom: data.resolved_from || 'schedule_code',
+    resolved_from: data.resolved_from || 'schedule_code',
+
+    programId: data.program?.id || schedule.program_id || null,
+    program_id: data.program?.id || schedule.program_id || null,
+    programRoomCode: data.program?.room_code || null,
+    program_room_code: data.program?.room_code || null,
+
+    teacherUsername: schedule.teacher_username,
+    teacher_username: schedule.teacher_username,
+    roomTitle: schedule.room_title || data.program?.title || '特約教室',
+    roomNote: schedule.room_note || data.program?.room_note || '',
+
+    roomSize: schedule.room_size,
+    periods: Number(schedule.periods || 1),
+    periodTime: Number(schedule.class_minutes || 50),
+    classMinutes: Number(schedule.class_minutes || 50),
+    restTime: Number(schedule.rest_minutes || 10),
+    restMinutes: Number(schedule.rest_minutes || 10),
+
+    startTime: schedule.start_time,
+    scheduledDate: schedule.scheduled_date,
+    scheduled_date: schedule.scheduled_date,
+
+    requiresWhitelist: schedule.requires_whitelist === true,
+    requires_whitelist: schedule.requires_whitelist === true,
+
+    status: schedule.status,
+    id: schedule.id
+};
+
+        sessionStorage.setItem('currentTutorRoomCode', actualRoomCode);
+localStorage.setItem(`tutor_schedule_${actualRoomCode}`, JSON.stringify(scheduleData));
+
+targetRoomUrl = `/tutor-room.html?room=${encodeURIComponent(actualRoomCode)}`;
 
         const normalModal = document.getElementById('device-modal');
         if (normalModal) {
@@ -1639,7 +1737,7 @@ window.verifyAndEnterTutorRoom = async function() {
                 const syncToken = typeof socket !== 'undefined' ? socket.id : '';
 
                 const mobileUrl =
-    `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}&target=tutor&room=${encodeURIComponent(roomCode)}`;
+    `${window.location.origin}/mobile.html?name=${encodeURIComponent(username)}&sync=${syncToken}&target=tutor&room=${encodeURIComponent(actualRoomCode)}`;
 
                 new QRCode(qrContainer, {
                     text: mobileUrl,
@@ -2271,7 +2369,7 @@ function showNotificationModal(notifications) {
                 ${notifications.map(n => `
                     <div class="bg-black/40 border border-white/10 rounded-2xl p-4">
                         <h3 class="text-blue-400 font-black mb-2">${escapeNotificationHtml(n.title)}</h3>
-                        <p class="text-gray-300 text-sm leading-relaxed">${escapeNotificationHtml(n.message)}</p>
+                        <p class="text-gray-300 text-sm leading-relaxed whitespace-pre-line">${escapeNotificationHtml(n.message)}</p>
                         <p class="text-gray-500 text-[10px] mt-3">
                             ${new Date(n.created_at).toLocaleString('zh-TW')}
                         </p>
@@ -2414,9 +2512,9 @@ function renderNotifications() {
                             </span>
                         </div>
 
-                        <p class="text-xs text-gray-400 leading-relaxed">
-                            ${notification.message || ''}
-                        </p>
+                        <p class="text-xs text-gray-400 leading-relaxed whitespace-pre-line">
+    ${notification.message || ''}
+</p>
 
                     </div>
                 </div>
@@ -2489,12 +2587,14 @@ window.showCourseStoreModal = async function() {
     let oldModal = document.getElementById('courseStoreModal');
     if (oldModal) oldModal.remove();
 
+    window.currentCourseStoreTab = 'courses';
+
     const modal = document.createElement('div');
     modal.id = 'courseStoreModal';
     modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
 
     modal.innerHTML = `
-        <div class="bg-[#111827] w-full max-w-lg rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
+        <div class="bg-[#111827] w-full max-w-2xl rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
 
             <button onclick="document.getElementById('courseStoreModal').remove()"
                     class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
@@ -2506,9 +2606,25 @@ window.showCourseStoreModal = async function() {
                     <i class="fas fa-store text-cyan-400"></i>
                     課程商店
                 </h2>
-                <p class="text-gray-400 text-xs mt-2">
-                    請選擇目前開放購買的線上課程，點擊後前往結帳頁。
+                <p id="courseStoreSubtitle" class="text-gray-400 text-xs mt-2">
+                    免費版也可以購買線上課程；特約教室需 trial / pro 權限才能報名。
                 </p>
+
+                <div class="grid grid-cols-2 gap-3 mt-5">
+                    <button id="courseStoreTabCourses"
+                            onclick="setCourseStoreTab('courses')"
+                            class="course-store-tab bg-cyan-600 text-white border border-cyan-400/50 py-3 rounded-2xl text-xs font-black transition-all">
+                        <i class="fas fa-book-open mr-1"></i>
+                        線上課程
+                    </button>
+
+                    <button id="courseStoreTabTutorPrograms"
+                            onclick="setCourseStoreTab('tutorPrograms')"
+                            class="course-store-tab bg-white/5 text-gray-400 border border-white/10 hover:border-yellow-400/40 hover:text-yellow-300 py-3 rounded-2xl text-xs font-black transition-all">
+                        <i class="fas fa-chalkboard-teacher mr-1"></i>
+                        特約教室
+                    </button>
+                </div>
             </div>
 
             <div id="courseStoreModalList" class="p-6 max-h-[65vh] overflow-y-auto">
@@ -2525,9 +2641,220 @@ window.showCourseStoreModal = async function() {
     await loadCourseStoreModalList();
 };
 let courseStoreCache = [];
+let tutorProgramStoreCache = [];
+window.currentCourseStoreTab = 'courses';
+function getCurrentCourseStoreUsername() {
+    return (
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        ''
+    );
+}
+
+window.setCourseStoreTab = async function(tabName) {
+    window.currentCourseStoreTab = tabName;
+
+    if (tabName === 'tutorPrograms') {
+        await loadTutorProgramStoreModalList();
+        return;
+    }
+
+    await loadCourseStoreModalList();
+};
+
+function updateCourseStoreTabButtons(activeTab) {
+    const coursesBtn = document.getElementById('courseStoreTabCourses');
+    const tutorBtn = document.getElementById('courseStoreTabTutorPrograms');
+    const subtitle = document.getElementById('courseStoreSubtitle');
+
+    if (coursesBtn) {
+        coursesBtn.className = activeTab === 'courses'
+            ? 'course-store-tab bg-cyan-600 text-white border border-cyan-400/50 py-3 rounded-2xl text-xs font-black transition-all'
+            : 'course-store-tab bg-white/5 text-gray-400 border border-white/10 hover:border-cyan-400/40 hover:text-cyan-300 py-3 rounded-2xl text-xs font-black transition-all';
+    }
+
+    if (tutorBtn) {
+        tutorBtn.className = activeTab === 'tutorPrograms'
+            ? 'course-store-tab bg-yellow-500 text-black border border-yellow-300/60 py-3 rounded-2xl text-xs font-black transition-all'
+            : 'course-store-tab bg-white/5 text-gray-400 border border-white/10 hover:border-yellow-400/40 hover:text-yellow-300 py-3 rounded-2xl text-xs font-black transition-all';
+    }
+
+    if (subtitle) {
+        subtitle.innerText = activeTab === 'tutorPrograms'
+            ? '報名制特約教室需 trial / pro 權限。報名成功後會收到站內通知與課程代碼。'
+            : '請選擇目前開放購買的線上課程，點擊後前往結帳頁。';
+    }
+}
+
+function renderCourseStoreLoading(iconClass = 'fa-circle-notch', text = '正在載入...') {
+    const list = document.getElementById('courseStoreModalList');
+    if (!list) return;
+
+    list.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-10 text-gray-500">
+            <div class="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center mb-4">
+                <i class="fas ${iconClass} fa-spin text-xl"></i>
+            </div>
+            <p class="text-xs tracking-widest uppercase">${text}</p>
+        </div>
+    `;
+}
+
+function parseTutorProgramTimeToMinutes(timeText) {
+    const raw = String(timeText || '').slice(0, 5);
+
+    if (!raw.includes(':')) return null;
+
+    const [hours, minutes] = raw.split(':').map(Number);
+
+    if (
+        Number.isNaN(hours) ||
+        Number.isNaN(minutes) ||
+        hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59
+    ) {
+        return null;
+    }
+
+    return hours * 60 + minutes;
+}
+
+function formatTutorProgramMinutes(totalMinutes) {
+    const minutesInDay = 24 * 60;
+    const safeTotal = ((Number(totalMinutes || 0) % minutesInDay) + minutesInDay) % minutesInDay;
+
+    const hours = Math.floor(safeTotal / 60);
+    const minutes = safeTotal % 60;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getTutorProgramTotalMinutes(program) {
+    const periods = Number(program?.periods || 1);
+    const classMinutes = Number(program?.class_minutes || 50);
+    const restMinutes = Number(program?.rest_minutes || 10);
+
+    return (
+        periods * classMinutes +
+        ((periods > 1) ? (periods - 1) * restMinutes : 0)
+    );
+}
+
+function getTutorProgramTimeRangeText(program) {
+    const startMinutes = parseTutorProgramTimeToMinutes(program?.start_time);
+
+    if (startMinutes === null) {
+        return '尚未設定';
+    }
+
+    const endMinutes = startMinutes + getTutorProgramTotalMinutes(program);
+
+    return `${formatTutorProgramMinutes(startMinutes)} – ${formatTutorProgramMinutes(endMinutes)}`;
+}
+
+function getTutorProgramSummaryText(program) {
+    const periods = Number(program?.periods || 1);
+    const classMinutes = Number(program?.class_minutes || 50);
+    const restMinutes = Number(program?.rest_minutes || 10);
+
+    if (periods <= 1) {
+        return `1 堂｜每堂 ${classMinutes} 分`;
+    }
+
+    return `${periods} 堂｜每堂 ${classMinutes} 分｜休息 ${restMinutes} 分`;
+}
+
+function buildTutorProgramTimeline(program) {
+    const timeline = [];
+    const startMinutes = parseTutorProgramTimeToMinutes(program?.start_time);
+
+    if (startMinutes === null) return timeline;
+
+    const periods = Number(program?.periods || 1);
+    const classMinutes = Number(program?.class_minutes || 50);
+    const restMinutes = Number(program?.rest_minutes || 10);
+
+    let cursor = startMinutes;
+
+    for (let i = 1; i <= periods; i++) {
+        const classStart = cursor;
+        const classEnd = classStart + classMinutes;
+
+        timeline.push({
+            type: 'class',
+            label: `第 ${i} 堂`,
+            start: formatTutorProgramMinutes(classStart),
+            end: formatTutorProgramMinutes(classEnd)
+        });
+
+        cursor = classEnd;
+
+        if (i < periods && restMinutes > 0) {
+            const restStart = cursor;
+            const restEnd = restStart + restMinutes;
+
+            timeline.push({
+                type: 'rest',
+                label: '休息',
+                start: formatTutorProgramMinutes(restStart),
+                end: formatTutorProgramMinutes(restEnd)
+            });
+
+            cursor = restEnd;
+        }
+    }
+
+    return timeline;
+}
+
+function renderTutorProgramTimelineHtml(program) {
+    const timeline = buildTutorProgramTimeline(program);
+
+    if (timeline.length === 0) {
+        return `
+            <div class="text-xs text-gray-500">
+                尚無可顯示的時刻表。
+            </div>
+        `;
+    }
+
+    return timeline.map(item => {
+        const isRest = item.type === 'rest';
+
+        const iconClass = isRest ? 'fa-mug-hot' : 'fa-book-open';
+        const textClass = isRest ? 'text-green-300' : 'text-yellow-300';
+        const bgClass = isRest ? 'bg-green-500/10 border-green-400/20' : 'bg-yellow-500/10 border-yellow-400/20';
+
+        return `
+            <div class="${bgClass} border rounded-2xl px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-black/30 flex items-center justify-center ${textClass}">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <div>
+                        <div class="${textClass} font-black text-sm">${item.label}</div>
+                        <div class="text-gray-500 text-[10px] uppercase tracking-widest">
+                            ${isRest ? 'Break Time' : 'Class Time'}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-white font-mono font-black text-sm">
+                    ${item.start} – ${item.end}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 async function loadCourseStoreModalList() {
     const list = document.getElementById('courseStoreModalList');
     if (!list) return;
+
+    updateCourseStoreTabButtons('courses');
+    renderCourseStoreLoading('fa-book-open', '正在載入線上課程...');
 
     try {
         const res = await fetch('/api/courses/store');
@@ -2608,6 +2935,396 @@ async function loadCourseStoreModalList() {
         `;
     }
 }
+
+async function loadTutorProgramStoreModalList() {
+    const list = document.getElementById('courseStoreModalList');
+    if (!list) return;
+
+    updateCourseStoreTabButtons('tutorPrograms');
+    renderCourseStoreLoading('fa-chalkboard-teacher', '正在載入特約教室...');
+
+    const username = getCurrentCourseStoreUsername();
+
+    try {
+        const res = await fetch(
+            `/api/tutor-programs/store?username=${encodeURIComponent(username)}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || '取得特約教室列表失敗');
+        }
+
+        const programs = data.programs || [];
+        tutorProgramStoreCache = programs;
+
+        const canEnrollTutorProgram = data.canEnrollTutorProgram === true;
+        const accessLevel = data.accessLevel || 'free';
+
+        let topNotice = '';
+
+        if (!canEnrollTutorProgram) {
+            topNotice = `
+                <div class="mb-5 bg-yellow-500/10 border border-yellow-400/30 rounded-2xl p-4 text-xs text-yellow-100 leading-relaxed">
+                    <div class="font-black text-yellow-300 mb-1">
+                        <i class="fas fa-lock mr-1"></i>
+                        特約教室為 trial / pro 功能
+                    </div>
+                    <p>
+                        你目前的權限是 <b>${escapeCourseStoreHtml(accessLevel)}</b>。
+                        你仍然可以查看特約教室資訊，也可以購買線上課程；若要報名特約教室，請升級方案。
+                    </p>
+                    <button onclick="openSubscriptionPage()"
+                            class="mt-3 bg-yellow-400 hover:bg-yellow-300 text-black font-black px-4 py-2 rounded-xl transition-all">
+                        查看方案
+                    </button>
+                </div>
+            `;
+        }
+
+        if (programs.length === 0) {
+            list.innerHTML = `
+                ${topNotice}
+                <div class="text-center py-10">
+                    <div class="w-14 h-14 bg-gray-500/20 rounded-2xl flex items-center justify-center text-gray-400 text-2xl mx-auto mb-4">
+                        <i class="fas fa-door-closed"></i>
+                    </div>
+                    <h3 class="text-white font-black mb-2">目前沒有開放報名的特約教室</h3>
+                    <p class="text-gray-500 text-xs">請等待教師開放新的週期特約教室。</p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = `
+            ${topNotice}
+            ${programs.map(program => {
+                const title = escapeCourseStoreHtml(program.title || '特約教室');
+                const teacher = escapeCourseStoreHtml(program.teacher_name || program.teacher_username || '教師');
+                const note = escapeCourseStoreHtml(program.room_note || '教師尚未提供備註');
+                const weekdays = escapeCourseStoreHtml(program.weekdays_text || '尚未設定');
+                const capacity = escapeCourseStoreHtml(program.capacity_text || '0 / 不限');
+                const timeRange = escapeCourseStoreHtml(getTutorProgramTimeRangeText(program));
+const summaryText = escapeCourseStoreHtml(getTutorProgramSummaryText(program));
+const startDate = escapeCourseStoreHtml(program.start_date || '尚未設定');
+const endDate = escapeCourseStoreHtml(program.end_date || '尚未設定');
+
+                let badgeHtml = '';
+
+                if (program.is_enrolled) {
+                    badgeHtml = `<span class="text-[10px] bg-green-500/20 text-green-300 border border-green-400/30 px-2 py-1 rounded-full font-black">已報名</span>`;
+                } else if (program.is_full) {
+                    badgeHtml = `<span class="text-[10px] bg-red-500/20 text-red-300 border border-red-400/30 px-2 py-1 rounded-full font-black">額滿</span>`;
+                } else if (!canEnrollTutorProgram) {
+                    badgeHtml = `<span class="text-[10px] bg-yellow-500/20 text-yellow-300 border border-yellow-400/30 px-2 py-1 rounded-full font-black">需升級</span>`;
+                } else {
+                    badgeHtml = `<span class="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-1 rounded-full font-black">可報名</span>`;
+                }
+
+                return `
+                    <button onclick="showTutorProgramDetail('${program.id}')"
+                            class="w-full bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-500/50 p-5 rounded-2xl mb-4 text-left transition-all group">
+
+                        <div class="flex items-start gap-4">
+                            <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400 text-2xl group-hover:bg-yellow-500 group-hover:text-black transition-all">
+                                <i class="fas fa-chalkboard-teacher"></i>
+                            </div>
+
+                            <div class="flex-1">
+                                <div class="flex items-start justify-between gap-3 mb-1">
+                                    <h3 class="text-white font-black text-lg">${title}</h3>
+                                    ${badgeHtml}
+                                </div>
+
+                                <p class="text-gray-400 text-xs mb-3">
+                                    教師：${teacher}
+                                </p>
+
+                                <p class="text-gray-500 text-xs leading-relaxed mb-4 line-clamp-2">
+                                    ${note}
+                                </p>
+
+                                <div class="grid grid-cols-2 gap-2 text-[11px] text-gray-400">
+                                    <div class="bg-black/30 rounded-xl px-3 py-2">
+                                        <span class="text-gray-500">日期</span>
+                                        <div class="text-white font-bold mt-1">${startDate} ~ ${endDate}</div>
+                                    </div>
+
+                                    <div class="bg-black/30 rounded-xl px-3 py-2">
+                                        <span class="text-gray-500">星期</span>
+                                        <div class="text-yellow-300 font-bold mt-1">${weekdays}</div>
+                                    </div>
+
+                                    <div class="bg-black/30 rounded-xl px-3 py-2">
+    <span class="text-gray-500">時間</span>
+    <div class="text-white font-bold mt-1">${timeRange}</div>
+</div>
+
+<div class="bg-black/30 rounded-xl px-3 py-2">
+    <span class="text-gray-500">名額</span>
+    <div class="text-green-300 font-bold mt-1">${capacity}</div>
+</div>
+
+<div class="mt-3 bg-yellow-500/10 border border-yellow-400/20 rounded-xl px-3 py-2 text-[11px] text-yellow-100 font-bold">
+    <i class="fas fa-clock mr-1 text-yellow-300"></i>
+    ${summaryText}
+</div>
+                            </div>
+                        </div>
+                    </button>
+                `;
+            }).join('')}
+        `;
+
+    } catch (err) {
+        console.error('特約教室列表載入失敗:', err);
+
+        list.innerHTML = `
+            <div class="text-center py-10">
+                <div class="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center text-red-400 text-2xl mx-auto mb-4">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-red-300 font-black mb-2">特約教室載入失敗</h3>
+                <p class="text-gray-500 text-xs">請稍後重新整理頁面。</p>
+            </div>
+        `;
+    }
+}
+
+window.showTutorProgramDetail = function(programId) {
+    const list = document.getElementById('courseStoreModalList');
+    if (!list) return;
+
+    const program = tutorProgramStoreCache.find(item => item.id === programId);
+
+    if (!program) {
+        alert('找不到特約教室資料，請重新開啟課程商店。');
+        return;
+    }
+
+    const title = escapeCourseStoreHtml(program.title || '特約教室');
+    const teacher = escapeCourseStoreHtml(program.teacher_name || program.teacher_username || '教師');
+    const note = escapeCourseStoreHtml(program.room_note || '教師尚未提供備註');
+    const weekdays = escapeCourseStoreHtml(program.weekdays_text || '尚未設定');
+    const capacity = escapeCourseStoreHtml(program.capacity_text || '0 / 不限');
+    const timeRange = escapeCourseStoreHtml(getTutorProgramTimeRangeText(program));
+const timelineHtml = renderTutorProgramTimelineHtml(program);
+
+const periods = Number(program.periods || 1);
+const classMinutes = Number(program.class_minutes || 50);
+const restMinutes = Number(program.rest_minutes || 10);
+
+    let actionButton = '';
+
+    if (program.is_enrolled) {
+        actionButton = `
+            <button disabled
+                    class="flex-1 bg-green-500/20 text-green-300 border border-green-400/30 font-black py-3 rounded-xl cursor-not-allowed">
+                已報名
+            </button>
+        `;
+    } else if (program.is_full) {
+        actionButton = `
+            <button disabled
+                    class="flex-1 bg-red-500/20 text-red-300 border border-red-400/30 font-black py-3 rounded-xl cursor-not-allowed">
+                已額滿
+            </button>
+        `;
+    } else if (program.can_enroll !== true) {
+        actionButton = `
+            <button onclick="openSubscriptionPage()"
+                    class="flex-1 bg-yellow-400 hover:bg-yellow-300 text-black font-black py-3 rounded-xl transition-all">
+                升級後報名
+            </button>
+        `;
+    } else {
+        actionButton = `
+            <button onclick="enrollTutorProgram('${program.id}')"
+        class="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-black py-3 rounded-xl transition-all">
+    報名特約教室
+</button>
+        `;
+    }
+
+    list.innerHTML = `
+        <div class="space-y-4">
+            <button onclick="loadTutorProgramStoreModalList()"
+                    class="text-xs text-yellow-400 hover:text-yellow-300 font-bold mb-2">
+                ← 返回特約教室列表
+            </button>
+
+            <div class="bg-white/5 border border-yellow-500/30 rounded-3xl p-6">
+                <div class="flex items-start gap-4 mb-5">
+                    <div class="w-14 h-14 bg-yellow-500/20 rounded-2xl flex items-center justify-center text-yellow-400 text-2xl">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                    </div>
+
+                    <div class="flex-1">
+                        <h3 class="text-2xl font-black text-white mb-1">${title}</h3>
+                        <p class="text-gray-400 text-xs">教師：${teacher}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs mb-5">
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">日期區間</span>
+                        <div class="text-white font-bold mt-1">${program.start_date || '尚未設定'} ~ ${program.end_date || '尚未設定'}</div>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">每週上課日</span>
+                        <div class="text-yellow-300 font-bold mt-1">${weekdays}</div>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+    <span class="text-gray-500">上課時段</span>
+    <div class="text-white font-bold mt-1">${timeRange}</div>
+</div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">名額</span>
+                        <div class="text-green-300 font-bold mt-1">${capacity}</div>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">堂數</span>
+                        <div class="text-white font-bold mt-1">${periods} 堂</div>
+                    </div>
+
+                    <div class="bg-black/30 rounded-xl p-3">
+                        <span class="text-gray-500">每堂 / 休息</span>
+                        <div class="text-white font-bold mt-1">${classMinutes} 分 / ${restMinutes} 分</div>
+                    </div>
+                </div>
+
+                <div class="bg-black/30 border border-white/10 rounded-2xl p-4 mb-5">
+    <div class="text-gray-500 text-xs font-bold mb-3">
+        <i class="fas fa-calendar-day mr-1"></i>
+        每次上課時刻表
+    </div>
+
+    <div class="space-y-2">
+        ${timelineHtml}
+    </div>
+</div>
+
+                <div class="bg-black/30 border border-white/10 rounded-2xl p-4 mb-5">
+                    <div class="text-gray-500 text-xs font-bold mb-2">教師備註</div>
+                    <p class="text-gray-200 text-sm leading-relaxed">${note}</p>
+                </div>
+
+                <div class="bg-yellow-500/10 border border-yellow-400/30 rounded-2xl p-4 text-xs text-yellow-100 leading-relaxed mb-5">
+                    報名成功後，系統會將你加入白名單，並透過大廳通知告知課程代碼。正式進入限制會在下一步接上。
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="loadTutorProgramStoreModalList()"
+                            class="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-3 rounded-xl transition-all">
+                        返回
+                    </button>
+
+                    ${actionButton}
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+window.enrollTutorProgram = async function(programId) {
+    const username = getCurrentCourseStoreUsername();
+
+    if (!username) {
+        alert('請先登入後再報名特約教室。');
+        return;
+    }
+
+    const program = tutorProgramStoreCache.find(item => item.id === programId);
+
+    if (!program) {
+        alert('找不到特約教室資料，請重新開啟課程商店。');
+        return;
+    }
+
+    if (program.is_enrolled) {
+        alert('你已經報名過此特約教室。');
+        return;
+    }
+
+    if (program.is_full) {
+        alert('此特約教室已額滿。');
+        return;
+    }
+
+    if (program.can_enroll !== true) {
+        const goSubscribe = confirm(
+            '此特約教室需要 trial / pro 權限才能報名。\n\n是否前往查看方案？'
+        );
+
+        if (goSubscribe && typeof openSubscriptionPage === 'function') {
+            openSubscriptionPage();
+        }
+
+        return;
+    }
+
+    const confirmEnroll = confirm(
+        `確定要報名「${program.title || '特約教室'}」嗎？\n\n` +
+        `教師：${program.teacher_name || program.teacher_username || '教師'}\n` +
+        `日期：${program.start_date} ~ ${program.end_date}\n` +
+        `星期：${program.weekdays_text || '未設定'}\n` +
+        `時間：${getTutorProgramTimeRangeText(program)}`
+    );
+
+    if (!confirmEnroll) return;
+
+    try {
+        const res = await fetch('/api/tutor-programs/enroll', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username,
+                programId
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            alert(data.error || '報名失敗，請稍後再試。');
+            return;
+        }
+
+        const enrolledProgram = tutorProgramStoreCache.find(item => item.id === programId);
+
+        if (enrolledProgram) {
+            enrolledProgram.is_enrolled = true;
+            enrolledProgram.can_enroll = false;
+
+            const newCount = Number(data.program?.enrolled_count ?? enrolledProgram.enrolled_count ?? 0);
+            enrolledProgram.enrolled_count = newCount;
+
+            const maxStudents = Number(enrolledProgram.max_students || 0);
+            enrolledProgram.capacity_text = maxStudents > 0
+                ? `${newCount} / ${maxStudents}`
+                : `${newCount} / 不限`;
+        }
+
+        alert(
+            `✅ 報名成功！\n\n` +
+            `你已加入此特約教室白名單。\n` +
+            `系統已將課程代碼與課程資訊發送到大廳通知。`
+        );
+
+        await loadTutorProgramStoreModalList();
+
+    } catch (err) {
+        console.error('報名特約教室失敗:', err);
+        alert('報名特約教室失敗，請稍後再試。');
+    }
+};
 
 window.goToCourseCheckout = function(courseId) {
     const username = localStorage.getItem('studyVerseUser');
