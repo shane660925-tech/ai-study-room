@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>客服聯絡｜STUDY VERSE</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.10), transparent 30%),
+        #05070a;
+      color: white;
+      font-family: Arial, "Noto Sans TC", sans-serif;
+      padding: 32px;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      font-size: 22px;
+      font-weight: 900;
+      color: #60a5fa;
+      letter-spacing: 0.08em;
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .nav a {
+      color: #cbd5e1;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(15, 23, 42, 0.72);
+      padding: 9px 12px;
+      border-radius: 999px;
+    }
+
+    .nav a:hover {
+      color: white;
+      border-color: rgba(96, 165, 250, 0.55);
+    }
+
+    .hero,
+    .section {
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(96, 165, 250, 0.20);
+      border-radius: 28px;
+      padding: 28px;
+      margin-bottom: 18px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+    }
+
+    .kicker {
+      color: #4ade80;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(32px, 5vw, 46px);
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      color: #93c5fd;
+    }
+
+    p,
+    li {
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.9;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 1.2em;
+    }
+
+    .contact-card {
+      border-color: rgba(74, 222, 128, 0.32);
+      background:
+        linear-gradient(135deg, rgba(34, 197, 94, 0.08), transparent 35%),
+        rgba(15, 23, 42, 0.82);
+    }
+
+    .mail {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #86efac;
+      font-weight: 900;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .mail:hover {
+      color: #bbf7d0;
+    }
+
+    .muted {
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .footer {
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+      padding: 18px 0 4px;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 20px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav {
+        justify-content: flex-start;
+      }
+
+      .hero,
+      .section {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <div class="topbar">
+      <div class="brand">STUDY VERSE</div>
+
+      <nav class="nav">
+        <a href="/">首頁</a>
+        <a href="/subscribe.html">訂閱方案</a>
+        <a href="/terms.html">服務條款</a>
+        <a href="/privacy-policy.html">隱私權政策</a>
+        <a href="/refund-policy.html">退款規則</a>
+      </nav>
+    </div>
+
+    <section class="hero">
+      <div class="kicker">Contact</div>
+      <h1>客服聯絡</h1>
+      <p>
+        若你在註冊、登入、付款、訂閱開通、課程使用或平台功能上遇到問題，
+        可以透過本頁提供的客服方式聯絡 STUDY VERSE。
+      </p>
+      <p class="muted">最後更新：2026 年 6 月 5 日</p>
+    </section>
+
+    <section class="section contact-card">
+      <h2>客服信箱</h2>
+      <p>
+        <a class="mail" href="mailto:studyverse.service@gmail.com">
+          studyverse.service@gmail.com
+        </a>
+      </p>
+      <p class="muted">
+        客服會依問題類型與來信順序處理，帳號、訂閱與付款問題原則上會於 1 至 3 個工作天內回覆。
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>建議提供的問題資訊</h2>
+      <p>為了加快處理速度，來信時請盡量附上以下資訊：</p>
+      <ul>
+        <li>註冊帳號或使用者名稱</li>
+        <li>遇到問題的頁面或功能名稱</li>
+        <li>問題發生時間</li>
+        <li>錯誤畫面截圖或付款紀錄截圖</li>
+        <li>使用裝置與瀏覽器，例如 Windows / Chrome、iPhone / Safari</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>客服處理時間</h2>
+      <p>
+        客服會依照問題類型與來信順序處理。一般帳號、訂閱與付款問題，原則上會於 1 至 3 個工作天內回覆。
+        若遇假日、金流查核、銀行作業或第三方服務異常，處理時間可能延長。
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>付款與訂閱問題</h2>
+      <p>
+        若付款成功但訂閱未開通，請不要重複付款。請先保留付款紀錄，並透過客服信箱聯絡我們，
+        我們會協助確認訂單狀態與開通情形。
+      </p>
+    </section>
+
+    <div class="footer">
+      STUDY VERSE © 2026 AI Focus System. All rights reserved.
+    </div>
+  </main>
+</body>
+</html>

@@ -145,6 +145,48 @@
       border-color: rgba(96, 165, 250, 0.75);
     }
 
+.agreement-box {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.24);
+}
+
+.agreement-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.8;
+  font-weight: 700;
+}
+
+.agreement-check input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  padding: 0;
+  cursor: pointer;
+  accent-color: #facc15;
+}
+
+.agreement-check a {
+  color: #93c5fd;
+  font-weight: 900;
+  text-decoration: underline;
+}
+
+.agreement-note {
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
     .button-row {
       display: grid;
       grid-template-columns: 1fr;
@@ -255,9 +297,9 @@
     <div class="kicker">Checkout</div>
     <h1>訂閱結帳</h1>
     <p class="desc">
-      請確認你選擇的方案。若有教師優惠碼，可在下方輸入，系統會直接折抵 NT$150。
-      目前為 mock 付款流程，正式金流會在後續串接。
-    </p>
+  請確認你選擇的方案。若有教師優惠碼，可在下方輸入，系統會直接折抵 NT$150。
+  藍新金流審核通過後，本頁將導向正式付款流程。
+</p>
 
     <div class="summary">
       <div class="row">
@@ -287,16 +329,34 @@
     </div>
 
     <label for="discountCodeInput">教師優惠碼</label>
-    <input id="discountCodeInput" placeholder="例如：TEACHER-XXXX-XXXX，可不填" />
+<input id="discountCodeInput" placeholder="例如：TEACHER-XXXX-XXXX，可不填" />
+
+<div class="agreement-box">
+  <label class="agreement-check" for="checkoutAgreement">
+    <input id="checkoutAgreement" type="checkbox" />
+    <span>
+      我已閱讀並同意
+      <a href="/terms.html" target="_blank" rel="noopener">服務條款</a>、
+      <a href="/privacy-policy.html" target="_blank" rel="noopener">隱私權政策</a>
+      與
+      <a href="/refund-policy.html" target="_blank" rel="noopener">退款規則</a>，
+      並了解付款完成後將立即開通對應期間之線上數位服務；除重複付款、付款異常、系統未開通或依法應退款之情形外，原則上不提供退款。
+    </span>
+  </label>
+
+  <div class="agreement-note">
+    請先確認方案、金額、優惠碼折扣與退款規則後再建立訂單。
+  </div>
+</div>
 
     <div class="button-row">
       <button class="primary" id="createOrderBtn" onclick="createOrder()">
         套用優惠碼 / 建立訂單
       </button>
 
-      <button class="pay" id="mockPayBtn" onclick="mockPayOrder()">
-        使用 mock 付款並開通訂閱
-      </button>
+      <button class="pay" id="mockPayBtn" onclick="showPaymentUnderReview()">
+  金流審核中，暫不開放線上付款
+</button>
     </div>
 
     <div class="paybox" id="paymentInfo">
@@ -304,9 +364,9 @@
     </div>
 
     <p class="hint">
-      未來接 LINE Pay / 街口支付 / 信用卡時，這裡會改成導向真實付款頁。
-      現階段 mock 付款成功後，會直接將訂閱狀態改為 pro。
-    </p>
+  目前線上付款功能正在進行金流審核，暫不開放付款。
+  藍新金流審核通過後，本頁將改為正式付款流程。
+</p>
 
     <p id="message"></p>
   </div>
@@ -362,6 +422,30 @@ function setMessage(html) {
   document.getElementById('message').innerHTML = html;
 }
 
+function showPaymentUnderReview() {
+  setMessage(
+    '<span class="warning">正式線上付款功能正在進行金流審核，暫不開放付款。藍新審核通過後，本頁將改為正式付款流程。</span>'
+  );
+}
+
+function hasAcceptedCheckoutAgreement() {
+  const checkbox = document.getElementById('checkoutAgreement');
+
+  if (!checkbox || !checkbox.checked) {
+    setMessage(
+      '<span class="error">請先勾選同意服務條款、隱私權政策與退款規則後，再繼續付款流程。</span>'
+    );
+
+    if (checkbox) {
+      checkbox.focus();
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
 function initPage() {
   if (!username) {
     setMessage('<span class="error">缺少 username，請重新登入。</span>');
@@ -382,13 +466,17 @@ async function createOrder() {
   const discountCode = document.getElementById('discountCodeInput').value.trim();
 
   setMessage('');
-  payBtn.style.display = 'none';
-  currentOrder = null;
+payBtn.style.display = 'none';
+currentOrder = null;
 
-  if (!username) {
-    setMessage('<span class="error">缺少 username，請重新登入。</span>');
-    return;
-  }
+if (!hasAcceptedCheckoutAgreement()) {
+  return;
+}
+
+if (!username) {
+  setMessage('<span class="error">缺少 username，請重新登入。</span>');
+  return;
+}
 
   btn.disabled = true;
   btn.textContent = '建立訂單中...';
@@ -400,7 +488,7 @@ async function createOrder() {
       body: JSON.stringify({
         username,
         planId,
-        provider: 'mock',
+        provider: 'newebpay_pending',
         discountCode
       })
     });
@@ -420,15 +508,19 @@ async function createOrder() {
     setText('amountText', `NT$${data.subscription.amount}`);
 
     paymentInfo.innerHTML = `
-      <strong>訂單已建立</strong><br>
-      訂單編號：${data.order.order_no || data.order.id}<br>
-      付款方式：${data.payment.provider}<br>
-      訂單狀態：${data.order.status}<br>
-      下一步：mock 付款確認
-    `;
+  <strong>方案與訂單資訊已確認</strong><br>
+  訂單編號：${data.order.order_no || data.order.id}<br>
+  訂單狀態：${data.order.status || '待付款'}<br>
+  付款說明：藍新金流審核中，暫不開放線上付款。
+`;
 
-    payBtn.style.display = 'block';
-    setMessage('<span class="success">訂單建立成功，請按下 mock 付款完成開通。</span>');
+payBtn.style.display = 'block';
+payBtn.disabled = true;
+payBtn.textContent = '金流審核中，暫不開放線上付款';
+
+setMessage(
+  '<span class="warning">方案與金額已確認。正式付款功能待藍新金流審核通過後開放。</span>'
+);
 
   } catch (err) {
     console.error('建立訂單失敗:', err);
@@ -441,48 +533,8 @@ async function createOrder() {
 }
 
 async function mockPayOrder() {
-  const payBtn = document.getElementById('mockPayBtn');
-
-  if (!currentOrder) {
-    setMessage('<span class="error">尚未建立訂單。</span>');
-    return;
-  }
-
-  payBtn.disabled = true;
-  payBtn.textContent = 'mock 付款處理中...';
-
-  try {
-    const res = await fetch('/api/subscription/mock-paid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        orderId: currentOrder.id
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'mock 付款失敗');
-    }
-
-    localStorage.setItem('studyVerseAccessUsername', username);
-    localStorage.setItem('studyVerseAccessLevel', 'pro');
-    localStorage.setItem('studyVerseCanUseFullFeatures', 'true');
-
-    setMessage('<span class="success">訂閱開通成功，正在返回大廳...</span>');
-
-    setTimeout(() => {
-      window.location.href = `/index.html?subscription=active&username=${encodeURIComponent(username)}`;
-    }, 900);
-
-  } catch (err) {
-    console.error('mock 付款失敗:', err);
-    setMessage(`<span class="error">${err.message}</span>`);
-    payBtn.disabled = false;
-    payBtn.textContent = '使用 mock 付款並開通訂閱';
-  }
+  showPaymentUnderReview();
+  return;
 }
 
 initPage();

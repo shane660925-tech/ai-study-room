@@ -313,6 +313,67 @@
       border: 1px solid rgba(148, 163, 184, 0.12);
     }
 
+    .payment-notice {
+  margin-top: 18px;
+  padding: 20px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent 38%),
+    rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(250, 204, 21, 0.24);
+}
+
+.payment-notice-title {
+  color: #facc15;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.payment-notice p {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 0 0 10px;
+}
+
+.payment-notice ul {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 6px;
+}
+
+.payment-notice li {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.legal-links {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.legal-links a {
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.legal-links a:hover {
+  color: white;
+  border-color: rgba(96, 165, 250, 0.55);
+}
+
     .error {
       color: #f87171;
     }
@@ -423,10 +484,33 @@
       </div>
     </section>
 
-    <div class="hint">
-      目前先保留 mock 付款流程，正式金流之後可接 LINE Pay、街口支付、信用卡或 Apple Pay。
-      下一步會進入結帳頁，輸入教師優惠碼後建立 pending 訂單。
-    </div>
+    <div class="payment-notice">
+  <div class="payment-notice-title">付款與退款提醒</div>
+
+  <p>
+    STUDY VERSE 目前提供月繳、2 個月、半年與年繳方案。使用者選擇方案並完成付款後，
+    系統將開通對應期間之線上數位服務；目前採一次付款開通，不會自動續扣。
+  </p>
+
+  <ul>
+    <li>新註冊學生享有 14 天免費體驗，體驗期間可使用完整功能。</li>
+    <li>教師優惠碼可於結帳頁輸入，成功套用後將折抵 NT$150。</li>
+    <li>付款前請確認方案、金額、優惠碼折扣、服務期間與退款規則。</li>
+    <li>付款完成並開通服務後，除重複付款、付款異常、系統未開通或依法應退款之情形外，原則上不提供退款。</li>
+  </ul>
+
+  <div class="legal-links">
+    <a href="/terms.html" target="_blank" rel="noopener">服務條款</a>
+    <a href="/privacy-policy.html" target="_blank" rel="noopener">隱私權政策</a>
+    <a href="/refund-policy.html" target="_blank" rel="noopener">退款規則</a>
+    <a href="/contact.html" target="_blank" rel="noopener">客服聯絡</a>
+  </div>
+</div>
+
+<div class="hint">
+  選擇方案後會進入結帳頁確認方案、金額與教師優惠碼。
+  目前線上付款功能正在進行金流審核，藍新審核通過後將開放正式付款流程。
+</div>
   </div>
 
 <script>

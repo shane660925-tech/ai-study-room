@@ -666,8 +666,61 @@ customElements.define('shared-sidebar-top', SharedSidebarTop);
 class SharedFooter extends HTMLElement {
     connectedCallback() {
         this.innerHTML = `
-        <footer class="p-6 text-center text-gray-600 text-[10px] tracking-widest uppercase">
-            Study Verse &copy; 2026 AI Focus System. All rights reserved.
+        <footer class="px-6 py-8 text-center border-t border-white/5 bg-black/20">
+            <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-4 text-[11px] font-bold tracking-widest">
+
+                <a href="/landing.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    平台介紹
+                </a>
+
+                <span class="text-gray-700">/</span>
+
+                <a href="/subscribe.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    訂閱方案
+                </a>
+
+                <span class="text-gray-700">/</span>
+
+                <a href="/terms.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    服務條款
+                </a>
+
+                <span class="text-gray-700">/</span>
+
+                <a href="/privacy-policy.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    隱私權政策
+                </a>
+
+                <span class="text-gray-700">/</span>
+
+                <a href="/refund-policy.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    退款規則
+                </a>
+
+                <span class="text-gray-700">/</span>
+
+                <a href="/contact.html"
+                   class="text-gray-400 hover:text-blue-400 transition-colors">
+                    客服聯絡
+                </a>
+            </div>
+
+            <div class="text-gray-600 text-[10px] tracking-widest uppercase">
+                Study Verse &copy; 2026 AI Focus System. All rights reserved.
+            </div>
+
+            <div class="mt-2 text-gray-600 text-[10px] normal-case">
+                客服信箱：
+                <a href="mailto:studyverse.service@gmail.com"
+                   class="text-gray-500 hover:text-blue-400 transition-colors">
+                    studyverse.service@gmail.com
+                </a>
+            </div>
         </footer>
         `;
     }

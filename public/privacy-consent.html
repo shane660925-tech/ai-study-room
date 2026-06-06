@@ -118,48 +118,68 @@
 </section>
 
         <section class="bg-[#111827] border border-yellow-500/20 rounded-3xl p-6 mb-8">
-            <h2 class="text-xl font-black text-yellow-400 mb-4">使用前請確認</h2>
+    <h2 class="text-xl font-black text-yellow-400 mb-4">使用前請確認</h2>
 
-            <div class="space-y-3 text-sm text-gray-300 leading-relaxed">
-                <label class="flex gap-3 items-start">
-                    <input id="agreeCamera" type="checkbox" class="mt-1">
-                    <span>我了解平台會使用攝影機進行 AI 專注狀態偵測。</span>
-                </label>
+    <p class="text-sm text-gray-400 leading-relaxed mb-5">
+        STUDY VERSE 的正式隱私權政策會說明平台如何蒐集、使用、保存與保護個人資料。
+        本頁則是針對「攝影機、AI 專注偵測、違規截圖與 LINE 推播」進行使用前確認。
+    </p>
 
-                <label class="flex gap-3 items-start">
-                    <input id="agreeScreenshot" type="checkbox" class="mt-1">
-                    <span>我了解只有在偵測到違規或異常事件時，系統才會提供截圖給教師確認。</span>
-                </label>
+    <div class="space-y-3 text-sm text-gray-300 leading-relaxed">
+        <label class="flex gap-3 items-start">
+            <input id="agreePolicy" type="checkbox" class="mt-1">
+            <span>
+                我已閱讀並同意
+                <a href="/privacy-policy.html"
+                   target="_blank"
+                   rel="noopener"
+                   class="text-blue-400 underline hover:text-blue-300 font-bold">
+                    隱私權政策
+                </a>
+                ，並了解平台會依政策處理我的帳號、學習、訂閱與客服相關資料。
+            </span>
+        </label>
 
-                <label class="flex gap-3 items-start">
-                    <input id="agreeLine" type="checkbox" class="mt-1">
-                    <span>我了解 LINE 綁定後，系統會傳送學習總結與重要提醒。</span>
-                </label>
-            </div>
+        <label class="flex gap-3 items-start">
+            <input id="agreeCamera" type="checkbox" class="mt-1">
+            <span>我了解平台會使用攝影機進行 AI 專注狀態偵測。</span>
+        </label>
 
-            <button onclick="confirmConsent()"
-                    class="mt-6 w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black transition-all">
-                我已了解並同意
-            </button>
+        <label class="flex gap-3 items-start">
+            <input id="agreeScreenshot" type="checkbox" class="mt-1">
+            <span>我了解只有在偵測到違規或異常事件時，系統才會提供截圖給教師確認。</span>
+        </label>
 
-            <p id="errorText" class="hidden text-red-400 text-xs mt-4 text-center">
-                請先勾選所有項目後再繼續。
-            </p>
-        </section>
+        <label class="flex gap-3 items-start">
+            <input id="agreeLine" type="checkbox" class="mt-1">
+            <span>我了解 LINE 綁定後，系統會傳送學習總結與重要提醒。</span>
+        </label>
+    </div>
+
+    <button onclick="confirmConsent()"
+            class="mt-6 w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black transition-all">
+        我已了解並同意
+    </button>
+
+    <p id="errorText" class="hidden text-red-400 text-xs mt-4 text-center">
+        請先勾選所有項目後再繼續。
+    </p>
+</section>
 
     </main>
 
     <script>
         function confirmConsent() {
-            const agreeCamera = document.getElementById('agreeCamera').checked;
-            const agreeScreenshot = document.getElementById('agreeScreenshot').checked;
-            const agreeLine = document.getElementById('agreeLine').checked;
-            const errorText = document.getElementById('errorText');
+            const agreePolicy = document.getElementById('agreePolicy').checked;
+const agreeCamera = document.getElementById('agreeCamera').checked;
+const agreeScreenshot = document.getElementById('agreeScreenshot').checked;
+const agreeLine = document.getElementById('agreeLine').checked;
+const errorText = document.getElementById('errorText');
 
-            if (!agreeCamera || !agreeScreenshot || !agreeLine) {
-                errorText.classList.remove('hidden');
-                return;
-            }
+if (!agreePolicy || !agreeCamera || !agreeScreenshot || !agreeLine) {
+    errorText.classList.remove('hidden');
+    return;
+}
 
             const username =
     localStorage.getItem('studyVerseUser');
@@ -177,7 +197,7 @@ fetch('/api/privacy-consent', {
     },
     body: JSON.stringify({
         username,
-        version: '2026-05-10'
+        version: '2026-06-06'
     })
 })
 .then(async (res) => {
@@ -195,10 +215,10 @@ fetch('/api/privacy-consent', {
 
     localStorage.setItem(
         'studyVersePrivacyConsentVersion',
-        '2026-05-10'
+        '2026-06-06'
     );
 
-    alert('已完成隱私與學習監測說明確認。');
+    alert('已完成隱私權政策與學習監測說明確認。');
 
     window.location.href = '/';
 
