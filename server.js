@@ -12,9 +12,15 @@ const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
 
 // 動態判斷網址 (本地端 vs 正式上線端)
-const GOOGLE_CALLBACK_URL = process.env.NODE_ENV === 'production'
-    ? 'https://study-universe.onrender.com/api/auth/google/callback'
-    : 'http://localhost:3000/api/auth/google/callback';
+const PUBLIC_BASE_URL = (
+    process.env.PUBLIC_BASE_URL ||
+    (process.env.NODE_ENV === 'production'
+        ? 'https://studyverse.tw'
+        : 'http://localhost:3000')
+).trim().replace(/\/+$/, '');
+
+const GOOGLE_CALLBACK_URL =
+    `${PUBLIC_BASE_URL}/api/auth/google/callback`;
 
 const googleClient = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
