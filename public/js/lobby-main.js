@@ -257,12 +257,7 @@ if (btnViewPlans) {
     btnViewPlans.addEventListener('click', async () => {
         await window.markSubscriptionIntroSeen();
         modal.remove();
-
-        alert(
-            '✅ 14 天完整功能免費體驗已啟用！\n\n' +
-            '你可以先進入大廳使用完整功能。\n' +
-            '之後若想查看方案，請點右上角「我的方案」。'
-        );
+        window.openSubscriptionPage();
     });
 }
 
@@ -620,6 +615,13 @@ initLineBindQRCode();
 
 if (typeof window.applyLobbySubscriptionVisualLocks === 'function') {
     window.applyLobbySubscriptionVisualLocks();
+}
+
+// 隱私權確認完成並回到大廳後，立即啟動新手導覽
+if (typeof startIntroTutorial === 'function') {
+    requestAnimationFrame(() => {
+        startIntroTutorial();
+    });
 }
 };
 
@@ -2260,16 +2262,10 @@ async function finishIntroTutorial() {
 
     clearIntroHighlight();
 
-setTimeout(() => {
-    if (typeof window.showSubscriptionIntroModalOnce === 'function') {
-        window.showSubscriptionIntroModalOnce();
-    }
-}, 500);
+if (typeof window.showSubscriptionIntroModalOnce === 'function') {
+    window.showSubscriptionIntroModalOnce();
 }
-
-setTimeout(() => {
-    startIntroTutorial();
-}, 2500);
+}
 
 window.openTeacherApplyModal = function() {
     const modal = document.getElementById('teacher-apply-modal');
