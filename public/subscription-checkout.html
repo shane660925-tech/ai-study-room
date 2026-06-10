@@ -145,6 +145,49 @@
       border-color: rgba(96, 165, 250, 0.75);
     }
 
+    input[type="date"] {
+  color-scheme: dark;
+  padding-right: 56px;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
+}
+
+.date-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.date-input-wrap input {
+  padding-right: 56px;
+}
+
+.date-picker-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #dbeafe;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-picker-btn:hover {
+  background: rgba(59, 130, 246, 0.28);
+  border-color: rgba(96, 165, 250, 0.65);
+}
+
 .agreement-box {
   margin-top: 18px;
   padding: 16px;
@@ -298,7 +341,8 @@
     <h1>訂閱結帳</h1>
     <p class="desc">
   請確認你選擇的方案。若有教師優惠碼，可在下方輸入，系統會直接折抵 NT$150。
-  藍新金流審核通過後，本頁將導向正式付款流程。
+  新註冊帳號可先使用 14 天完整功能免費體驗；若體驗結束後想繼續使用完整功能，可在本頁建立訂單並依匯款資訊完成付款。
+  目前付費方式採銀行匯款與人工開通，不會自動續訂。
 </p>
 
     <div class="summary">
@@ -340,12 +384,12 @@
       <a href="/privacy-policy.html" target="_blank" rel="noopener">隱私權政策</a>
       與
       <a href="/refund-policy.html" target="_blank" rel="noopener">退款規則</a>，
-      並了解付款完成後將立即開通對應期間之線上數位服務；除重複付款、付款異常、系統未開通或依法應退款之情形外，原則上不提供退款。
+      並了解送出匯款資料後不會立即自動開通，需由客服人工確認款項後才會開通對應期間之線上數位服務；除重複付款、付款異常、系統未開通或依法應退款之情形外，原則上不提供退款。
     </span>
   </label>
 
   <div class="agreement-note">
-    請先確認方案、金額、優惠碼折扣與退款規則後再建立訂單。
+    請先確認方案、金額、優惠碼折扣、匯款開通方式與退款規則後再建立訂單。
   </div>
 </div>
 
@@ -355,7 +399,7 @@
       </button>
 
       <button class="pay" id="mockPayBtn" onclick="showPaymentUnderReview()">
-  金流審核中，暫不開放線上付款
+  建立訂單後顯示匯款資訊
 </button>
     </div>
 
@@ -363,9 +407,50 @@
       尚未建立訂單。
     </div>
 
+    <div class="paybox" id="transferFormBox" style="display:none;">
+  <strong>提交匯款資料</strong>
+
+  <label for="transferPayerName">匯款人姓名</label>
+  <input id="transferPayerName" placeholder="請填寫實際匯款人姓名" />
+
+  <label for="transferAccountLast5">匯款帳號後五碼</label>
+  <input
+    id="transferAccountLast5"
+    inputmode="numeric"
+    maxlength="5"
+    placeholder="例如：12345"
+  />
+
+  <label for="transferDate">匯款日期，可點選右側日曆</label>
+
+<div class="date-input-wrap">
+  <input id="transferDate" type="date" />
+  <button
+    type="button"
+    class="date-picker-btn"
+    onclick="openTransferDatePicker()"
+    aria-label="選擇匯款日期"
+  >
+    📅
+  </button>
+</div>
+
+  <label for="transferNote">備註，可不填</label>
+  <input id="transferNote" placeholder="例如：已於下午匯款 / 轉帳末五碼說明" />
+
+  <button
+    class="primary"
+    id="submitTransferInfoBtn"
+    onclick="submitTransferInfo()"
+    style="margin-top:18px;"
+  >
+    送出匯款資料
+  </button>
+</div>
+
     <p class="hint">
-  目前線上付款功能正在進行金流審核，暫不開放付款。
-  藍新金流審核通過後，本頁將改為正式付款流程。
+  目前 STUDY VERSE 付費功能採銀行匯款與人工開通。
+  建立訂單後，頁面會顯示匯款金額與訂單編號；完成匯款並提交資料後，客服將於 1 至 2 個工作天內確認並開通對應方案。
 </p>
 
     <p id="message"></p>
@@ -424,8 +509,21 @@ function setMessage(html) {
 
 function showPaymentUnderReview() {
   setMessage(
-    '<span class="warning">正式線上付款功能正在進行金流審核，暫不開放付款。藍新審核通過後，本頁將改為正式付款流程。</span>'
+    '<span class="warning">請先建立訂單。建立成功後，頁面會顯示匯款金額、訂單編號與後續填寫匯款資料的說明。</span>'
   );
+}
+
+function openTransferDatePicker() {
+  const dateInput = document.getElementById('transferDate');
+
+  if (!dateInput) return;
+
+  if (typeof dateInput.showPicker === 'function') {
+    dateInput.showPicker();
+  } else {
+    dateInput.focus();
+    dateInput.click();
+  }
 }
 
 function hasAcceptedCheckoutAgreement() {
@@ -461,12 +559,14 @@ function initPage() {
 
 async function createOrder() {
   const btn = document.getElementById('createOrderBtn');
-  const payBtn = document.getElementById('mockPayBtn');
-  const paymentInfo = document.getElementById('paymentInfo');
-  const discountCode = document.getElementById('discountCodeInput').value.trim();
+const payBtn = document.getElementById('mockPayBtn');
+const paymentInfo = document.getElementById('paymentInfo');
+const transferFormBox = document.getElementById('transferFormBox');
+const discountCode = document.getElementById('discountCodeInput').value.trim();
 
   setMessage('');
 payBtn.style.display = 'none';
+if (transferFormBox) transferFormBox.style.display = 'none';
 currentOrder = null;
 
 if (!hasAcceptedCheckoutAgreement()) {
@@ -486,11 +586,11 @@ if (!username) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username,
-        planId,
-        provider: 'newebpay_pending',
-        discountCode
-      })
+  username,
+  planId,
+  provider: 'manual_transfer',
+  discountCode
+})
     });
 
     const data = await res.json();
@@ -508,18 +608,31 @@ if (!username) {
     setText('amountText', `NT$${data.subscription.amount}`);
 
     paymentInfo.innerHTML = `
-  <strong>方案與訂單資訊已確認</strong><br>
+  <strong>匯款訂單已建立</strong><br>
   訂單編號：${data.order.order_no || data.order.id}<br>
-  訂單狀態：${data.order.status || '待付款'}<br>
-  付款說明：藍新金流審核中，暫不開放線上付款。
+  訂單狀態：待匯款 / 待提交匯款資料<br>
+  匯款金額：<strong style="color:#facc15;">NT$${data.subscription.amount}</strong><br><br>
+
+  <strong>銀行匯款資訊</strong><br>
+  銀行名稱：待補<br>
+  銀行代碼：待補<br>
+  匯款帳號：待補<br>
+  戶名：待補<br><br>
+
+  <span style="color:#94a3b8;">
+    完成匯款後，請保留匯款紀錄。下一步會加入「提交匯款資料」表單，
+    讓你填寫匯款人姓名、帳號後五碼、匯款日期與備註。
+  </span>
 `;
 
-payBtn.style.display = 'block';
-payBtn.disabled = true;
-payBtn.textContent = '金流審核中，暫不開放線上付款';
+payBtn.style.display = 'none';
+
+if (transferFormBox) {
+  transferFormBox.style.display = 'block';
+}
 
 setMessage(
-  '<span class="warning">方案與金額已確認。正式付款功能待藍新金流審核通過後開放。</span>'
+  '<span class="success">訂單已建立。請依頁面顯示的匯款資訊完成匯款，完成後填寫下方匯款資料並送出審核。</span>'
 );
 
   } catch (err) {
@@ -529,6 +642,88 @@ setMessage(
   } finally {
     btn.disabled = false;
     btn.textContent = '套用優惠碼 / 建立訂單';
+  }
+}
+
+async function submitTransferInfo() {
+  const btn = document.getElementById('submitTransferInfoBtn');
+  const payerName = document.getElementById('transferPayerName')?.value.trim() || '';
+  const accountLast5 = document.getElementById('transferAccountLast5')?.value.trim() || '';
+  const transferDate = document.getElementById('transferDate')?.value || '';
+  const transferNote = document.getElementById('transferNote')?.value.trim() || '';
+
+  if (!currentOrder || !currentOrder.id) {
+    setMessage('<span class="error">找不到目前訂單，請先建立訂單後再提交匯款資料。</span>');
+    return;
+  }
+
+  if (!payerName) {
+    setMessage('<span class="error">請填寫匯款人姓名。</span>');
+    return;
+  }
+
+  if (!/^[0-9]{5}$/.test(accountLast5)) {
+    setMessage('<span class="error">請填寫 5 位數字的匯款帳號後五碼。</span>');
+    return;
+  }
+
+  if (!transferDate) {
+    setMessage('<span class="error">請選擇匯款日期。</span>');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '送出中...';
+  setMessage('');
+
+  try {
+    const res = await fetch('/api/subscription/submit-transfer-info', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username,
+        orderId: currentOrder.id,
+        payerName,
+        accountLast5,
+        transferDate,
+        transferNote
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '提交匯款資料失敗');
+    }
+
+    const transferFormBox = document.getElementById('transferFormBox');
+    if (transferFormBox) {
+      transferFormBox.style.display = 'none';
+    }
+
+    const paymentInfo = document.getElementById('paymentInfo');
+    if (paymentInfo) {
+      paymentInfo.innerHTML += `
+        <br><br>
+        <strong style="color:#4ade80;">匯款資料已送出</strong><br>
+        審核狀態：等待客服人工確認<br>
+        匯款人姓名：${payerName}<br>
+        匯款帳號後五碼：${accountLast5}<br>
+        匯款日期：${transferDate}<br>
+        <span style="color:#94a3b8;">客服將於 1 至 2 個工作天內確認，通過後會開通對應訂閱方案。</span>
+      `;
+    }
+
+    setMessage('<span class="success">匯款資料已送出，請等待客服人工確認。</span>');
+
+  } catch (err) {
+    console.error('提交匯款資料失敗:', err);
+    setMessage(`<span class="error">${err.message}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '送出匯款資料';
   }
 }
 

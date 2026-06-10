@@ -59,9 +59,10 @@ function switchTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 
   if (tab === 'overview') loadOverview();
-if (tab === 'users') loadUsers();
-if (tab === 'teachers') loadTeacherReviews();
-if (tab === 'themes') loadThemeRooms();
+  if (tab === 'users') loadUsers();
+  if (tab === 'teachers') loadTeacherReviews();
+  if (tab === 'payments') loadManualTransferOrders();
+  if (tab === 'themes') loadThemeRooms();
 }
 
 async function loadOverview() {
@@ -161,6 +162,183 @@ adminUsersCache.sort((a, b) => {
         <tbody>${rows}</tbody>
       </table>
     `;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function loadManualTransferOrders() {
+  const list = document.getElementById('manualTransferOrdersList');
+
+  if (!list) return;
+
+  list.innerHTML = `
+    <div class="empty-card">
+      正在載入待審核匯款訂單...
+    </div>
+  `;
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/manual-transfer-orders?${getAdminQuery()}`
+    );
+
+    const orders = data.orders || [];
+
+    if (orders.length === 0) {
+      list.innerHTML = `
+        <div class="empty-card">
+          目前沒有等待審核的匯款訂單
+        </div>
+      `;
+      return;
+    }
+
+    const rows = orders.map(order => {
+      const transfer = order.transferInfo || {};
+      const user = order.user || {};
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(order.order_no || order.id)}</strong><br>
+            <small>${order.created_at ? new Date(order.created_at).toLocaleString('zh-TW') : '-'}</small>
+          </td>
+
+          <td>
+            ${escapeHtml(order.username || '-')}<br>
+            <small>${escapeHtml(user.email || user.account || '-')}</small>
+          </td>
+
+          <td>
+            ${renderSubscriptionPlanText(order.subscription_plan)}<br>
+            <small>${order.subscription_months || '-'} 個月</small>
+          </td>
+
+          <td>
+            NT$${Number(order.amount || 0).toLocaleString('zh-TW')}
+          </td>
+
+          <td>
+            匯款人：${escapeHtml(transfer.payerName || '-')}<br>
+            後五碼：${escapeHtml(transfer.accountLast5 || '-')}<br>
+            日期：${escapeHtml(transfer.transferDate || '-')}<br>
+            備註：${escapeHtml(transfer.transferNote || '-')}
+          </td>
+
+          <td>
+            ${transfer.submittedAt ? new Date(transfer.submittedAt).toLocaleString('zh-TW') : '-'}
+          </td>
+
+          <td>
+            <button onclick="approveManualTransferOrder('${escapeJs(order.id)}')">
+              審核通過
+            </button>
+
+            <button onclick="rejectManualTransferOrder('${escapeJs(order.id)}')">
+              駁回
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    list.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>訂單</th>
+            <th>學生</th>
+            <th>方案</th>
+            <th>金額</th>
+            <th>匯款資料</th>
+            <th>提交時間</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+  } catch (err) {
+    console.error('載入匯款訂單失敗:', err);
+
+    list.innerHTML = `
+      <div class="empty-card">
+        載入匯款訂單失敗：${escapeHtml(err.message)}
+      </div>
+    `;
+  }
+}
+
+function renderSubscriptionPlanText(plan) {
+  const map = {
+    monthly: '月繳方案',
+    two_months: '2 個月方案',
+    half_year: '半年方案',
+    yearly: '年繳方案'
+  };
+
+  return map[plan] || plan || '-';
+}
+
+async function approveManualTransferOrder(orderId) {
+  if (!confirm('確定這筆匯款已確認入帳，並要開通訂閱嗎？')) {
+    return;
+  }
+
+  const reviewNote =
+    prompt('審核備註，可留空：') || '';
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/manual-transfer-orders/${encodeURIComponent(orderId)}/approve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          adminUsername,
+          reviewNote
+        })
+      }
+    );
+
+    alert(data.message || '匯款訂單已審核通過');
+    await loadManualTransferOrders();
+    await loadUsers();
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function rejectManualTransferOrder(orderId) {
+  const reviewNote =
+    prompt('請輸入駁回原因，例如：匯款帳號後五碼不符 / 未查到入帳紀錄');
+
+  if (!reviewNote || !reviewNote.trim()) {
+    alert('駁回時必須填寫原因');
+    return;
+  }
+
+  if (!confirm('確定要駁回這筆匯款訂單嗎？')) {
+    return;
+  }
+
+  try {
+    const data = await apiFetch(
+      `/api/admin/manual-transfer-orders/${encodeURIComponent(orderId)}/reject`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          adminUsername,
+          reviewNote: reviewNote.trim()
+        })
+      }
+    );
+
+    alert(data.message || '匯款訂單已駁回');
+    await loadManualTransferOrders();
+
   } catch (err) {
     alert(err.message);
   }

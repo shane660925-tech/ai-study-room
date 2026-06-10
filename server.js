@@ -1603,6 +1603,301 @@ app.get('/api/admin/me', verifyAdmin, async (req, res) => {
     });
 });
 
+// ==========================================
+// Manual Transfer Admin API - 取得待審核匯款訂單
+// ==========================================
+app.get('/api/admin/manual-transfer-orders', verifyAdmin, async (req, res) => {
+    try {
+        const { data: orders, error: ordersError } = await supabase
+            .from('orders')
+            .select(`
+                id,
+                order_no,
+                username,
+                order_type,
+                subscription_plan,
+                subscription_months,
+                original_amount,
+                discount_amount,
+                amount,
+                status,
+                provider,
+                provider_status,
+                provider_payload,
+                created_at,
+                updated_at
+            `)
+            .eq('order_type', 'subscription')
+            .eq('provider', 'manual_transfer')
+            .eq('status', 'pending')
+            .eq('provider_status', 'awaiting_manual_review')
+            .order('updated_at', { ascending: false })
+            .limit(100);
+
+        if (ordersError) throw ordersError;
+
+        const usernames = [
+            ...new Set((orders || []).map(order => order.username).filter(Boolean))
+        ];
+
+        let usersByUsername = {};
+
+        if (usernames.length > 0) {
+            const { data: users, error: usersError } = await supabase
+                .from('users')
+                .select(`
+                    username,
+                    account,
+                    email,
+                    role,
+                    membership_level,
+                    is_subscribed,
+                    subscription_status,
+                    subscription_end_date
+                `)
+                .in('username', usernames);
+
+            if (usersError) throw usersError;
+
+            usersByUsername = (users || []).reduce((map, user) => {
+                map[user.username] = user;
+                return map;
+            }, {});
+        }
+
+        const mappedOrders = (orders || []).map(order => {
+            const transferInfo =
+                order.provider_payload &&
+                order.provider_payload.manual_transfer
+                    ? order.provider_payload.manual_transfer
+                    : {};
+
+            return {
+                ...order,
+                user: usersByUsername[order.username] || null,
+                transferInfo: {
+                    payerName: transferInfo.payer_name || '',
+                    accountLast5: transferInfo.account_last5 || '',
+                    transferDate: transferInfo.transfer_date || '',
+                    transferNote: transferInfo.transfer_note || '',
+                    submittedAt: transferInfo.submitted_at || null
+                }
+            };
+        });
+
+        res.json({
+            success: true,
+            count: mappedOrders.length,
+            orders: mappedOrders
+        });
+
+    } catch (err) {
+        console.error('取得待審核匯款訂單失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '取得待審核匯款訂單失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
+// ==========================================
+// Manual Transfer Admin API - 審核通過匯款訂單
+// ==========================================
+app.post('/api/admin/manual-transfer-orders/:orderId/approve', verifyAdmin, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { reviewNote } = req.body || {};
+
+        if (!orderId) {
+            return res.status(400).json({ error: '缺少 orderId' });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({ error: '找不到訂單' });
+        }
+
+        if (order.order_type !== 'subscription') {
+            return res.status(400).json({ error: '這不是訂閱訂單' });
+        }
+
+        if (order.provider !== 'manual_transfer') {
+            return res.status(400).json({ error: '這不是銀行匯款訂單' });
+        }
+
+        if (order.status === 'paid') {
+            return res.status(400).json({ error: '此訂單已付款完成，無法重複審核通過' });
+        }
+
+        if (order.status === 'failed') {
+            return res.status(400).json({ error: '此訂單已被駁回，請重新建立訂單' });
+        }
+
+        if (order.provider_status !== 'awaiting_manual_review') {
+            return res.status(400).json({
+                error: '此訂單尚未提交匯款資料，無法審核通過'
+            });
+        }
+
+        const nowIso = new Date().toISOString();
+
+        const nextPayload = {
+            ...(order.provider_payload || {}),
+            manual_review: {
+                status: 'approved',
+                reviewed_by: req.adminUser.username,
+                reviewed_at: nowIso,
+                review_note: String(reviewNote || '').trim() || null
+            }
+        };
+
+        const result = await activateSubscriptionByOrder(order.id);
+
+        const { data: finalOrder, error: finalUpdateError } = await supabase
+            .from('orders')
+            .update({
+                provider_status: 'confirmed',
+                provider_payload: nextPayload,
+                payment_confirmed_at: nowIso,
+                updated_at: nowIso
+            })
+            .eq('id', order.id)
+            .select()
+            .single();
+
+        if (finalUpdateError) throw finalUpdateError;
+
+        await createNotification({
+            username: order.username,
+            type: 'payment_approved',
+            title: '付款已確認，訂閱已開通',
+            message: `你的訂單 ${order.order_no || order.id} 已完成匯款確認，訂閱方案已開通。`
+        });
+
+        res.json({
+            success: true,
+            message: '匯款訂單已審核通過，訂閱已開通',
+            order: finalOrder,
+            result
+        });
+
+    } catch (err) {
+        console.error('審核通過匯款訂單失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '審核通過匯款訂單失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
+// ==========================================
+// Manual Transfer Admin API - 駁回匯款訂單
+// ==========================================
+app.post('/api/admin/manual-transfer-orders/:orderId/reject', verifyAdmin, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { reviewNote } = req.body || {};
+
+        if (!orderId) {
+            return res.status(400).json({ error: '缺少 orderId' });
+        }
+
+        const finalReviewNote = String(reviewNote || '').trim();
+
+        if (!finalReviewNote) {
+            return res.status(400).json({ error: '請填寫駁回原因' });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({ error: '找不到訂單' });
+        }
+
+        if (order.order_type !== 'subscription') {
+            return res.status(400).json({ error: '這不是訂閱訂單' });
+        }
+
+        if (order.provider !== 'manual_transfer') {
+            return res.status(400).json({ error: '這不是銀行匯款訂單' });
+        }
+
+        if (order.status === 'paid') {
+            return res.status(400).json({ error: '此訂單已付款完成，無法駁回' });
+        }
+
+        if (order.status === 'failed') {
+            return res.status(400).json({ error: '此訂單已經被駁回' });
+        }
+
+        const nowIso = new Date().toISOString();
+
+        const nextPayload = {
+            ...(order.provider_payload || {}),
+            manual_review: {
+                status: 'rejected',
+                reviewed_by: req.adminUser.username,
+                reviewed_at: nowIso,
+                review_note: finalReviewNote
+            }
+        };
+
+        const { data: updatedOrder, error: updateError } = await supabase
+            .from('orders')
+            .update({
+                status: 'failed',
+                provider_status: 'rejected',
+                provider_payload: nextPayload,
+                payment_error: finalReviewNote,
+                updated_at: nowIso
+            })
+            .eq('id', order.id)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        await createNotification({
+            username: order.username,
+            type: 'payment_rejected',
+            title: '付款資料需要重新確認',
+            message: `你的訂單 ${order.order_no || order.id} 匯款資料未通過審核。原因：${finalReviewNote}。請確認後重新建立訂單或聯繫客服。`
+        });
+
+        res.json({
+            success: true,
+            message: '匯款訂單已駁回',
+            order: updatedOrder
+        });
+
+    } catch (err) {
+        console.error('駁回匯款訂單失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '駁回匯款訂單失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
 // 取得會員列表
 app.get('/api/admin/users', verifyAdmin, async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -2872,6 +3167,7 @@ const SUBSCRIPTION_TEACHER_DISCOUNT_AMOUNT = 150;
 
 const PAYMENT_PROVIDERS = {
     mock: 'mock',
+    manual_transfer: 'manual_transfer',
     linepay: 'linepay',
     jkopay: 'jkopay',
     credit_card: 'credit_card'
@@ -3092,13 +3388,15 @@ app.post('/api/subscription/create-order', async (req, res) => {
         const selectedPlan = getSubscriptionPlan(planId);
         const paymentProvider = normalizePaymentProvider(provider);
 
-        // 真實金流尚未串接，現階段只允許 mock 建立測試訂單
-        if (paymentProvider !== 'mock') {
-            return res.status(400).json({
-                error: '此付款方式尚未開放，請先使用 mock 測試流程',
-                provider: paymentProvider
-            });
-        }
+        // 封測階段：允許銀行匯款人工開通；保留 mock 供開發測試使用
+const allowedSubscriptionProviders = ['manual_transfer', 'mock'];
+
+if (!allowedSubscriptionProviders.includes(paymentProvider)) {
+    return res.status(400).json({
+        error: '目前付費方式僅支援銀行匯款與人工開通',
+        provider: paymentProvider
+    });
+}
 
         const { data: user, error: userError } = await supabase
             .from('users')
@@ -3181,10 +3479,13 @@ app.post('/api/subscription/create-order', async (req, res) => {
                 subscription_plan: selectedPlan.id,
                 subscription_months: selectedPlan.months,
                 provider: paymentProvider,
-                provider_order_id: null,
-                provider_payment_id: null,
-                payment_url: null,
-                paid_at: null
+provider_status: paymentProvider === 'manual_transfer'
+    ? 'awaiting_transfer_info'
+    : 'pending',
+provider_order_id: null,
+provider_payment_id: null,
+payment_url: null,
+paid_at: null
             }])
             .select()
             .single();
@@ -3204,10 +3505,12 @@ app.post('/api/subscription/create-order', async (req, res) => {
                 isFreeCheckout: amount === 0
             },
             payment: {
-                provider: paymentProvider,
-                paymentUrl: null,
-                nextAction: 'mock_confirm'
-            }
+    provider: paymentProvider,
+    paymentUrl: null,
+    nextAction: paymentProvider === 'manual_transfer'
+        ? 'show_transfer_info'
+        : 'mock_confirm'
+}
         });
 
     } catch (err) {
@@ -3216,6 +3519,129 @@ app.post('/api/subscription/create-order', async (req, res) => {
         res.status(500).json({
             error: '建立訂閱訂單失敗',
             detail: err.message
+        });
+    }
+});
+
+// ==========================================
+// Manual Transfer - 提交匯款資料
+// 學生送出匯款資料後，只改成等待人工審核，不自動開通
+// ==========================================
+app.post('/api/subscription/submit-transfer-info', async (req, res) => {
+    try {
+        const {
+            username,
+            orderId,
+            payerName,
+            accountLast5,
+            transferDate,
+            transferNote
+        } = req.body;
+
+        const finalUsername = String(username || '').trim();
+        const finalOrderId = String(orderId || '').trim();
+        const finalPayerName = String(payerName || '').trim();
+        const finalAccountLast5 = String(accountLast5 || '').trim();
+        const finalTransferDate = String(transferDate || '').trim();
+        const finalTransferNote = String(transferNote || '').trim();
+
+        if (!finalUsername) {
+            return res.status(400).json({ error: '缺少 username' });
+        }
+
+        if (!finalOrderId) {
+            return res.status(400).json({ error: '缺少訂單 ID' });
+        }
+
+        if (!finalPayerName) {
+            return res.status(400).json({ error: '請填寫匯款人姓名' });
+        }
+
+        if (!/^[0-9]{5}$/.test(finalAccountLast5)) {
+            return res.status(400).json({ error: '請填寫匯款帳號後五碼，且必須是 5 位數字' });
+        }
+
+        if (!finalTransferDate) {
+            return res.status(400).json({ error: '請選擇匯款日期' });
+        }
+
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', finalOrderId)
+            .maybeSingle();
+
+        if (orderError) throw orderError;
+
+        if (!order) {
+            return res.status(404).json({ error: '找不到訂單' });
+        }
+
+        if (order.username !== finalUsername) {
+            return res.status(403).json({ error: '訂單使用者不符' });
+        }
+
+        if (order.order_type !== 'subscription') {
+            return res.status(400).json({ error: '這不是訂閱訂單' });
+        }
+
+        if (order.provider !== 'manual_transfer') {
+            return res.status(400).json({ error: '此訂單不是銀行匯款訂單' });
+        }
+
+        if (order.status === 'paid') {
+            return res.status(400).json({ error: '此訂單已付款完成，無法重複提交匯款資料' });
+        }
+
+        if (order.status === 'failed') {
+            return res.status(400).json({ error: '此訂單已失敗或被駁回，請重新建立訂單' });
+        }
+
+        const nowIso = new Date().toISOString();
+
+        const nextProviderPayload = {
+            ...(order.provider_payload || {}),
+            manual_transfer: {
+                payer_name: finalPayerName,
+                account_last5: finalAccountLast5,
+                transfer_date: finalTransferDate,
+                transfer_note: finalTransferNote || null,
+                submitted_at: nowIso
+            }
+        };
+
+        const { data: updatedOrder, error: updateError } = await supabase
+            .from('orders')
+            .update({
+                provider_status: 'awaiting_manual_review',
+                provider_payload: nextProviderPayload,
+                updated_at: nowIso
+            })
+            .eq('id', order.id)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        await createNotification({
+            username: finalUsername,
+            type: 'payment_transfer_submitted',
+            title: '匯款資料已送出',
+            message: `你的訂單 ${order.order_no || order.id} 匯款資料已送出，客服將於 1 至 2 個工作天內確認。確認完成後會開通對應訂閱方案。`
+        });
+
+        res.json({
+            success: true,
+            order: updatedOrder,
+            message: '匯款資料已送出，等待客服人工審核'
+        });
+
+    } catch (err) {
+        console.error('提交匯款資料失敗:', err);
+
+        res.status(500).json({
+            error: '提交匯款資料失敗',
+            detail: err.message || String(err)
         });
     }
 });

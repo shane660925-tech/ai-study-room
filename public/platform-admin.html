@@ -16,11 +16,12 @@
       <button id="loginBtn">驗證管理員</button>
 
       <nav>
-        <button onclick="switchTab('overview')">總覽</button>
-        <button onclick="switchTab('users')">會員管理</button>
-        <button onclick="switchTab('teachers')">教師審核</button>
-        <button onclick="switchTab('themes')">主題教室</button>
-      </nav>
+  <button onclick="switchTab('overview')">總覽</button>
+  <button onclick="switchTab('users')">會員管理</button>
+  <button onclick="switchTab('teachers')">教師審核</button>
+  <button onclick="switchTab('payments')">匯款審核</button>
+  <button onclick="switchTab('themes')">主題教室</button>
+</nav>
     </aside>
 
     <main>
@@ -50,6 +51,19 @@
   <div id="teacherReviewList"></div>
 </section>
 
+      <section id="tab-payments" class="tab hidden">
+        <h2>匯款審核</h2>
+        <p class="admin-hint">
+          這裡會顯示學生已提交匯款資料、等待人工確認的訂閱訂單。
+        </p>
+
+        <button onclick="loadManualTransferOrders()">重新整理待審核訂單</button>
+
+        <div id="manualTransferOrdersList">
+          請點擊「重新整理待審核訂單」載入資料。
+        </div>
+      </section>
+      
       <section id="tab-themes" class="tab hidden">
         <h2>主題教室管理</h2>
 
