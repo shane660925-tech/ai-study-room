@@ -1,6 +1,6 @@
 // 引入環境變數設定 (必須放在最頂端)
 require('dotenv').config();
-
+console.log('[SV VERSION] server oauth-clean-20260610-2 loaded');
 const express = require('express');
 const axios = require('axios'); // [新增] 用來發送 LINE API 請求
 const path = require('path');

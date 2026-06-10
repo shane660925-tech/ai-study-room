@@ -2,7 +2,7 @@
  * StudyVerse V2.2.5.1 - 核心共用邏輯 (lobby-core.js)
  * 負責：登入驗證、個人數據讀取、成就系統、Socket 全域廣播(跑馬燈/週榜)
  */
-
+console.log('[SV VERSION] lobby-core oauth-clean-20260610-2 loaded');
 function normalizeStudyVerseUsername(value) {
     return String(value || '')
         .replace(/[\r\n\t]+/g, ' ')
