@@ -96,11 +96,8 @@ function normalizeUsername(value) {
         .trim();
 }
 
-function normalizeUsername(value) {
-    return String(value || '')
-        .replace(/[\r\n\t]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+function generateSessionId() {
+    return crypto.randomBytes(32).toString('hex');
 }
 
 function buildNewStudentTrialFields() {
