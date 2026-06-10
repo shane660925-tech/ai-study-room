@@ -5244,12 +5244,15 @@ if (sessionUpdateError) {
     console.error('LINE 更新 session 失敗:', sessionUpdateError);
 }
 
+const lineUsername = normalizeUsername(existingUser.username);
+const lineRole = existingUser.role || 'student';
+
 const redirectParams = new URLSearchParams({
-    username: String(user.username || '').trim(),
-    role: String(redirectRole || 'student').trim(),
+    username: lineUsername,
+    role: lineRole,
     sessionId: String(sessionId || '').trim(),
     login_success: 'true',
-    oauth_role: String(state || 'student').trim()
+    oauth_role: 'student'
 });
 
 res.redirect(`/?${redirectParams.toString()}`);
