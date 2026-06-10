@@ -727,65 +727,57 @@ class SharedFooter extends HTMLElement {
 }
 customElements.define('shared-footer', SharedFooter);
 
-// --- 自動處理 Google / LINE 登入回傳的參數 ---
-(async function() {
+// --- OAuth 教師申請處理 ---
+// 學生 / 一般登入 session 已由 index.html 在 session-guard 前處理。
+// 這裡只保留「教師使用 Google / LINE 申請」後續送審流程，避免重複寫入 session。
+(async function handleTeacherOAuthApplicationOnly() {
     const urlParams = new URLSearchParams(window.location.search);
 
-    const username = urlParams.get('username');
+    const username = String(urlParams.get('username') || '').trim();
     const sessionId = urlParams.get('sessionId');
     const role = urlParams.get('role') || 'student';
     const isLoginSuccess = urlParams.get('login_success');
+    const oauthRole = urlParams.get('oauth_role');
 
-    if (isLoginSuccess === 'true' && username && sessionId) {
-        localStorage.setItem('studyVerseUser', username);
-        localStorage.setItem('studyVerseSessionId', sessionId);
-        localStorage.setItem('studyVerseRole', role);
+    if (isLoginSuccess !== 'true' || !username || !sessionId) {
+        return;
+    }
 
-        const oauthRole = urlParams.get('oauth_role');
-        const pendingRaw = sessionStorage.getItem('pendingTeacherApplication');
+    const pendingRaw = sessionStorage.getItem('pendingTeacherApplication');
 
-        if (pendingRaw && oauthRole === 'teacher_apply') {
-            try {
-                const draft = JSON.parse(pendingRaw);
+    if (!pendingRaw || oauthRole !== 'teacher_apply') {
+        return;
+    }
 
-                const res = await fetch('/api/teacher/oauth-apply', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        username: draft.username || username,
-                        email: draft.email,
-                        teacherType: draft.teacherType,
-                        classroomSize: draft.classroomSize,
-                        courseInfo: draft.courseInfo,
-                        courseSchedule: draft.courseSchedule
-                    })
-                });
+    try {
+        const draft = JSON.parse(pendingRaw);
 
-                const data = await res.json();
+        const res = await fetch('/api/teacher/oauth-apply', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: draft.username || username,
+                email: draft.email,
+                teacherType: draft.teacherType,
+                classroomSize: draft.classroomSize,
+                courseInfo: draft.courseInfo,
+                courseSchedule: draft.courseSchedule
+            })
+        });
 
-                if (!res.ok) {
-                    alert(data.error || '教師申請送出失敗');
-                } else {
-                    alert('教師申請已送出，請等待管理員審核');
-                    sessionStorage.removeItem('pendingTeacherApplication');
-                }
+        const data = await res.json();
 
-            } catch (err) {
-                console.error('教師 OAuth 申請處理失敗:', err);
-                alert('教師申請處理失敗，請稍後再試');
-            }
+        if (!res.ok) {
+            alert(data.error || '教師申請送出失敗');
+        } else {
+            alert('教師申請已送出，請等待管理員審核');
+            sessionStorage.removeItem('pendingTeacherApplication');
         }
 
-        const loginOverlay = document.getElementById('loginOverlay');
-        if (loginOverlay) {
-            loginOverlay.classList.add('hidden');
-        }
-
-        const cleanUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-
-        console.log("OAuth 登入成功，已儲存 session：", username);
+    } catch (err) {
+        console.error('教師 OAuth 申請處理失敗:', err);
+        alert('教師申請處理失敗，請稍後再試');
     }
 })();

@@ -251,21 +251,27 @@ window.showSubscriptionIntroModalOnce = async function() {
         document.body.appendChild(modal);
 
         const btnViewPlans = document.getElementById('btnViewSubscriptionPlans');
-        const btnClose = document.getElementById('btnCloseSubscriptionIntro');
+const btnClose = document.getElementById('btnCloseSubscriptionIntro');
 
-        if (btnViewPlans) {
-            btnViewPlans.addEventListener('click', async () => {
-                await window.markSubscriptionIntroSeen();
-                window.openSubscriptionPage();
-            });
-        }
+if (btnViewPlans) {
+    btnViewPlans.addEventListener('click', async () => {
+        await window.markSubscriptionIntroSeen();
+        modal.remove();
 
-        if (btnClose) {
-            btnClose.addEventListener('click', async () => {
-                await window.markSubscriptionIntroSeen();
-                modal.remove();
-            });
-        }
+        alert(
+            '✅ 14 天完整功能免費體驗已啟用！\n\n' +
+            '你可以先進入大廳使用完整功能。\n' +
+            '之後若想查看方案，請點右上角「我的方案」。'
+        );
+    });
+}
+
+if (btnClose) {
+    btnClose.addEventListener('click', async () => {
+        await window.markSubscriptionIntroSeen();
+        modal.remove();
+    });
+}
 
     } catch (err) {
         console.error('顯示訂閱方案介紹失敗:', err);

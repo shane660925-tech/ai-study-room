@@ -13,9 +13,61 @@
     <link rel="stylesheet" href="/css/lobby-main.css">
 <link rel="stylesheet" href="/css/lobby-mobile.css">
     
-    <script src="/js/lobby-components.js"></script>
+   <script>
+(function saveOAuthSessionFromUrlEarly() {
+    function cleanUsername(value) {
+        return String(value || '')
+            .replace(/[\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function cleanSessionId(value) {
+        return String(value || '')
+            .replace(/[\r\n\t\s]+/g, '')
+            .trim();
+    }
+
+    const params = new URLSearchParams(window.location.search);
+
+    const rawUsername = params.get('username');
+    const rawSessionId = params.get('sessionId');
+    const rawRole = params.get('role') || 'student';
+
+    const username = cleanUsername(rawUsername);
+    const sessionId = cleanSessionId(rawSessionId);
+    const role = cleanUsername(rawRole) || 'student';
+
+    if (username && sessionId) {
+        localStorage.removeItem('studyVerseUser');
+        localStorage.removeItem('studyVerseSessionId');
+        localStorage.removeItem('studyVerseRole');
+
+        localStorage.removeItem('username');
+        localStorage.removeItem('studyverse_username');
+        localStorage.removeItem('currentUser');
+
+        localStorage.removeItem('studyVerseAccessUsername');
+        localStorage.removeItem('studyVerseAccessLevel');
+        localStorage.removeItem('studyVerseCanUseFullFeatures');
+
+        sessionStorage.clear();
+
+        localStorage.setItem('studyVerseUser', username);
+        localStorage.setItem('studyVerseSessionId', sessionId);
+        localStorage.setItem('studyVerseRole', role);
+
+        window.__studyVerseOAuthSaved = true;
+
+        // 重要：立刻清掉網址列，避免 lobby-components.js 舊程式再次讀到 dodo Na%0A
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+})();
+</script>
+
+<script src="/js/lobby-components.js"></script>
 </head>
-<script src="/js/session-guard.js"></script>
 <body class="min-h-screen flex flex-col relative bg-grid-pattern">
     
     <shared-modals></shared-modals>
@@ -453,25 +505,6 @@
 </div>
 
     <shared-footer></shared-footer>
-    
-    <script>
-(function saveOAuthSessionFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-
-    const username = params.get('username');
-    const sessionId = params.get('sessionId');
-    const role = params.get('role') || 'student';
-
-    if (username && sessionId) {
-        localStorage.setItem('studyVerseUser', username);
-        localStorage.setItem('studyVerseSessionId', sessionId);
-        localStorage.setItem('studyVerseRole', role);
-
-        const cleanUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-    }
-})();
-</script>
 
     <script src="/js/lobby-core.js"></script>
     <script src="/js/lobby-main.js"></script>

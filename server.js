@@ -83,8 +83,18 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 console.log('✅ 已成功載入 Supabase 雲端資料庫設定。');
 
-function generateSessionId() {
-    return crypto.randomBytes(32).toString('hex');
+function normalizeUsername(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeUsername(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function buildNewStudentTrialFields() {
@@ -2750,7 +2760,7 @@ res.json({
 
 // --- 檢查使用者狀態 API ---
 app.get('/api/auth/check-user', async (req, res) => {
-    const username = req.query.username;
+    const username = normalizeUsername(req.query.username);
 
     if (!username) {
         return res.status(400).json({
@@ -2800,7 +2810,8 @@ app.get('/api/auth/check-user', async (req, res) => {
 
 // --- 單裝置登入：session 驗證 API ---
 app.get('/api/auth/session-check', async (req, res) => {
-    const { username, sessionId } = req.query;
+    const username = normalizeUsername(req.query.username);
+const sessionId = String(req.query.sessionId || '').trim();
 
     if (!username || !sessionId) {
         return res.status(400).json({
@@ -3191,7 +3202,7 @@ function normalizePaymentProvider(provider) {
 
 app.get('/api/subscription/status', async (req, res) => {
     try {
-        const username = req.query.username;
+        const username = normalizeUsername(req.query.username);
 
         if (!username) {
             return res.status(400).json({
@@ -4802,13 +4813,16 @@ app.get('/api/auth/google', (req, res) => {
     const role = req.query.role || 'student';
 
     const url = googleClient.generateAuthUrl({
-        access_type: 'offline',
-        scope: ['email', 'profile'],
-        redirect_uri: GOOGLE_CALLBACK_URL,
+    access_type: 'offline',
+    scope: ['email', 'profile'],
+    redirect_uri: GOOGLE_CALLBACK_URL,
 
-        // 👇 關鍵
-        state: role
-    });
+    // 每次都顯示 Google 帳號選擇畫面，不要直接沿用目前瀏覽器帳號
+    prompt: 'select_account',
+
+    // 👇 關鍵：保留學生 / 教師申請身份
+    state: role
+});
 
     console.log('🔗 Google OAuth role:', role);
 
@@ -4844,15 +4858,20 @@ app.get('/api/auth/google/callback', async (req, res) => {
         if (findError) throw findError;
 
         if (!user) {
-            let finalName = name || 'Google學員';
+            let finalName =
+    normalizeUsername(name) ||
+    normalizeUsername(email?.split('@')[0]) ||
+    'Google學員';
 
-            const { data: nameCheck } = await supabase
-                .from('users')
-                .select('username')
-                .eq('username', finalName)
-                .maybeSingle();
+const { data: nameCheck } = await supabase
+    .from('users')
+    .select('username')
+    .eq('username', finalName)
+    .maybeSingle();
 
-            if (nameCheck) finalName += Math.floor(Math.random() * 1000);
+if (nameCheck) {
+    finalName = `${finalName}${Math.floor(Math.random() * 1000)}`;
+}
 
             const newLinkCode = await generateUniqueLinkCode();
 
@@ -4912,18 +4931,79 @@ link_code: newLinkCode,
             `);
         }
 
+                // Google OAuth 登入成功後，統一整理 username，避免網址或 session 帶入換行
+        let cleanUsername = normalizeUsername(user.username);
+
+        if (user.username !== cleanUsername && cleanUsername) {
+    const { data: duplicateUser, error: duplicateCheckError } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', cleanUsername)
+        .maybeSingle();
+
+    if (duplicateCheckError) throw duplicateCheckError;
+
+    if (!duplicateUser) {
+        const { data: renamedUser, error: renameError } = await supabase
+            .from('users')
+            .update({
+                username: cleanUsername,
+                updated_at: new Date().toISOString()
+            })
+            .eq('account', user.account)
+            .select()
+            .single();
+
+        if (renameError) {
+            console.error('Google OAuth 清理 username 失敗:', renameError);
+        } else if (renamedUser) {
+            user = renamedUser;
+            cleanUsername = normalizeUsername(user.username);
+        }
+    } else {
+        cleanUsername = normalizeUsername(user.username);
+    }
+}
+
+        const shouldBackfillTrial =
+            user.role === 'student' &&
+            user.is_subscribed !== true &&
+            user.subscription_status !== 'active' &&
+            !user.trial_started_at &&
+            !user.trial_ends_at;
+
+        if (shouldBackfillTrial) {
+            const trialFields = buildNewStudentTrialFields();
+
+            const { data: trialUpdatedUser, error: trialUpdateError } = await supabase
+                .from('users')
+                .update({
+                    ...trialFields,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('username', cleanUsername)
+                .select()
+                .single();
+
+            if (trialUpdateError) {
+                console.error('Google 舊帳號補發 14 天體驗失敗:', trialUpdateError);
+            } else if (trialUpdatedUser) {
+                user = trialUpdatedUser;
+            }
+        }
+
         if (!user.link_code) {
             const newLinkCode = await generateUniqueLinkCode();
 
             await supabase
                 .from('users')
                 .update({ link_code: newLinkCode })
-                .eq('username', user.username);
+                .eq('username', cleanUsername);
 
             user.link_code = newLinkCode;
         }
 
-        const sessionId = generateSessionId();
+const sessionId = generateSessionId();
 
 const { error: sessionUpdateError } = await supabase
     .from('users')
@@ -4932,7 +5012,7 @@ const { error: sessionUpdateError } = await supabase
         last_login_at: new Date().toISOString(),
         last_active_at: new Date().toISOString()
     })
-    .eq('username', user.username);
+    .eq('username', cleanUsername);
 
 if (sessionUpdateError) {
     console.error('Google 更新 session 失敗:', sessionUpdateError);
@@ -4943,13 +5023,15 @@ const redirectRole =
         ? 'teacher_pending'
         : (user.role || 'student');
 
-res.redirect(
-`/?username=${encodeURIComponent(user.username)}
-&role=${encodeURIComponent(redirectRole)}
-&sessionId=${encodeURIComponent(sessionId)}
-&login_success=true
-&oauth_role=${encodeURIComponent(state || 'student')}`
-);
+const redirectParams = new URLSearchParams({
+    username: cleanUsername,
+    role: redirectRole,
+    sessionId,
+    login_success: 'true',
+    oauth_role: state || 'student'
+});
+
+res.redirect(`/?${redirectParams.toString()}`);
 
     } catch (err) {
         console.error('Google Auth Error:', err);
@@ -5159,7 +5241,15 @@ if (sessionUpdateError) {
     console.error('LINE 更新 session 失敗:', sessionUpdateError);
 }
 
-res.redirect(`/?username=${encodeURIComponent(existingUser.username)}&role=${encodeURIComponent(existingUser.role || 'student')}&sessionId=${encodeURIComponent(sessionId)}&login_success=true`);
+const redirectParams = new URLSearchParams({
+    username: String(user.username || '').trim(),
+    role: String(redirectRole || 'student').trim(),
+    sessionId: String(sessionId || '').trim(),
+    login_success: 'true',
+    oauth_role: String(state || 'student').trim()
+});
+
+res.redirect(`/?${redirectParams.toString()}`);
 
     } catch (error) {
         console.error('LINE 登入過程發生錯誤:', error.response?.data || error.message);
@@ -5361,7 +5451,7 @@ if (targetUser) {
 });
 
 app.get('/api/user-stats', async (req, res) => {
-    const username = req.query.username;
+    const username = normalizeUsername(req.query.username);
     if (!username) return res.status(400).json({ error: 'Missing username' });
 
     try {

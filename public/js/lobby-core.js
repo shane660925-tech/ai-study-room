@@ -3,6 +3,49 @@
  * 負責：登入驗證、個人數據讀取、成就系統、Socket 全域廣播(跑馬燈/週榜)
  */
 
+function normalizeStudyVerseUsername(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function sanitizeStoredStudyVerseSession() {
+    const storedUsername = localStorage.getItem('studyVerseUser');
+    const storedSessionId = localStorage.getItem('studyVerseSessionId');
+    const storedRole = localStorage.getItem('studyVerseRole');
+
+    if (storedUsername !== null) {
+        const cleanUsername = normalizeStudyVerseUsername(storedUsername);
+
+        if (cleanUsername) {
+            localStorage.setItem('studyVerseUser', cleanUsername);
+        } else {
+            localStorage.removeItem('studyVerseUser');
+        }
+    }
+
+    if (storedSessionId !== null) {
+        const cleanSessionId = String(storedSessionId || '').trim();
+
+        if (cleanSessionId) {
+            localStorage.setItem('studyVerseSessionId', cleanSessionId);
+        } else {
+            localStorage.removeItem('studyVerseSessionId');
+        }
+    }
+
+    if (storedRole !== null) {
+        localStorage.setItem('studyVerseRole', String(storedRole || 'student').trim());
+    }
+
+    localStorage.removeItem('username');
+    localStorage.removeItem('studyverse_username');
+    localStorage.removeItem('currentUser');
+}
+
+sanitizeStoredStudyVerseSession();
+
 let myUsername = localStorage.getItem('studyVerseUser');
 let mySessionId = localStorage.getItem('studyVerseSessionId');
 let myRole = localStorage.getItem('studyVerseRole') || 'student';
@@ -222,12 +265,22 @@ async function guardSubscriptionPaywall() {
 // [核心修改] 初始化檢查登入狀態：確保 UI 與姓名同步
 // ==========================================
 async function checkLogin() {
+    sanitizeStoredStudyVerseSession();
+
     // 【關鍵】：重新從 localStorage 抓取，確保能抓到 Google 登入或其它腳本寫入的最新名稱
     myUsername = localStorage.getItem('studyVerseUser');
 
     mySessionId = localStorage.getItem('studyVerseSessionId');
 myRole = localStorage.getItem('studyVerseRole') || 'student';
-checkCurrentSessionOrLogout();
+
+if (myUsername && mySessionId) {
+    const sessionOk = await checkCurrentSessionOrLogout();
+
+    if (!sessionOk) {
+        return;
+    }
+}
+
 const canPassPaywall = await guardSubscriptionPaywall();
 
 if (!canPassPaywall) {
