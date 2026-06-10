@@ -46,9 +46,26 @@ function sanitizeStoredStudyVerseSession() {
 
 sanitizeStoredStudyVerseSession();
 
-let myUsername = localStorage.getItem('studyVerseUser');
-let mySessionId = localStorage.getItem('studyVerseSessionId');
-let myRole = localStorage.getItem('studyVerseRole') || 'student';
+function cleanStoredUsername(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function cleanStoredSessionId(value) {
+    return String(value || '')
+        .replace(/[\r\n\t\s]+/g, '')
+        .trim();
+}
+
+let myUsername = cleanStoredUsername(localStorage.getItem('studyVerseUser'));
+let mySessionId = cleanStoredSessionId(localStorage.getItem('studyVerseSessionId'));
+let myRole = cleanStoredUsername(localStorage.getItem('studyVerseRole') || 'student') || 'student';
+
+if (myUsername) localStorage.setItem('studyVerseUser', myUsername);
+if (mySessionId) localStorage.setItem('studyVerseSessionId', mySessionId);
+if (myRole) localStorage.setItem('studyVerseRole', myRole);
 
 const socket = io();
 
@@ -85,8 +102,19 @@ socket.on('force_logout', (data) => {
 // ==========================================
 window.checkCurrentSessionOrLogout = async function() {
 
-    const username = localStorage.getItem('studyVerseUser');
-    const sessionId = localStorage.getItem('studyVerseSessionId');
+    const rawUsername = localStorage.getItem('studyVerseUser');
+const rawSessionId = localStorage.getItem('studyVerseSessionId');
+
+const username = cleanStoredUsername(rawUsername);
+const sessionId = cleanStoredSessionId(rawSessionId);
+
+if (rawUsername !== username) {
+    localStorage.setItem('studyVerseUser', username);
+}
+
+if (rawSessionId !== sessionId) {
+    localStorage.setItem('studyVerseSessionId', sessionId);
+}
 
     if (!username || !sessionId) {
         return false;
@@ -166,7 +194,10 @@ socket.on('mobile_sync_update', (data) => {
 });
 
 async function guardSubscriptionPaywall() {
-    const username = localStorage.getItem('studyVerseUser');
+    const username = cleanStoredUsername(localStorage.getItem('studyVerseUser'));
+if (username) {
+    localStorage.setItem('studyVerseUser', username);
+}
     const role = localStorage.getItem('studyVerseRole') || 'student';
 
     // 預設權限：未登入或查詢失敗時，先視為 free，但不阻擋進大廳

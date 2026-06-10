@@ -1,8 +1,25 @@
 // public/js/session-guard.js
 
 async function checkCurrentSessionOrLogout() {
-    const username = localStorage.getItem('studyVerseUser');
-    const sessionId = localStorage.getItem('studyVerseSessionId');
+    const rawUsername = localStorage.getItem('studyVerseUser');
+const rawSessionId = localStorage.getItem('studyVerseSessionId');
+
+const username = String(rawUsername || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const sessionId = String(rawSessionId || '')
+    .replace(/[\r\n\t\s]+/g, '')
+    .trim();
+
+if (rawUsername !== username) {
+    localStorage.setItem('studyVerseUser', username);
+}
+
+if (rawSessionId !== sessionId) {
+    localStorage.setItem('studyVerseSessionId', sessionId);
+}
 
     if (!username || !sessionId) {
         return true; 
