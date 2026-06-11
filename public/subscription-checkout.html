@@ -421,7 +421,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     placeholder="例如：12345"
   />
 
-  <label for="transferDate">匯款日期，可點選右側日曆</label>
+<label for="transferAmount">實際匯款金額</label>
+<input
+  id="transferAmount"
+  inputmode="numeric"
+  placeholder="請填寫實際匯款金額，例如：300"
+/>
+
+<label for="transferDate">匯款日期，可點選右側日曆</label>
 
 <div class="date-input-wrap">
   <input id="transferDate" type="date" />
@@ -435,8 +442,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   </button>
 </div>
 
-  <label for="transferNote">備註，可不填</label>
-  <input id="transferNote" placeholder="例如：已於下午匯款 / 轉帳末五碼說明" />
+<label for="transferTime">匯款時間</label>
+<input id="transferTime" type="time" />
+
+<label for="transferNote">備註，可不填</label>
+<input id="transferNote" placeholder="例如：已於下午匯款 / 轉帳末五碼說明" />
 
   <button
     class="primary"
@@ -491,6 +501,13 @@ const PLAN_INFO = {
 };
 
 const selectedPlan = PLAN_INFO[planId] || PLAN_INFO.monthly;
+
+const BANK_TRANSFER_INFO = {
+  bankName: '請填入銀行名稱',
+  bankCode: '請填入銀行代碼',
+  accountNumber: '請填入匯款帳號',
+  accountName: '請填入戶名'
+};
 
 let currentOrder = null;
 
@@ -607,21 +624,21 @@ if (!username) {
     setText('discountAmountText', `-NT$${data.subscription.discountAmount}`);
     setText('amountText', `NT$${data.subscription.amount}`);
 
-    paymentInfo.innerHTML = `
+   paymentInfo.innerHTML = `
   <strong>匯款訂單已建立</strong><br>
   訂單編號：${data.order.order_no || data.order.id}<br>
   訂單狀態：待匯款 / 待提交匯款資料<br>
   匯款金額：<strong style="color:#facc15;">NT$${data.subscription.amount}</strong><br><br>
 
   <strong>銀行匯款資訊</strong><br>
-  銀行名稱：待補<br>
-  銀行代碼：待補<br>
-  匯款帳號：待補<br>
-  戶名：待補<br><br>
+  銀行名稱：${BANK_TRANSFER_INFO.bankName}<br>
+  銀行代碼：${BANK_TRANSFER_INFO.bankCode}<br>
+  匯款帳號：${BANK_TRANSFER_INFO.accountNumber}<br>
+  戶名：${BANK_TRANSFER_INFO.accountName}<br><br>
 
   <span style="color:#94a3b8;">
-    完成匯款後，請保留匯款紀錄。下一步會加入「提交匯款資料」表單，
-    讓你填寫匯款人姓名、帳號後五碼、匯款日期與備註。
+    完成匯款後，請保留匯款紀錄，並在下方填寫匯款人姓名、帳號後五碼、
+    實際匯款金額、匯款日期、匯款時間與備註。客服確認款項後會人工開通訂閱。
   </span>
 `;
 
@@ -647,10 +664,12 @@ setMessage(
 
 async function submitTransferInfo() {
   const btn = document.getElementById('submitTransferInfoBtn');
-  const payerName = document.getElementById('transferPayerName')?.value.trim() || '';
-  const accountLast5 = document.getElementById('transferAccountLast5')?.value.trim() || '';
-  const transferDate = document.getElementById('transferDate')?.value || '';
-  const transferNote = document.getElementById('transferNote')?.value.trim() || '';
+const payerName = document.getElementById('transferPayerName')?.value.trim() || '';
+const accountLast5 = document.getElementById('transferAccountLast5')?.value.trim() || '';
+const transferAmount = document.getElementById('transferAmount')?.value.trim() || '';
+const transferDate = document.getElementById('transferDate')?.value || '';
+const transferTime = document.getElementById('transferTime')?.value || '';
+const transferNote = document.getElementById('transferNote')?.value.trim() || '';
 
   if (!currentOrder || !currentOrder.id) {
     setMessage('<span class="error">找不到目前訂單，請先建立訂單後再提交匯款資料。</span>');
@@ -667,10 +686,20 @@ async function submitTransferInfo() {
     return;
   }
 
-  if (!transferDate) {
-    setMessage('<span class="error">請選擇匯款日期。</span>');
-    return;
-  }
+ if (!/^[0-9]+$/.test(transferAmount)) {
+  setMessage('<span class="error">請填寫正確的實際匯款金額。</span>');
+  return;
+}
+
+if (!transferDate) {
+  setMessage('<span class="error">請選擇匯款日期。</span>');
+  return;
+}
+
+if (!transferTime) {
+  setMessage('<span class="error">請選擇匯款時間。</span>');
+  return;
+}
 
   btn.disabled = true;
   btn.textContent = '送出中...';
@@ -683,13 +712,15 @@ async function submitTransferInfo() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        username,
-        orderId: currentOrder.id,
-        payerName,
-        accountLast5,
-        transferDate,
-        transferNote
-      })
+  username,
+  orderId: currentOrder.id,
+  payerName,
+  accountLast5,
+  transferAmount,
+  transferDate,
+  transferTime,
+  transferNote
+})
     });
 
     const data = await res.json();
@@ -711,7 +742,9 @@ async function submitTransferInfo() {
         審核狀態：等待客服人工確認<br>
         匯款人姓名：${payerName}<br>
         匯款帳號後五碼：${accountLast5}<br>
-        匯款日期：${transferDate}<br>
+實際匯款金額：NT$${transferAmount}<br>
+匯款日期：${transferDate}<br>
+匯款時間：${transferTime}<br>
         <span style="color:#94a3b8;">客服將於 1 至 2 個工作天內確認，通過後會開通對應訂閱方案。</span>
       `;
     }

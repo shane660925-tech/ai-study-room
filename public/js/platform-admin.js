@@ -221,9 +221,12 @@ async function loadManualTransferOrders() {
 
           <td>
             匯款人：${escapeHtml(transfer.payerName || '-')}<br>
-            後五碼：${escapeHtml(transfer.accountLast5 || '-')}<br>
-            日期：${escapeHtml(transfer.transferDate || '-')}<br>
-            備註：${escapeHtml(transfer.transferNote || '-')}
+後五碼：${escapeHtml(transfer.accountLast5 || '-')}<br>
+實匯金額：NT$${Number(transfer.transferAmount || 0).toLocaleString('zh-TW')}<br>
+訂單金額：NT$${Number(transfer.expectedAmount || order.amount || 0).toLocaleString('zh-TW')}<br>
+日期：${escapeHtml(transfer.transferDate || '-')}<br>
+時間：${escapeHtml(transfer.transferTime || '-')}<br>
+備註：${escapeHtml(transfer.transferNote || '-')}
           </td>
 
           <td>

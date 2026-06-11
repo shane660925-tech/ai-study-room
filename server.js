@@ -1689,12 +1689,15 @@ app.get('/api/admin/manual-transfer-orders', verifyAdmin, async (req, res) => {
                 ...order,
                 user: usersByUsername[order.username] || null,
                 transferInfo: {
-                    payerName: transferInfo.payer_name || '',
-                    accountLast5: transferInfo.account_last5 || '',
-                    transferDate: transferInfo.transfer_date || '',
-                    transferNote: transferInfo.transfer_note || '',
-                    submittedAt: transferInfo.submitted_at || null
-                }
+    payerName: transferInfo.payer_name || '',
+    accountLast5: transferInfo.account_last5 || '',
+    transferAmount: transferInfo.transfer_amount || '',
+    expectedAmount: transferInfo.expected_amount || order.amount || '',
+    transferDate: transferInfo.transfer_date || '',
+    transferTime: transferInfo.transfer_time || '',
+    transferNote: transferInfo.transfer_note || '',
+    submittedAt: transferInfo.submitted_at || null
+}
             };
         });
 
@@ -3544,20 +3547,24 @@ paid_at: null
 app.post('/api/subscription/submit-transfer-info', async (req, res) => {
     try {
         const {
-            username,
-            orderId,
-            payerName,
-            accountLast5,
-            transferDate,
-            transferNote
-        } = req.body;
+    username,
+    orderId,
+    payerName,
+    accountLast5,
+    transferAmount,
+    transferDate,
+    transferTime,
+    transferNote
+} = req.body;
 
         const finalUsername = String(username || '').trim();
         const finalOrderId = String(orderId || '').trim();
         const finalPayerName = String(payerName || '').trim();
         const finalAccountLast5 = String(accountLast5 || '').trim();
-        const finalTransferDate = String(transferDate || '').trim();
-        const finalTransferNote = String(transferNote || '').trim();
+const finalTransferAmount = String(transferAmount || '').trim();
+const finalTransferDate = String(transferDate || '').trim();
+const finalTransferTime = String(transferTime || '').trim();
+const finalTransferNote = String(transferNote || '').trim();
 
         if (!finalUsername) {
             return res.status(400).json({ error: '缺少 username' });
@@ -3575,9 +3582,17 @@ app.post('/api/subscription/submit-transfer-info', async (req, res) => {
             return res.status(400).json({ error: '請填寫匯款帳號後五碼，且必須是 5 位數字' });
         }
 
-        if (!finalTransferDate) {
-            return res.status(400).json({ error: '請選擇匯款日期' });
-        }
+        if (!/^[0-9]+$/.test(finalTransferAmount)) {
+    return res.status(400).json({ error: '請填寫正確的實際匯款金額' });
+}
+
+if (!finalTransferDate) {
+    return res.status(400).json({ error: '請選擇匯款日期' });
+}
+
+if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(finalTransferTime)) {
+    return res.status(400).json({ error: '請填寫正確的匯款時間' });
+}
 
         const { data: order, error: orderError } = await supabase
             .from('orders')
@@ -3603,6 +3618,15 @@ app.post('/api/subscription/submit-transfer-info', async (req, res) => {
             return res.status(400).json({ error: '此訂單不是銀行匯款訂單' });
         }
 
+        const expectedAmount = Number(order.amount || 0);
+const submittedAmount = Number(finalTransferAmount);
+
+if (submittedAmount !== expectedAmount) {
+    return res.status(400).json({
+        error: `匯款金額與訂單金額不符，訂單金額為 NT$${expectedAmount}`
+    });
+}
+
         if (order.status === 'paid') {
             return res.status(400).json({ error: '此訂單已付款完成，無法重複提交匯款資料' });
         }
@@ -3616,12 +3640,15 @@ app.post('/api/subscription/submit-transfer-info', async (req, res) => {
         const nextProviderPayload = {
             ...(order.provider_payload || {}),
             manual_transfer: {
-                payer_name: finalPayerName,
-                account_last5: finalAccountLast5,
-                transfer_date: finalTransferDate,
-                transfer_note: finalTransferNote || null,
-                submitted_at: nowIso
-            }
+    payer_name: finalPayerName,
+    account_last5: finalAccountLast5,
+    transfer_amount: submittedAmount,
+    expected_amount: expectedAmount,
+    transfer_date: finalTransferDate,
+    transfer_time: finalTransferTime,
+    transfer_note: finalTransferNote || null,
+    submitted_at: nowIso
+}
         };
 
         const { data: updatedOrder, error: updateError } = await supabase
