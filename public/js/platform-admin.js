@@ -28,8 +28,8 @@ async function apiFetch(url, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error(data.error || 'API 發生錯誤');
-  }
+  throw new Error(data.detail || data.error || 'API 發生錯誤');
+}
 
   return data;
 }
@@ -347,6 +347,16 @@ async function rejectManualTransferOrder(orderId) {
 }
 
 async function loadTeacherReviews() {
+  const list = document.getElementById('teacherReviewList');
+
+  if (!list) return;
+
+  list.innerHTML = `
+    <div class="empty-card">
+      正在載入待審核教師申請...
+    </div>
+  `;
+
   try {
     const data = await apiFetch(
       `/api/admin/teacher-applications?${getAdminQuery()}`
@@ -355,7 +365,7 @@ async function loadTeacherReviews() {
     const applications = data.applications || [];
 
     if (applications.length === 0) {
-      document.getElementById('teacherReviewList').innerHTML = `
+      list.innerHTML = `
         <div class="empty-card">
           目前沒有等待審核的教師申請
         </div>
@@ -363,8 +373,8 @@ async function loadTeacherReviews() {
       return;
     }
 
-    document.getElementById('teacherReviewList').innerHTML = applications.map(app => `
-      <div class="teacher-review-card">
+    list.innerHTML = applications.map(app => `
+      <div class="teacher-review-card" id="teacher-review-${escapeHtml(app.id)}">
         <div>
           <h3>${escapeHtml(app.username)}</h3>
           <p>${escapeHtml(app.email || '-')}</p>
@@ -386,13 +396,52 @@ async function loadTeacherReviews() {
         </div>
 
         <div>
-          <strong>課程資訊</strong>
-          <p>${escapeHtml(app.course_info || '-')}</p>
+          <strong>課程名稱</strong>
+          <p>${escapeHtml(app.course_name || app.course_info || '-')}</p>
         </div>
 
         <div>
-          <strong>上課時間</strong>
-          <p>${escapeHtml(app.course_schedule || '-')}</p>
+          <strong>科目</strong>
+          <p>${escapeHtml(app.course_subject || '-')}</p>
+        </div>
+
+        <div>
+          <strong>課程簡介</strong>
+          <p>${escapeHtml(app.course_intro || app.course_info || '-')}</p>
+        </div>
+
+        <div>
+          <strong>課程價格</strong>
+          <p>NT$${Number(app.course_price || 0).toLocaleString('zh-TW')}</p>
+        </div>
+
+        <div>
+          <strong>上課日期</strong>
+          <p>${escapeHtml(app.start_date || '-')} ~ ${escapeHtml(app.end_date || '-')}</p>
+        </div>
+
+        <div>
+          <strong>每週上課日</strong>
+          <p>${escapeHtml(app.weekly_day || '-')}</p>
+        </div>
+
+        <div>
+          <strong>開始時間</strong>
+          <p>${escapeHtml(app.start_time || '-')}</p>
+        </div>
+
+        <div>
+          <strong>堂數 / 時長 / 休息</strong>
+          <p>
+            ${escapeHtml(app.total_sessions || '-')} 堂 /
+            ${escapeHtml(app.class_minutes || '-')} 分鐘 /
+            休息 ${escapeHtml(app.break_minutes ?? '-')} 分鐘
+          </p>
+        </div>
+
+        <div>
+          <strong>Google Meet</strong>
+          <p>${escapeHtml(app.google_meet_url || '尚未填寫')}</p>
         </div>
 
         <div>
@@ -412,7 +461,30 @@ async function loadTeacherReviews() {
     `).join('');
 
   } catch (err) {
-    alert(err.message);
+    list.innerHTML = `
+      <div class="empty-card">
+        載入教師申請失敗：${escapeHtml(err.message)}
+      </div>
+    `;
+  }
+}
+
+function removeTeacherReviewCard(applicationId) {
+  const card = document.getElementById(`teacher-review-${applicationId}`);
+
+  if (card) {
+    card.remove();
+  }
+
+  const list = document.getElementById('teacherReviewList');
+  const remainingCards = document.querySelectorAll('.teacher-review-card');
+
+  if (list && remainingCards.length === 0) {
+    list.innerHTML = `
+      <div class="empty-card">
+        目前沒有等待審核的教師申請
+      </div>
+    `;
   }
 }
 
@@ -683,14 +755,11 @@ function closeTeacherDetail() {
 }
 
 async function approveTeacherApplication(applicationId, username) {
+  if (!confirm(`確定批准 ${username} 成為教師嗎？`)) return;
 
   try {
-
-    const res = await fetch('/api/admin/approve-teacher', {
+    const data = await apiFetch('/api/admin/approve-teacher', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({
         applicationId,
         username,
@@ -698,56 +767,49 @@ async function approveTeacherApplication(applicationId, username) {
       })
     });
 
-    const data = await res.json();
+    removeTeacherReviewCard(applicationId);
 
-    if (!res.ok) {
-      alert(data.error || '批准失敗');
-      return;
-    }
+    await loadOverview().catch(() => {});
+    await loadUsers().catch(() => {});
 
-    alert('教師申請已批准');
-
-    loadTeacherReviews();
+    setTimeout(() => {
+      alert(data.message || '教師申請已批准');
+    }, 50);
 
   } catch (err) {
-
-    console.error(err);
-
-    alert('批准失敗');
+    alert(err.message || '批准失敗');
+    await loadTeacherReviews();
   }
 }
 
 async function rejectTeacherApplication(applicationId, username) {
+  const reviewNote =
+    prompt(`請輸入拒絕 ${username} 的原因，可留空：`) || '';
+
+  if (!confirm(`確定拒絕 ${username} 的教師申請嗎？`)) return;
 
   try {
-
-    const res = await fetch('/api/admin/reject-teacher', {
+    const data = await apiFetch('/api/admin/reject-teacher', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({
         applicationId,
         username,
-        adminUsername
+        adminUsername,
+        reviewNote
       })
     });
 
-    const data = await res.json();
+    removeTeacherReviewCard(applicationId);
 
-    if (!res.ok) {
-      alert(data.error || '拒絕失敗');
-      return;
-    }
+    await loadOverview().catch(() => {});
+    await loadUsers().catch(() => {});
 
-    alert('教師申請已拒絕');
-
-    loadTeacherReviews();
+    setTimeout(() => {
+      alert(data.message || '教師申請已拒絕');
+    }, 50);
 
   } catch (err) {
-
-    console.error(err);
-
-    alert('拒絕失敗');
+    alert(err.message || '拒絕失敗');
+    await loadTeacherReviews();
   }
 }

@@ -1588,22 +1588,45 @@ async function createOnlineCourseFromApprovedTeacherApplication(applicationData)
 
     const teacherType = String(applicationData.teacher_type || '').trim();
 
-    // 目前只讓「線上課程」申請通過後自動進課程商店。
-    // 特約教室 special_room 仍走原本特約教室排程流程，不在這裡建立 courses。
+    // 只讓「線上課程」申請通過後自動建立 courses。
+    // 你的 courses.course_type 目前允許 google_meet / tutor_self_study。
     if (teacherType !== 'online') {
         return null;
     }
 
     const teacherUsername = String(applicationData.username || '').trim();
-    const courseName = buildCourseNameFromApplication(applicationData);
-    const intro = String(applicationData.course_info || '').trim();
-    const scheduleText = String(applicationData.course_schedule || '').trim();
+
+    const courseName = String(
+        applicationData.course_name ||
+        applicationData.course_info ||
+        `${teacherUsername || '教師'} 的線上課程`
+    ).trim().slice(0, 80);
+
+    const courseSubject = String(
+        applicationData.course_subject ||
+        applicationData.course_name ||
+        applicationData.course_info ||
+        ''
+    ).trim();
+
+    const courseIntro = String(
+        applicationData.course_intro ||
+        applicationData.course_info ||
+        applicationData.course_schedule ||
+        '教師申請開設的線上課程'
+    ).trim();
+
+    const coursePrice = Number(applicationData.course_price || 0);
+    const maxStudents = getMaxStudentsFromTeacherApplication(applicationData);
 
     if (!teacherUsername || !courseName) {
         return null;
     }
 
-    // 避免同一個教師同一份申請重複建立課程
+    if (!Number.isFinite(coursePrice) || coursePrice < 0) {
+        throw new Error('課程價格格式錯誤');
+    }
+
     const { data: existingCourse, error: existingCourseError } = await supabase
         .from('courses')
         .select('id, course_name, status, is_public')
@@ -1615,12 +1638,42 @@ async function createOnlineCourseFromApprovedTeacherApplication(applicationData)
         throw existingCourseError;
     }
 
+    const coursePayload = {
+        teacher_username: teacherUsername,
+        course_name: courseName,
+        subject: courseSubject || null,
+        intro: courseIntro || null,
+
+        // 符合 courses_course_type_check
+        course_type: 'google_meet',
+
+        google_meet_url: applicationData.google_meet_url || null,
+        weekly_day: applicationData.weekly_day || null,
+        start_time: applicationData.start_time || null,
+        class_minutes: applicationData.class_minutes ? Number(applicationData.class_minutes) : null,
+        break_minutes: applicationData.break_minutes !== null && applicationData.break_minutes !== undefined && applicationData.break_minutes !== ''
+            ? Number(applicationData.break_minutes)
+            : null,
+        total_sessions: applicationData.total_sessions ? Number(applicationData.total_sessions) : null,
+        start_date: applicationData.start_date || null,
+        end_date: applicationData.end_date || null,
+
+        is_public: true,
+        max_students: maxStudents || 0,
+        price: Math.floor(coursePrice),
+        commission_rate: 0,
+        enrolled_count: 0,
+
+        // 符合 courses_status_check
+        status: 'approved'
+    };
+
     if (existingCourse) {
         const { data: updatedCourse, error: updateCourseError } = await supabase
             .from('courses')
             .update({
-                status: 'active',
-                is_public: true
+                ...coursePayload,
+                updated_at: new Date().toISOString()
             })
             .eq('id', existingCourse.id)
             .select()
@@ -1634,27 +1687,12 @@ async function createOnlineCourseFromApprovedTeacherApplication(applicationData)
     }
 
     const courseRoomCode = await generateUniqueCourseRoomCode();
-    const maxStudents = getMaxStudentsFromTeacherApplication(applicationData);
 
     const { data: createdCourse, error: courseCreateError } = await supabase
         .from('courses')
         .insert([{
-            teacher_username: teacherUsername,
-            course_name: courseName,
-            subject: null,
-            intro: intro || scheduleText || '教師申請開設的線上課程',
-            course_type: 'studyverse_room',
-            weekly_day: null,
-            start_time: null,
-            start_date: null,
-            end_date: null,
-            course_room_code: courseRoomCode,
-            status: 'active',
-            is_public: true,
-            price: 0,
-            commission_rate: 0,
-            max_students: maxStudents,
-            enrolled_count: 0
+            ...coursePayload,
+            course_room_code: courseRoomCode
         }])
         .select()
         .single();
@@ -2223,10 +2261,11 @@ app.post('/api/admin/reject-teacher', verifyAdmin, async (req, res) => {
     try {
 
         const {
-            applicationId,
-            username,
-            adminUsername
-        } = req.body;
+    applicationId,
+    username,
+    adminUsername,
+    reviewNote
+} = req.body;
 
         if (!applicationId || !username) {
             return res.status(400).json({
@@ -2276,13 +2315,16 @@ teacher_status: 'rejected'
         }
 
         // 發通知
-        await supabase
-            .from('notifications')
-            .insert({
-                username,
-                title: '教師申請未通過',
-                message: '很抱歉，您的教師申請未通過，請重新調整課程資訊後再次申請。'
-            });
+        const finalReviewNote = String(reviewNote || '').trim();
+
+await createNotification({
+    username: applicationData.username,
+    type: 'teacher_rejected',
+    title: '教師申請未通過',
+    message: finalReviewNote
+        ? `很抱歉，您的教師申請未通過。原因：${finalReviewNote}。請重新調整課程資訊後再次申請。`
+        : '很抱歉，您的教師申請未通過，請重新調整課程資訊後再次申請。'
+});
 
         res.json({
             success: true
@@ -2656,30 +2698,56 @@ app.post('/api/teacher/register', async (req, res) => {
     try {
 
         const {
-            username,
-            email,
-            account,
-            password,
-            teacherType,
-            classroomSize,
-            courseInfo,
-            courseSchedule
-        } = req.body;
+    username,
+    email,
+    account,
+    password,
+    teacherType,
+    classroomSize,
+
+    courseName,
+    courseSubject,
+    courseInfo,
+    coursePrice,
+    weeklyDay,
+    startDate,
+    endDate,
+    startTime,
+    totalSessions,
+    classMinutes,
+    breakMinutes,
+    googleMeetUrl,
+
+    courseSchedule
+} = req.body;
 
         // 基本檢查
         if (
-            !username ||
-            !email ||
-            !account ||
-            !password ||
-            !teacherType ||
-            !courseInfo ||
-            !courseSchedule
-        ) {
-            return res.status(400).json({
-                error: '請完整填寫教師申請資料'
-            });
-        }
+    !username ||
+    !email ||
+    !account ||
+    !password ||
+    !teacherType ||
+    !courseName ||
+    !courseSubject ||
+    !courseInfo ||
+    coursePrice === undefined ||
+    coursePrice === null ||
+    String(coursePrice).trim() === '' ||
+    !weeklyDay ||
+    !startDate ||
+    !endDate ||
+    !startTime ||
+    !totalSessions ||
+    !classMinutes ||
+    breakMinutes === undefined ||
+    breakMinutes === null ||
+    String(breakMinutes).trim() === ''
+) {
+    return res.status(400).json({
+        error: '請完整填寫教師申請資料'
+    });
+}
 
         // 檢查帳號是否已存在
         const { data: existingUser } = await supabase
@@ -2728,19 +2796,33 @@ app.post('/api/teacher/register', async (req, res) => {
 
         // 建立 teacher_applications
         const { error: applicationError } = await supabase
-            .from('teacher_applications')
-            .insert({
-                username,
-                email,
+    .from('teacher_applications')
+    .insert({
+        username,
+        email,
 
-                teacher_type: teacherType,
-                classroom_size: classroomSize,
+        teacher_type: teacherType,
+        classroom_size: classroomSize,
 
-                course_info: courseInfo,
-                course_schedule: courseSchedule,
+        course_name: courseName,
+        course_subject: courseSubject,
+        course_intro: courseInfo,
+        course_price: Number(coursePrice || 0),
+        weekly_day: weeklyDay,
+        start_date: startDate,
+        end_date: endDate,
+        start_time: startTime,
+        total_sessions: Number(totalSessions || 0),
+        class_minutes: Number(classMinutes || 0),
+        break_minutes: Number(breakMinutes || 0),
+        google_meet_url: googleMeetUrl || null,
 
-                status: 'pending'
-            });
+        // 保留舊欄位相容後台舊顯示
+        course_info: courseInfo,
+        course_schedule: courseSchedule,
+
+        status: 'pending'
+    });
 
         if (applicationError) {
 
@@ -2772,19 +2854,51 @@ app.post('/api/teacher/register', async (req, res) => {
 app.post('/api/teacher/oauth-apply', async (req, res) => {
     try {
         const {
-            username,
-            email,
-            teacherType,
-            classroomSize,
-            courseInfo,
-            courseSchedule
-        } = req.body;
+    username,
+    email,
+    teacherType,
+    classroomSize,
 
-        if (!username || !email || !teacherType || !courseInfo || !courseSchedule) {
-            return res.status(400).json({
-                error: '缺少教師申請資料'
-            });
-        }
+    courseName,
+    courseSubject,
+    courseInfo,
+    coursePrice,
+    weeklyDay,
+    startDate,
+    endDate,
+    startTime,
+    totalSessions,
+    classMinutes,
+    breakMinutes,
+    googleMeetUrl,
+
+    courseSchedule
+} = req.body;
+
+        if (
+    !username ||
+    !email ||
+    !teacherType ||
+    !courseName ||
+    !courseSubject ||
+    !courseInfo ||
+    coursePrice === undefined ||
+    coursePrice === null ||
+    String(coursePrice).trim() === '' ||
+    !weeklyDay ||
+    !startDate ||
+    !endDate ||
+    !startTime ||
+    !totalSessions ||
+    !classMinutes ||
+    breakMinutes === undefined ||
+    breakMinutes === null ||
+    String(breakMinutes).trim() === ''
+) {
+    return res.status(400).json({
+        error: '缺少教師申請資料'
+    });
+}
 
         const { data: user, error: findError } = await supabase
             .from('users')
@@ -2816,16 +2930,32 @@ app.post('/api/teacher/oauth-apply', async (req, res) => {
             .eq('username', username);
 
         const { error: applicationError } = await supabase
-            .from('teacher_applications')
-            .insert({
-                username,
-                email,
-                teacher_type: teacherType,
-                classroom_size: classroomSize,
-                course_info: courseInfo,
-                course_schedule: courseSchedule,
-                status: 'pending'
-            });
+    .from('teacher_applications')
+    .insert({
+        username,
+        email,
+        teacher_type: teacherType,
+        classroom_size: classroomSize,
+
+        course_name: courseName,
+        course_subject: courseSubject,
+        course_intro: courseInfo,
+        course_price: Number(coursePrice || 0),
+        weekly_day: weeklyDay,
+        start_date: startDate,
+        end_date: endDate,
+        start_time: startTime,
+        total_sessions: Number(totalSessions || 0),
+        class_minutes: Number(classMinutes || 0),
+        break_minutes: Number(breakMinutes || 0),
+        google_meet_url: googleMeetUrl || null,
+
+        // 保留舊欄位相容
+        course_info: courseInfo,
+        course_schedule: courseSchedule,
+
+        status: 'pending'
+    });
 
         if (applicationError) throw applicationError;
 
