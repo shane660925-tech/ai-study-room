@@ -3553,7 +3553,6 @@ app.post('/api/subscription/submit-transfer-info', async (req, res) => {
     accountLast5,
     transferAmount,
     transferDate,
-    transferTime,
     transferNote
 } = req.body;
 
@@ -3563,7 +3562,6 @@ app.post('/api/subscription/submit-transfer-info', async (req, res) => {
         const finalAccountLast5 = String(accountLast5 || '').trim();
 const finalTransferAmount = String(transferAmount || '').trim();
 const finalTransferDate = String(transferDate || '').trim();
-const finalTransferTime = String(transferTime || '').trim();
 const finalTransferNote = String(transferNote || '').trim();
 
         if (!finalUsername) {
@@ -3645,7 +3643,6 @@ if (submittedAmount !== expectedAmount) {
     transfer_amount: submittedAmount,
     expected_amount: expectedAmount,
     transfer_date: finalTransferDate,
-    transfer_time: finalTransferTime,
     transfer_note: finalTransferNote || null,
     submitted_at: nowIso
 }

@@ -225,7 +225,6 @@ async function loadManualTransferOrders() {
 實匯金額：NT$${Number(transfer.transferAmount || 0).toLocaleString('zh-TW')}<br>
 訂單金額：NT$${Number(transfer.expectedAmount || order.amount || 0).toLocaleString('zh-TW')}<br>
 日期：${escapeHtml(transfer.transferDate || '-')}<br>
-時間：${escapeHtml(transfer.transferTime || '-')}<br>
 備註：${escapeHtml(transfer.transferNote || '-')}
           </td>
 

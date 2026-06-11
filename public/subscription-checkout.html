@@ -442,9 +442,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   </button>
 </div>
 
-<label for="transferTime">匯款時間</label>
-<input id="transferTime" type="time" />
-
 <label for="transferNote">備註，可不填</label>
 <input id="transferNote" placeholder="例如：已於下午匯款 / 轉帳末五碼說明" />
 
@@ -668,7 +665,6 @@ const payerName = document.getElementById('transferPayerName')?.value.trim() || 
 const accountLast5 = document.getElementById('transferAccountLast5')?.value.trim() || '';
 const transferAmount = document.getElementById('transferAmount')?.value.trim() || '';
 const transferDate = document.getElementById('transferDate')?.value || '';
-const transferTime = document.getElementById('transferTime')?.value || '';
 const transferNote = document.getElementById('transferNote')?.value.trim() || '';
 
   if (!currentOrder || !currentOrder.id) {
@@ -696,11 +692,6 @@ if (!transferDate) {
   return;
 }
 
-if (!transferTime) {
-  setMessage('<span class="error">請選擇匯款時間。</span>');
-  return;
-}
-
   btn.disabled = true;
   btn.textContent = '送出中...';
   setMessage('');
@@ -718,7 +709,6 @@ if (!transferTime) {
   accountLast5,
   transferAmount,
   transferDate,
-  transferTime,
   transferNote
 })
     });
@@ -744,7 +734,6 @@ if (!transferTime) {
         匯款帳號後五碼：${accountLast5}<br>
 實際匯款金額：NT$${transferAmount}<br>
 匯款日期：${transferDate}<br>
-匯款時間：${transferTime}<br>
         <span style="color:#94a3b8;">客服將於 1 至 2 個工作天內確認，通過後會開通對應訂閱方案。</span>
       `;
     }
