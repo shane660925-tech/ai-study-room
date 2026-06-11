@@ -4242,6 +4242,35 @@ app.post('/api/checkout/create-order', async (req, res) => {
             });
         }
 
+        const { data: existingPendingOrder, error: pendingOrderError } = await supabase
+    .from('orders')
+    .select('id, order_no, status, provider_status, amount, created_at')
+    .eq('username', username)
+    .eq('course_id', courseId)
+    .eq('order_type', 'course')
+    .eq('provider', 'manual_transfer')
+    .eq('status', 'pending')
+    .in('provider_status', [
+        'awaiting_transfer_info',
+        'awaiting_manual_review'
+    ])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+if (pendingOrderError) throw pendingOrderError;
+
+if (existingPendingOrder) {
+    return res.status(409).json({
+        success: false,
+        pendingPayment: true,
+        order: existingPendingOrder,
+        error: existingPendingOrder.provider_status === 'awaiting_manual_review'
+            ? '你已經提交過此課程的匯款資料，正在等待人工審核，請勿重複購買。'
+            : '你已經建立過此課程的匯款訂單，請完成匯款並提交資料，請勿重複建立訂單。'
+    });
+}
+
         const originalAmount = Number(course.price || 0);
         const discountAmount = 0;
         const amount = originalAmount;
@@ -4882,34 +4911,88 @@ app.post('/api/courses/create', async (req, res) => {
 // 課程商店：取得目前開放購買的線上課程
 app.get('/api/courses/store', async (req, res) => {
     try {
+        const username = String(req.query.username || '').trim();
+
         const { data, error } = await supabase
             .from('courses')
             .select(`
-    id,
-    teacher_username,
-    course_name,
-    subject,
-    intro,
-    course_type,
-    price,
-    status,
-    start_date,
-    end_date,
-    weekly_day,
-    start_time,
-    max_students,
-    enrolled_count,
-    created_at
-`)
+                id,
+                teacher_username,
+                course_name,
+                subject,
+                intro,
+                course_type,
+                price,
+                status,
+                start_date,
+                end_date,
+                weekly_day,
+                start_time,
+                max_students,
+                enrolled_count,
+                created_at
+            `)
             .in('status', ['approved', 'active'])
             .eq('is_public', true)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
 
+        const courses = data || [];
+        const courseIds = courses.map(course => course.id);
+
+        let enrolledCourseIdSet = new Set();
+        let pendingCourseIdSet = new Set();
+
+        if (username && courseIds.length > 0) {
+            const { data: enrollments, error: enrollmentError } = await supabase
+                .from('course_enrollments')
+                .select('course_id')
+                .eq('username', username)
+                .in('course_id', courseIds);
+
+            if (enrollmentError) throw enrollmentError;
+
+            enrolledCourseIdSet = new Set(
+                (enrollments || []).map(row => row.course_id)
+            );
+
+            const { data: pendingOrders, error: pendingOrderError } = await supabase
+                .from('orders')
+                .select('course_id, provider_status')
+                .eq('username', username)
+                .eq('order_type', 'course')
+                .eq('provider', 'manual_transfer')
+                .eq('status', 'pending')
+                .in('provider_status', [
+                    'awaiting_transfer_info',
+                    'awaiting_manual_review'
+                ])
+                .in('course_id', courseIds);
+
+            if (pendingOrderError) throw pendingOrderError;
+
+            pendingCourseIdSet = new Set(
+                (pendingOrders || []).map(row => row.course_id)
+            );
+        }
+
+        const mappedCourses = courses.map(course => {
+            const isEnrolled = enrolledCourseIdSet.has(course.id);
+            const hasPendingOrder = pendingCourseIdSet.has(course.id);
+
+            return {
+                ...course,
+                is_enrolled: isEnrolled,
+                has_pending_order: hasPendingOrder,
+                can_buy: !isEnrolled && !hasPendingOrder
+            };
+        });
+
         res.json({
             success: true,
-            courses: data || []
+            username: username || null,
+            courses: mappedCourses
         });
 
     } catch (err) {

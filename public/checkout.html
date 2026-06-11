@@ -117,9 +117,9 @@ input[type="date"] {
       尚未建立課程訂單
     </div>
 
-    <button onclick="createCourseOrder()">
-      建立課程訂單
-    </button>
+    <button id="createOrderButton" onclick="createCourseOrder()">
+  建立課程訂單
+</button>
 
     <div id="transferFormBox" class="price-box" style="display:none;">
   <strong>提交匯款資料</strong>
@@ -203,11 +203,21 @@ async function checkCourseAccessOnLoad() {
       `;
     }
 
-    if (data.canEnter) {
-      messageEl.innerHTML =
-        '<span class="success">你已經加入過這門課，可以直接進入課程。</span>';
-      return;
-    }
+if (data.canEnter) {
+  const createOrderButton = document.getElementById('createOrderButton');
+  if (createOrderButton) {
+    createOrderButton.style.display = 'none';
+  }
+
+  messageEl.innerHTML =
+    '<span class="success">你已經購買並開通這門課，正在返回大廳...</span>';
+
+  setTimeout(() => {
+    window.location.href = `/?username=${encodeURIComponent(username)}&course_already_purchased=1`;
+  }, 900);
+
+  return;
+}
 
     if (data.needCheckout) {
       messageEl.innerHTML =
@@ -384,7 +394,13 @@ async function submitTransferInfo() {
     `;
 
     messageEl.innerHTML =
-      '<span class="success">匯款資料已送出，請等待管理員人工確認。</span>';
+  '<span class="success">匯款資料已送出，正在返回大廳...</span>';
+
+currentOrder = null;
+
+setTimeout(() => {
+  window.location.href = `/?username=${encodeURIComponent(username)}&course_payment_submitted=1`;
+}, 900);
 
   } catch (err) {
     messageEl.innerHTML = `<span class="error">${err.message}</span>`;

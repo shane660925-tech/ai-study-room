@@ -2858,11 +2858,16 @@ async function loadCourseStoreModalList() {
     updateCourseStoreTabButtons('courses');
     renderCourseStoreLoading('fa-book-open', '正在載入線上課程...');
 
+    const username = getCurrentCourseStoreUsername();
+
     try {
-        const res = await fetch('/api/courses/store');
+        const res = await fetch(
+            `/api/courses/store?username=${encodeURIComponent(username)}`
+        );
+
         const data = await res.json();
 
-        if (!res.ok) {
+        if (!res.ok || data.success === false) {
             throw new Error(data.error || '取得課程商店失敗');
         }
 
@@ -2886,8 +2891,41 @@ async function loadCourseStoreModalList() {
             const title = escapeCourseStoreHtml(course.course_name || '未命名課程');
             const teacher = escapeCourseStoreHtml(course.teacher_username || 'STUDY VERSE');
             const subject = escapeCourseStoreHtml(course.subject || '線上課程');
-            const intro = escapeCourseStoreHtml(course.intro || '點擊前往結帳頁。');
+            const intro = escapeCourseStoreHtml(course.intro || '點擊查看課程詳情。');
             const price = Number(course.price || 0);
+
+            const isEnrolled = course.is_enrolled === true;
+            const hasPendingOrder = course.has_pending_order === true;
+
+            const courseActionText = isEnrolled
+                ? '已購買'
+                : hasPendingOrder
+                    ? '付款審核中'
+                    : '查看詳情 →';
+
+            const actionTextClass = isEnrolled
+                ? 'text-green-400'
+                : hasPendingOrder
+                    ? 'text-yellow-300'
+                    : 'text-cyan-400 group-hover:text-cyan-300';
+
+            const statusBadgeHTML = isEnrolled
+                ? `
+                    <span class="text-[10px] bg-green-500/20 text-green-300 px-2 py-1 rounded-full font-black whitespace-nowrap border border-green-500/30">
+                        已購買
+                    </span>
+                `
+                : hasPendingOrder
+                    ? `
+                        <span class="text-[10px] bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-full font-black whitespace-nowrap border border-yellow-400/30">
+                            審核中
+                        </span>
+                    `
+                    : `
+                        <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded-full font-black whitespace-nowrap">
+                            NT$${price}
+                        </span>
+                    `;
 
             return `
                 <button onclick="showCourseDetail('${course.id}')"
@@ -2901,9 +2939,7 @@ async function loadCourseStoreModalList() {
                         <div class="flex-1">
                             <div class="flex items-center justify-between gap-2 mb-1">
                                 <h3 class="text-white font-black text-lg">${title}</h3>
-                                <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded-full font-black whitespace-nowrap">
-                                    NT$${price}
-                                </span>
+                                ${statusBadgeHTML}
                             </div>
 
                             <p class="text-cyan-300 text-xs mb-2">
@@ -2914,8 +2950,8 @@ async function loadCourseStoreModalList() {
                                 ${intro}
                             </p>
 
-                            <div class="text-right text-cyan-400 text-xs font-black group-hover:text-cyan-300">
-                                前往結帳 →
+                            <div class="text-right ${actionTextClass} text-xs font-black">
+                                ${courseActionText}
                             </div>
                         </div>
                     </div>
@@ -3329,10 +3365,25 @@ window.enrollTutorProgram = async function(programId) {
 };
 
 window.goToCourseCheckout = function(courseId) {
-    const username = localStorage.getItem('studyVerseUser');
+    const username =
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        '';
 
     if (!username) {
         alert('請先登入後再購買課程。');
+        return;
+    }
+
+    const course = courseStoreCache.find(item => item.id === courseId);
+
+    if (course?.is_enrolled === true) {
+        alert('你已經購買並開通這門課。');
+        return;
+    }
+
+    if (course?.has_pending_order === true) {
+        alert('這門課已有匯款訂單正在等待審核，請勿重複購買。');
         return;
     }
 
@@ -3368,6 +3419,10 @@ window.showCourseDetail = function(courseId) {
     const maxStudents = Number(course.max_students || 0);
     const enrolledCount = Number(course.enrolled_count || 0);
 
+    const isEnrolled = course.is_enrolled === true;
+    const hasPendingOrder = course.has_pending_order === true;
+    const canBuy = course.can_buy !== false && !isEnrolled && !hasPendingOrder;
+
     const startDate = course.start_date || '尚未設定';
     const endDate = course.end_date || '尚未設定';
     const weeklyDay = course.weekly_day || '尚未設定';
@@ -3376,6 +3431,49 @@ window.showCourseDetail = function(courseId) {
     const capacityText = maxStudents > 0
         ? `${enrolledCount} / ${maxStudents}`
         : `${enrolledCount} / 不限`;
+
+    let statusText = '可購買';
+    let statusClass = 'text-cyan-300';
+
+    if (isEnrolled) {
+        statusText = '已購買';
+        statusClass = 'text-green-300';
+    } else if (hasPendingOrder) {
+        statusText = '付款審核中';
+        statusClass = 'text-yellow-300';
+    }
+
+    let actionButtonHTML = '';
+
+    if (isEnrolled) {
+        actionButtonHTML = `
+            <button disabled
+                    class="flex-1 bg-green-600/30 text-green-300 font-bold py-3 rounded-xl border border-green-500/30 cursor-not-allowed">
+                已購買
+            </button>
+        `;
+    } else if (hasPendingOrder) {
+        actionButtonHTML = `
+            <button disabled
+                    class="flex-1 bg-yellow-500/20 text-yellow-300 font-bold py-3 rounded-xl border border-yellow-400/30 cursor-not-allowed">
+                付款審核中
+            </button>
+        `;
+    } else if (canBuy) {
+        actionButtonHTML = `
+            <button onclick="goToCourseCheckout('${course.id}')"
+                    class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl transition-all">
+                確認購買
+            </button>
+        `;
+    } else {
+        actionButtonHTML = `
+            <button disabled
+                    class="flex-1 bg-gray-600/30 text-gray-400 font-bold py-3 rounded-xl border border-gray-500/30 cursor-not-allowed">
+                暫不可購買
+            </button>
+        `;
+    }
 
     list.innerHTML = `
         <div class="space-y-4">
@@ -3418,18 +3516,20 @@ window.showCourseDetail = function(courseId) {
                         <span class="text-gray-500">課程價格</span>
                         <span class="text-green-400 font-black">NT$${price}</span>
                     </div>
+
+                    <div class="bg-black/30 rounded-xl p-3 flex justify-between">
+                        <span class="text-gray-500">購買狀態</span>
+                        <span class="${statusClass} font-black">${statusText}</span>
+                    </div>
                 </div>
 
                 <div class="flex gap-3">
                     <button onclick="loadCourseStoreModalList()"
                             class="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-3 rounded-xl transition-all">
-                        取消
+                        返回列表
                     </button>
 
-                    <button onclick="goToCourseCheckout('${course.id}')"
-                            class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl transition-all">
-                        確認購買
-                    </button>
+                    ${actionButtonHTML}
                 </div>
             </div>
         </div>
