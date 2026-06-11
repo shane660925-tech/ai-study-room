@@ -3584,16 +3584,8 @@ const finalTransferNote = String(transferNote || '').trim();
     return res.status(400).json({ error: '請填寫正確的實際匯款金額' });
 }
 
-if (!/^[0-9]+$/.test(finalTransferAmount)) {
-    return res.status(400).json({ error: '請填寫正確的實際匯款金額' });
-}
-
 if (!finalTransferDate) {
     return res.status(400).json({ error: '請選擇匯款日期' });
-}
-
-if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(finalTransferTime)) {
-    return res.status(400).json({ error: '請填寫正確的匯款時間' });
 }
 
         const { data: order, error: orderError } = await supabase
