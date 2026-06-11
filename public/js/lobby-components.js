@@ -244,20 +244,111 @@ class SharedModals extends HTMLElement {
                     </select>
                 </div>
 
-                <div class="md:col-span-2">
-                    <label class="text-xs text-gray-400 font-bold mb-1 block">課程資訊</label>
-                    <textarea id="courseInfo"
-                              rows="3"
-                              class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all resize-none"
-                              placeholder="例如：高中數學段考衝刺、英文作文批改、多益聽力訓練"></textarea>
-                </div>
+                <div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">課程名稱</label>
+    <input id="courseName"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：國中英文文法班">
+</div>
 
-                <div class="md:col-span-2">
-                    <label class="text-xs text-gray-400 font-bold mb-1 block">上課時間</label>
-                    <input id="courseSchedule"
-                           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 focus:border-yellow-500 outline-none transition-all"
-                           placeholder="例如：每週六 19:00-21:00">
-                </div>
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">科目</label>
+    <input id="courseSubject"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：國中英文 / 高中數學 / 多益">
+</div>
+
+<div class="md:col-span-2">
+    <label class="text-xs text-gray-400 font-bold mb-1 block">課程簡介</label>
+    <textarea id="courseInfo"
+              rows="3"
+              class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all resize-none"
+              placeholder="請簡短說明課程內容，會顯示在課程商店中"></textarea>
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">課程價格 NT$</label>
+    <input id="coursePrice"
+           type="number"
+           min="0"
+           step="1"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：500">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">每週上課日</label>
+    <select id="courseWeeklyDay"
+            class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all">
+        <option value="">請選擇</option>
+        <option value="一">每週一</option>
+        <option value="二">每週二</option>
+        <option value="三">每週三</option>
+        <option value="四">每週四</option>
+        <option value="五">每週五</option>
+        <option value="六">每週六</option>
+        <option value="日">每週日</option>
+        <option value="彈性約課">彈性約課</option>
+    </select>
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">開始日期</label>
+    <input id="courseStartDate"
+           type="date"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all [color-scheme:dark]">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">結束日期</label>
+    <input id="courseEndDate"
+           type="date"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all [color-scheme:dark]">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">開始時間</label>
+    <input id="courseStartTime"
+           type="time"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all [color-scheme:dark]">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">總堂數</label>
+    <input id="courseTotalSessions"
+           type="number"
+           min="1"
+           step="1"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：8">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">每堂分鐘</label>
+    <input id="courseClassMinutes"
+           type="number"
+           min="10"
+           step="5"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：50">
+</div>
+
+<div>
+    <label class="text-xs text-gray-400 font-bold mb-1 block">中間休息分鐘</label>
+    <input id="courseBreakMinutes"
+           type="number"
+           min="0"
+           step="5"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-4 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：10，沒有休息可填 0">
+</div>
+
+<div class="md:col-span-2">
+    <label class="text-xs text-gray-400 font-bold mb-1 block">Google Meet 連結，可先不填</label>
+    <input id="googleMeetUrl"
+           class="w-full bg-black p-4 rounded-xl border border-gray-700 text-white mb-6 focus:border-yellow-500 outline-none transition-all"
+           placeholder="例如：https://meet.google.com/xxx-xxxx-xxx">
+</div>
             </div>
 
             <button onclick="handleTeacherRegister('password')"
@@ -415,14 +506,52 @@ window.handleTeacherRegister = async function(method = 'password') {
     const account = document.getElementById('teacherRegAccount').value.trim();
     const password = document.getElementById('teacherRegPassword').value;
     const teacherType = document.getElementById('teacherType').value;
-    const classroomSize = document.getElementById('classroomSize').value;
-    const courseInfo = document.getElementById('courseInfo').value.trim();
-    const courseSchedule = document.getElementById('courseSchedule').value.trim();
+const classroomSize = document.getElementById('classroomSize').value;
 
-    if (!username || !email || !courseInfo || !courseSchedule || !teacherType) {
-        alert('請完整填寫教師名稱、Email、課程資訊與上課時間');
-        return;
-    }
+const courseName = document.getElementById('courseName')?.value.trim() || '';
+const courseSubject = document.getElementById('courseSubject')?.value.trim() || '';
+const courseInfo = document.getElementById('courseInfo')?.value.trim() || '';
+const coursePrice = document.getElementById('coursePrice')?.value.trim() || '';
+const weeklyDay = document.getElementById('courseWeeklyDay')?.value || '';
+const startDate = document.getElementById('courseStartDate')?.value || '';
+const endDate = document.getElementById('courseEndDate')?.value || '';
+const startTime = document.getElementById('courseStartTime')?.value || '';
+const totalSessions = document.getElementById('courseTotalSessions')?.value.trim() || '';
+const classMinutes = document.getElementById('courseClassMinutes')?.value.trim() || '';
+const breakMinutes = document.getElementById('courseBreakMinutes')?.value.trim() || '';
+const googleMeetUrl = document.getElementById('googleMeetUrl')?.value.trim() || '';
+
+const courseSchedule = `${startDate || '未設定'} ~ ${endDate || '未設定'}｜每週${weeklyDay || '未設定'}｜${startTime || '未設定'} 開始`;
+
+if (
+    !username ||
+    !email ||
+    !teacherType ||
+    !courseName ||
+    !courseSubject ||
+    !courseInfo ||
+    !coursePrice ||
+    !weeklyDay ||
+    !startDate ||
+    !endDate ||
+    !startTime ||
+    !totalSessions ||
+    !classMinutes ||
+    breakMinutes === ''
+) {
+    alert('請完整填寫教師名稱、Email、課程名稱、科目、簡介、價格與課表資料');
+    return;
+}
+
+if (endDate < startDate) {
+    alert('結束日期不能早於開始日期');
+    return;
+}
+
+if (!/^[0-9]+$/.test(coursePrice)) {
+    alert('課程價格請填寫 0 以上的整數');
+    return;
+}
 
     if (method === 'password' && (!account || !password)) {
         alert('使用帳密申請時，請填寫登入帳號與密碼');
@@ -430,15 +559,28 @@ window.handleTeacherRegister = async function(method = 'password') {
     }
 
     const teacherDraft = {
-        username,
-        email,
-        account,
-        teacherType,
-        classroomSize,
-        courseInfo,
-        courseSchedule,
-        method
-    };
+    username,
+    email,
+    account,
+    teacherType,
+    classroomSize,
+
+    courseName,
+    courseSubject,
+    courseInfo,
+    coursePrice,
+    weeklyDay,
+    startDate,
+    endDate,
+    startTime,
+    totalSessions,
+    classMinutes,
+    breakMinutes,
+    googleMeetUrl,
+
+    courseSchedule,
+    method
+};
 
     sessionStorage.setItem('pendingTeacherApplication', JSON.stringify(teacherDraft));
 
@@ -460,15 +602,28 @@ window.handleTeacherRegister = async function(method = 'password') {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            username,
-            email,
-            account,
-            password,
-            teacherType,
-            classroomSize,
-            courseInfo,
-            courseSchedule
-        })
+    username,
+    email,
+    account,
+    password,
+    teacherType,
+    classroomSize,
+
+    courseName,
+    courseSubject,
+    courseInfo,
+    coursePrice,
+    weeklyDay,
+    startDate,
+    endDate,
+    startTime,
+    totalSessions,
+    classMinutes,
+    breakMinutes,
+    googleMeetUrl,
+
+    courseSchedule
+})
     });
 
     const data = await response.json();
@@ -758,13 +913,26 @@ customElements.define('shared-footer', SharedFooter);
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                username: draft.username || username,
-                email: draft.email,
-                teacherType: draft.teacherType,
-                classroomSize: draft.classroomSize,
-                courseInfo: draft.courseInfo,
-                courseSchedule: draft.courseSchedule
-            })
+    username: draft.username || username,
+    email: draft.email,
+    teacherType: draft.teacherType,
+    classroomSize: draft.classroomSize,
+
+    courseName: draft.courseName,
+    courseSubject: draft.courseSubject,
+    courseInfo: draft.courseInfo,
+    coursePrice: draft.coursePrice,
+    weeklyDay: draft.weeklyDay,
+    startDate: draft.startDate,
+    endDate: draft.endDate,
+    startTime: draft.startTime,
+    totalSessions: draft.totalSessions,
+    classMinutes: draft.classMinutes,
+    breakMinutes: draft.breakMinutes,
+    googleMeetUrl: draft.googleMeetUrl,
+
+    courseSchedule: draft.courseSchedule
+})
         });
 
         const data = await res.json();
