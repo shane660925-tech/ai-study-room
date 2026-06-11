@@ -211,9 +211,17 @@ async function loadManualTransferOrders() {
           </td>
 
           <td>
-            ${renderSubscriptionPlanText(order.subscription_plan)}<br>
-            <small>${order.subscription_months || '-'} 個月</small>
-          </td>
+  ${order.order_type === 'course'
+    ? '線上課程'
+    : renderSubscriptionPlanText(order.subscription_plan)
+  }<br>
+  <small>
+    ${order.order_type === 'course'
+      ? '課程購買'
+      : `${order.subscription_months || '-'} 個月`
+    }
+  </small>
+</td>
 
           <td>
             NT$${Number(order.amount || 0).toLocaleString('zh-TW')}

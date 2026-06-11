@@ -1787,10 +1787,10 @@ app.get('/api/admin/manual-transfer-orders', verifyAdmin, async (req, res) => {
                 created_at,
                 updated_at
             `)
-            .eq('order_type', 'subscription')
-            .eq('provider', 'manual_transfer')
-            .eq('status', 'pending')
-            .eq('provider_status', 'awaiting_manual_review')
+            .in('order_type', ['subscription', 'course'])
+.eq('provider', 'manual_transfer')
+.eq('status', 'pending')
+.eq('provider_status', 'awaiting_manual_review')
             .order('updated_at', { ascending: false })
             .limit(100);
 
@@ -1889,9 +1889,9 @@ app.post('/api/admin/manual-transfer-orders/:orderId/approve', verifyAdmin, asyn
             return res.status(404).json({ error: '找不到訂單' });
         }
 
-        if (order.order_type !== 'subscription') {
-            return res.status(400).json({ error: '這不是訂閱訂單' });
-        }
+        if (order.order_type !== 'subscription' && order.order_type !== 'course') {
+    return res.status(400).json({ error: '這不是可審核的匯款訂單' });
+}
 
         if (order.provider !== 'manual_transfer') {
             return res.status(400).json({ error: '這不是銀行匯款訂單' });
@@ -1923,7 +1923,13 @@ app.post('/api/admin/manual-transfer-orders/:orderId/approve', verifyAdmin, asyn
             }
         };
 
-        const result = await activateSubscriptionByOrder(order.id);
+        const completed = await completePaidOrderByType({
+    orderId: order.id,
+    expectedProvider: 'manual_transfer',
+    paidAmount: Number(order.amount || 0)
+});
+
+const result = completed.result;
 
         const { data: finalOrder, error: finalUpdateError } = await supabase
             .from('orders')
@@ -1939,12 +1945,16 @@ app.post('/api/admin/manual-transfer-orders/:orderId/approve', verifyAdmin, asyn
 
         if (finalUpdateError) throw finalUpdateError;
 
-        await createNotification({
-            username: order.username,
-            type: 'payment_approved',
-            title: '付款已確認，訂閱已開通',
-            message: `你的訂單 ${order.order_no || order.id} 已完成匯款確認，訂閱方案已開通。`
-        });
+        const approvedOrderTypeText = order.order_type === 'course'
+    ? '線上課程'
+    : '訂閱方案';
+
+await createNotification({
+    username: order.username,
+    type: 'payment_approved',
+    title: `付款已確認，${approvedOrderTypeText}已開通`,
+    message: `你的${approvedOrderTypeText}訂單 ${order.order_no || order.id} 已完成匯款確認，對應服務已開通。`
+});
 
         res.json({
             success: true,
@@ -1994,9 +2004,9 @@ app.post('/api/admin/manual-transfer-orders/:orderId/reject', verifyAdmin, async
             return res.status(404).json({ error: '找不到訂單' });
         }
 
-        if (order.order_type !== 'subscription') {
-            return res.status(400).json({ error: '這不是訂閱訂單' });
-        }
+        if (order.order_type !== 'subscription' && order.order_type !== 'course') {
+    return res.status(400).json({ error: '這不是可駁回的匯款訂單' });
+}
 
         if (order.provider !== 'manual_transfer') {
             return res.status(400).json({ error: '這不是銀行匯款訂單' });
@@ -3861,9 +3871,9 @@ if (!finalTransferDate) {
             return res.status(403).json({ error: '訂單使用者不符' });
         }
 
-        if (order.order_type !== 'subscription') {
-            return res.status(400).json({ error: '這不是訂閱訂單' });
-        }
+        if (order.order_type !== 'subscription' && order.order_type !== 'course') {
+    return res.status(400).json({ error: '這不是可提交匯款資料的訂單' });
+}
 
         if (order.provider !== 'manual_transfer') {
     return res.status(400).json({ error: '此訂單不是銀行匯款訂單' });
@@ -3915,12 +3925,16 @@ const nowIso = new Date().toISOString();
         if (updateError) throw updateError;
 
         try {
-    await createNotification({
-        username: finalUsername,
-        type: 'payment_transfer_submitted',
-        title: '匯款資料已送出',
-        message: `你的訂單 ${order.order_no || order.id} 匯款資料已送出，客服將於 1 至 2 個工作天內確認。確認完成後會開通對應訂閱方案。`
-    });
+    const orderTypeText = order.order_type === 'course'
+    ? '線上課程'
+    : '訂閱方案';
+
+await createNotification({
+    username: finalUsername,
+    type: 'payment_transfer_submitted',
+    title: '匯款資料已送出',
+    message: `你的${orderTypeText}訂單 ${order.order_no || order.id} 匯款資料已送出，客服將於 1 至 2 個工作天內確認。確認完成後會開通對應服務。`
+});
 } catch (notificationError) {
     console.error('⚠️ 匯款資料已提交，但建立通知失敗:', notificationError);
 }
@@ -4247,7 +4261,8 @@ app.post('/api/checkout/create-order', async (req, res) => {
                 order_type: 'course',
 subscription_plan: null,
 subscription_months: null,
-provider: 'mock',
+provider: amount === 0 ? 'free' : 'manual_transfer',
+provider_status: amount === 0 ? 'free_checkout' : 'awaiting_transfer_info',
 provider_order_id: null,
 provider_payment_id: null,
 payment_url: null,
@@ -4267,11 +4282,15 @@ paid_at: null
             },
             order,
             payment: {
-                originalAmount,
-                discountAmount,
-                amount,
-                isFreeCheckout: false
-            }
+    provider: amount === 0 ? 'free' : 'manual_transfer',
+    originalAmount,
+    discountAmount,
+    amount,
+    isFreeCheckout: amount === 0,
+    nextAction: amount === 0
+        ? 'free_complete'
+        : 'show_transfer_info'
+}
         });
 
     } catch (err) {
