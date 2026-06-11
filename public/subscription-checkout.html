@@ -716,8 +716,8 @@ if (!transferDate) {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || '提交匯款資料失敗');
-    }
+  throw new Error(data.detail || data.error || '提交匯款資料失敗');
+}
 
     const transferFormBox = document.getElementById('transferFormBox');
     if (transferFormBox) {

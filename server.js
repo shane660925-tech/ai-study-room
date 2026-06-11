@@ -3584,6 +3584,10 @@ const finalTransferNote = String(transferNote || '').trim();
     return res.status(400).json({ error: '請填寫正確的實際匯款金額' });
 }
 
+if (!/^[0-9]+$/.test(finalTransferAmount)) {
+    return res.status(400).json({ error: '請填寫正確的實際匯款金額' });
+}
+
 if (!finalTransferDate) {
     return res.status(400).json({ error: '請選擇匯款日期' });
 }
@@ -3630,10 +3634,19 @@ if (submittedAmount !== expectedAmount) {
         }
 
         if (order.status === 'failed') {
-            return res.status(400).json({ error: '此訂單已失敗或被駁回，請重新建立訂單' });
-        }
+    return res.status(400).json({ error: '此訂單已失敗或被駁回，請重新建立訂單' });
+}
 
-        const nowIso = new Date().toISOString();
+const expectedAmount = Number(order.amount || 0);
+const submittedAmount = Number(finalTransferAmount);
+
+if (submittedAmount !== expectedAmount) {
+    return res.status(400).json({
+        error: `匯款金額與訂單金額不符，訂單金額為 NT$${expectedAmount}`
+    });
+}
+
+const nowIso = new Date().toISOString();
 
         const nextProviderPayload = {
             ...(order.provider_payload || {}),
@@ -3661,18 +3674,22 @@ if (submittedAmount !== expectedAmount) {
 
         if (updateError) throw updateError;
 
-        await createNotification({
-            username: finalUsername,
-            type: 'payment_transfer_submitted',
-            title: '匯款資料已送出',
-            message: `你的訂單 ${order.order_no || order.id} 匯款資料已送出，客服將於 1 至 2 個工作天內確認。確認完成後會開通對應訂閱方案。`
-        });
+        try {
+    await createNotification({
+        username: finalUsername,
+        type: 'payment_transfer_submitted',
+        title: '匯款資料已送出',
+        message: `你的訂單 ${order.order_no || order.id} 匯款資料已送出，客服將於 1 至 2 個工作天內確認。確認完成後會開通對應訂閱方案。`
+    });
+} catch (notificationError) {
+    console.error('⚠️ 匯款資料已提交，但建立通知失敗:', notificationError);
+}
 
-        res.json({
-            success: true,
-            order: updatedOrder,
-            message: '匯款資料已送出，等待客服人工審核'
-        });
+res.json({
+    success: true,
+    order: updatedOrder,
+    message: '匯款資料已送出，等待客服人工審核'
+});
 
     } catch (err) {
         console.error('提交匯款資料失敗:', err);
