@@ -1557,6 +1557,115 @@ if (targetSocketId) {
 return data;
 }
 
+function buildCourseNameFromApplication(applicationData) {
+    const rawCourseInfo = String(applicationData?.course_info || '').trim();
+
+    if (!rawCourseInfo) {
+        return `${applicationData?.username || '教師'} 的線上課程`;
+    }
+
+    const firstLine = rawCourseInfo
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)[0];
+
+    return (firstLine || rawCourseInfo).slice(0, 60);
+}
+
+function getMaxStudentsFromTeacherApplication(applicationData) {
+    const rawSize = String(applicationData?.classroom_size || '').trim();
+    const sizeNumber = Number(rawSize);
+
+    if (Number.isFinite(sizeNumber) && sizeNumber > 0) {
+        return sizeNumber;
+    }
+
+    return null;
+}
+
+async function createOnlineCourseFromApprovedTeacherApplication(applicationData) {
+    if (!applicationData) return null;
+
+    const teacherType = String(applicationData.teacher_type || '').trim();
+
+    // 目前只讓「線上課程」申請通過後自動進課程商店。
+    // 特約教室 special_room 仍走原本特約教室排程流程，不在這裡建立 courses。
+    if (teacherType !== 'online') {
+        return null;
+    }
+
+    const teacherUsername = String(applicationData.username || '').trim();
+    const courseName = buildCourseNameFromApplication(applicationData);
+    const intro = String(applicationData.course_info || '').trim();
+    const scheduleText = String(applicationData.course_schedule || '').trim();
+
+    if (!teacherUsername || !courseName) {
+        return null;
+    }
+
+    // 避免同一個教師同一份申請重複建立課程
+    const { data: existingCourse, error: existingCourseError } = await supabase
+        .from('courses')
+        .select('id, course_name, status, is_public')
+        .eq('teacher_username', teacherUsername)
+        .eq('course_name', courseName)
+        .maybeSingle();
+
+    if (existingCourseError) {
+        throw existingCourseError;
+    }
+
+    if (existingCourse) {
+        const { data: updatedCourse, error: updateCourseError } = await supabase
+            .from('courses')
+            .update({
+                status: 'active',
+                is_public: true
+            })
+            .eq('id', existingCourse.id)
+            .select()
+            .single();
+
+        if (updateCourseError) {
+            throw updateCourseError;
+        }
+
+        return updatedCourse;
+    }
+
+    const courseRoomCode = await generateUniqueCourseRoomCode();
+    const maxStudents = getMaxStudentsFromTeacherApplication(applicationData);
+
+    const { data: createdCourse, error: courseCreateError } = await supabase
+        .from('courses')
+        .insert([{
+            teacher_username: teacherUsername,
+            course_name: courseName,
+            subject: null,
+            intro: intro || scheduleText || '教師申請開設的線上課程',
+            course_type: 'studyverse_room',
+            weekly_day: null,
+            start_time: null,
+            start_date: null,
+            end_date: null,
+            course_room_code: courseRoomCode,
+            status: 'active',
+            is_public: true,
+            price: 0,
+            commission_rate: 0,
+            max_students: maxStudents,
+            enrolled_count: 0
+        }])
+        .select()
+        .single();
+
+    if (courseCreateError) {
+        throw courseCreateError;
+    }
+
+    return createdCourse;
+}
+
 function generateTeacherDiscountCode(username) {
     const safeName = String(username || '')
         .toUpperCase()
@@ -2058,8 +2167,22 @@ const { error: userError } = await supabase
             })
             .eq('id', applicationId);
 
-        if (appError) {
+                if (appError) {
             throw appError;
+        }
+
+        let createdOnlineCourse = null;
+
+        try {
+            createdOnlineCourse =
+                await createOnlineCourseFromApprovedTeacherApplication(applicationData);
+        } catch (courseCreateError) {
+            console.error('⚠️ 教師已通過，但自動建立線上課程失敗:', courseCreateError);
+
+            return res.status(500).json({
+                error: '教師已通過，但自動建立線上課程失敗',
+                detail: courseCreateError.message || String(courseCreateError)
+            });
         }
 
         // 建立教師封測優惠碼
@@ -2075,7 +2198,11 @@ await createNotification({
 
 res.json({
     success: true,
-    discountCode: discountCode.code
+    discountCode: discountCode.code,
+    course: createdOnlineCourse,
+    message: createdOnlineCourse
+        ? '教師申請已通過，並已建立線上課程'
+        : '教師申請已通過'
 });
 
     } catch (err) {
