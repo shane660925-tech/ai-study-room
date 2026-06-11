@@ -70,8 +70,40 @@
     }
 
     .error {
-      color: #f87171;
-    }
+  color: #f87171;
+}
+
+label {
+  display: block;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 800;
+  margin: 18px 0 8px;
+}
+
+input {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: white;
+  font-size: 15px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+input:focus {
+  border-color: #60a5fa;
+}
+
+input[type="date"] {
+  color-scheme: dark;
+}
+
+.warning {
+  color: #facc15;
+}
   </style>
 </head>
 <body>
@@ -89,13 +121,41 @@
       建立課程訂單
     </button>
 
-    <button id="mockPaidButton" class="secondary" onclick="mockCoursePaid()" style="display:none;">
-      模擬付款成功
-    </button>
+    <div id="transferFormBox" class="price-box" style="display:none;">
+  <strong>提交匯款資料</strong>
 
-    <div class="hint">
-      此頁面已移除優惠碼。正式金流串接前，先使用「模擬付款成功」測試課程加入流程。
-    </div>
+  <label for="transferPayerName">匯款人姓名</label>
+  <input id="transferPayerName" placeholder="請填寫實際匯款人姓名" />
+
+  <label for="transferAccountLast5">匯款帳號後五碼</label>
+  <input
+    id="transferAccountLast5"
+    inputmode="numeric"
+    maxlength="5"
+    placeholder="例如：12345"
+  />
+
+  <label for="transferAmount">實際匯款金額</label>
+  <input
+    id="transferAmount"
+    inputmode="numeric"
+    placeholder="請填寫實際匯款金額，例如：500"
+  />
+
+  <label for="transferDate">匯款日期</label>
+  <input id="transferDate" type="date" />
+
+  <label for="transferNote">備註，可不填</label>
+  <input id="transferNote" placeholder="例如：已完成轉帳 / 其他說明" />
+
+  <button class="secondary" onclick="submitTransferInfo()">
+    送出匯款資料
+  </button>
+</div>
+
+<div class="hint">
+  目前線上課程採銀行匯款與人工審核。完成匯款並提交資料後，客服確認款項後才會開通課程。
+</div>
 
     <p id="message"></p>
   </div>
@@ -111,6 +171,13 @@ const username =
 const courseId = params.get('courseId');
 
 let currentOrder = null;
+
+const BANK_TRANSFER_INFO = {
+  bankName: '請填入銀行名稱',
+  bankCode: '請填入銀行代碼',
+  accountNumber: '請填入匯款帳號',
+  accountName: '請填入戶名'
+};
 
 if (!username || !courseId) {
   document.getElementById('courseInfo').innerHTML =
@@ -144,7 +211,7 @@ async function checkCourseAccessOnLoad() {
 
     if (data.needCheckout) {
       messageEl.innerHTML =
-        '<span class="hint">尚未加入此課程，請建立訂單後使用模擬付款完成測試。</span>';
+  '<span class="hint">尚未加入此課程，請建立訂單後依匯款資訊完成付款，並提交匯款資料等待審核。</span>';
       return;
     }
 
@@ -162,10 +229,10 @@ async function checkCourseAccessOnLoad() {
 async function createCourseOrder() {
   const messageEl = document.getElementById('message');
   const paymentInfoEl = document.getElementById('paymentInfo');
-  const mockPaidButton = document.getElementById('mockPaidButton');
+  const transferFormBox = document.getElementById('transferFormBox');
 
   messageEl.textContent = '';
-  mockPaidButton.style.display = 'none';
+  if (transferFormBox) transferFormBox.style.display = 'none';
 
   try {
     const res = await fetch('/api/checkout/create-order', {
@@ -186,7 +253,7 @@ async function createCourseOrder() {
         return;
       }
 
-      throw new Error(data.error || '建立課程訂單失敗');
+      throw new Error(data.detail || data.error || '建立課程訂單失敗');
     }
 
     currentOrder = data.order;
@@ -195,55 +262,160 @@ async function createCourseOrder() {
       <p><strong>${data.course.course_name}</strong></p>
     `;
 
+    const amount = Number(data.payment.amount || 0);
+
+    if (amount === 0 || data.payment.isFreeCheckout) {
+      paymentInfoEl.innerHTML = `
+        <strong>免費課程訂單已建立</strong><br>
+        訂單編號：${data.order.order_no || data.order.id}<br>
+        課程原價：NT$${data.payment.originalAmount}<br>
+        應付金額：<strong style="color:#4ade80;">NT$0</strong><br>
+        訂單狀態：${data.order.status}
+      `;
+
+      await completeFreeCourseOrder(data.order.id);
+      return;
+    }
+
     paymentInfoEl.innerHTML = `
-      課程原價：${data.payment.originalAmount} 元<br>
-      折扣：-${data.payment.discountAmount} 元<br>
-      <strong>應付金額：${data.payment.amount} 元</strong><br>
-      訂單狀態：${data.order.status}
+      <strong>課程匯款訂單已建立</strong><br>
+      訂單編號：${data.order.order_no || data.order.id}<br>
+      課程原價：NT$${data.payment.originalAmount}<br>
+      折扣：-NT$${data.payment.discountAmount}<br>
+      匯款金額：<strong style="color:#facc15;">NT$${data.payment.amount}</strong><br>
+      訂單狀態：待匯款 / 待提交匯款資料<br><br>
+
+      <strong>銀行匯款資訊</strong><br>
+      銀行名稱：${BANK_TRANSFER_INFO.bankName}<br>
+      銀行代碼：${BANK_TRANSFER_INFO.bankCode}<br>
+      匯款帳號：${BANK_TRANSFER_INFO.accountNumber}<br>
+      戶名：${BANK_TRANSFER_INFO.accountName}<br><br>
+
+      <span style="color:#94a3b8;">
+        完成匯款後，請在下方填寫匯款人姓名、帳號後五碼、實際匯款金額、匯款日期與備註。
+        管理員審核通過後，課程才會開通。
+      </span>
     `;
 
-    mockPaidButton.style.display = 'block';
+    if (transferFormBox) {
+      transferFormBox.style.display = 'block';
+    }
 
     messageEl.innerHTML =
-      '<span class="success">課程訂單已建立。封測期間可按「模擬付款成功」。</span>';
+      '<span class="success">課程訂單已建立。請完成匯款後提交下方匯款資料。</span>';
 
   } catch (err) {
     messageEl.innerHTML = `<span class="error">${err.message}</span>`;
   }
 }
 
-async function mockCoursePaid() {
+async function submitTransferInfo() {
   const messageEl = document.getElementById('message');
 
-  if (!currentOrder) {
+  if (!currentOrder || !currentOrder.id) {
     messageEl.innerHTML = '<span class="error">尚未建立課程訂單。</span>';
     return;
   }
 
+  const payerName = document.getElementById('transferPayerName')?.value.trim() || '';
+  const accountLast5 = document.getElementById('transferAccountLast5')?.value.trim() || '';
+  const transferAmount = document.getElementById('transferAmount')?.value.trim() || '';
+  const transferDate = document.getElementById('transferDate')?.value || '';
+  const transferNote = document.getElementById('transferNote')?.value.trim() || '';
+
+  if (!payerName) {
+    messageEl.innerHTML = '<span class="error">請填寫匯款人姓名。</span>';
+    return;
+  }
+
+  if (!/^[0-9]{5}$/.test(accountLast5)) {
+    messageEl.innerHTML = '<span class="error">請填寫 5 位數字的匯款帳號後五碼。</span>';
+    return;
+  }
+
+  if (!/^[0-9]+$/.test(transferAmount)) {
+    messageEl.innerHTML = '<span class="error">請填寫正確的實際匯款金額。</span>';
+    return;
+  }
+
+  if (!transferDate) {
+    messageEl.innerHTML = '<span class="error">請選擇匯款日期。</span>';
+    return;
+  }
+
   try {
-    const res = await fetch('/api/checkout/mock-course-paid', {
+    const res = await fetch('/api/subscription/submit-transfer-info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username,
-        orderId: currentOrder.id
+        orderId: currentOrder.id,
+        payerName,
+        accountLast5,
+        transferAmount,
+        transferDate,
+        transferNote
       })
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || '模擬付款失敗');
+      throw new Error(data.detail || data.error || '提交匯款資料失敗');
+    }
+
+    const transferFormBox = document.getElementById('transferFormBox');
+    if (transferFormBox) {
+      transferFormBox.style.display = 'none';
+    }
+
+    const paymentInfoEl = document.getElementById('paymentInfo');
+    paymentInfoEl.innerHTML += `
+      <br><br>
+      <strong style="color:#4ade80;">匯款資料已送出</strong><br>
+      審核狀態：等待管理員人工確認<br>
+      匯款人姓名：${payerName}<br>
+      匯款帳號後五碼：${accountLast5}<br>
+      實際匯款金額：NT$${transferAmount}<br>
+      匯款日期：${transferDate}<br>
+      <span style="color:#94a3b8;">
+        管理員審核通過後，系統會自動開通此線上課程。
+      </span>
+    `;
+
+    messageEl.innerHTML =
+      '<span class="success">匯款資料已送出，請等待管理員人工確認。</span>';
+
+  } catch (err) {
+    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+
+async function completeFreeCourseOrder(orderId) {
+  const messageEl = document.getElementById('message');
+
+  try {
+    const res = await fetch('/api/checkout/free-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        orderId
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || '免費課程加入失敗');
     }
 
     messageEl.innerHTML =
-  '<span class="success">模擬付款成功，已加入課程！正在返回大廳...</span>';
+      '<span class="success">免費課程已加入！正在返回大廳...</span>';
 
-document.getElementById('mockPaidButton').style.display = 'none';
-
-setTimeout(() => {
-  window.location.href = `/?username=${encodeURIComponent(username)}&course_paid=success`;
-}, 900);
+    setTimeout(() => {
+      window.location.href = `/?username=${encodeURIComponent(username)}&course_paid=success`;
+    }, 900);
 
   } catch (err) {
     messageEl.innerHTML = `<span class="error">${err.message}</span>`;

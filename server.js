@@ -1957,11 +1957,11 @@ await createNotification({
 });
 
         res.json({
-            success: true,
-            message: '匯款訂單已審核通過，訂閱已開通',
-            order: finalOrder,
-            result
-        });
+    success: true,
+    message: `匯款訂單已審核通過，${approvedOrderTypeText}已開通`,
+    order: finalOrder,
+    result
+});
 
     } catch (err) {
         console.error('審核通過匯款訂單失敗:', err);
