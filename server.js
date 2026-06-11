@@ -3617,23 +3617,14 @@ if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(finalTransferTime)) {
         }
 
         if (order.provider !== 'manual_transfer') {
-            return res.status(400).json({ error: '此訂單不是銀行匯款訂單' });
-        }
-
-        const expectedAmount = Number(order.amount || 0);
-const submittedAmount = Number(finalTransferAmount);
-
-if (submittedAmount !== expectedAmount) {
-    return res.status(400).json({
-        error: `匯款金額與訂單金額不符，訂單金額為 NT$${expectedAmount}`
-    });
+    return res.status(400).json({ error: '此訂單不是銀行匯款訂單' });
 }
 
-        if (order.status === 'paid') {
-            return res.status(400).json({ error: '此訂單已付款完成，無法重複提交匯款資料' });
-        }
+if (order.status === 'paid') {
+    return res.status(400).json({ error: '此訂單已付款完成，無法重複提交匯款資料' });
+}
 
-        if (order.status === 'failed') {
+if (order.status === 'failed') {
     return res.status(400).json({ error: '此訂單已失敗或被駁回，請重新建立訂單' });
 }
 
