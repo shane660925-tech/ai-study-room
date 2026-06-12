@@ -1951,10 +1951,29 @@ const result = completed.result;
 
 await createNotification({
     username: order.username,
-    type: 'payment_approved',
+    type: order.order_type === 'course'
+        ? 'course_payment_approved'
+        : 'payment_approved',
     title: `付款已確認，${approvedOrderTypeText}已開通`,
     message: `你的${approvedOrderTypeText}訂單 ${order.order_no || order.id} 已完成匯款確認，對應服務已開通。`
 });
+
+if (order.order_type === 'course') {
+    const targetSocketId = activeUserSockets.get(order.username);
+
+    if (targetSocketId) {
+        io.to(targetSocketId).emit('course_access_updated', {
+            type: 'course_access_updated',
+            username: order.username,
+            courseId: order.course_id,
+            orderId: order.id,
+            status: 'approved',
+            message: '線上課程已開通'
+        });
+
+        console.log(`📚 已即時推送課程開通事件給 ${order.username}`);
+    }
+}
 
         res.json({
     success: true,

@@ -2564,6 +2564,27 @@ async function markNotificationRead(notificationId) {
     }
 }
 
+function showCourseUnlockedToast() {
+    const oldToast = document.getElementById('courseUnlockedToast');
+    if (oldToast) oldToast.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'courseUnlockedToast';
+    toast.className =
+        'fixed top-5 left-1/2 -translate-x-1/2 z-[100000] bg-cyan-500/95 text-white px-5 py-3 rounded-2xl shadow-2xl font-black text-sm border border-cyan-200/40';
+
+    toast.innerHTML = `
+        <i class="fas fa-circle-check mr-2"></i>
+        線上課程已開通，已更新到你的大廳
+    `;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 3600);
+}
+
 // 頁面載入後讀取通知，並監聽即時通知
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
@@ -2571,17 +2592,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1200);
 
     if (typeof socket !== 'undefined') {
-        socket.on('new_notification', (notification) => {
-            if (!notification || !notification.id) return;
+        socket.on('new_notification', async (notification) => {
+    if (!notification || !notification.id) return;
 
-            const exists = notifications.some(n => n.id === notification.id);
-            if (exists) return;
+    const exists = notifications.some(n => n.id === notification.id);
+    if (exists) return;
 
-            notifications.unshift(notification);
-            renderNotifications();
+    notifications.unshift(notification);
+    renderNotifications();
 
-            showNotificationModal([notification]);
-        });
+    showNotificationModal([notification]);
+
+    if (
+        notification.type === 'course_payment_approved' ||
+        (
+            notification.type === 'payment_approved' &&
+            String(notification.title || '').includes('線上課程')
+        )
+    ) {
+        await refreshCourseList();
+
+        if (
+            document.getElementById('courseStoreModal') &&
+            typeof loadCourseStoreModalList === 'function'
+        ) {
+            await loadCourseStoreModalList();
+        }
+
+        showCourseUnlockedToast();
+    }
+});
+socket.on('course_access_updated', async (payload) => {
+    const currentUsername =
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        '';
+
+    if (!payload || payload.username !== currentUsername) {
+        return;
+    }
+
+    await refreshCourseList();
+
+    if (
+        document.getElementById('courseStoreModal') &&
+        typeof loadCourseStoreModalList === 'function'
+    ) {
+        await loadCourseStoreModalList();
+    }
+
+    showCourseUnlockedToast();
+});
     }
 });
 
