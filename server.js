@@ -4272,9 +4272,17 @@ if (existingPendingOrder) {
 }
 
         const originalAmount = Number(course.price || 0);
-        const discountAmount = 0;
-        const amount = originalAmount;
-        const orderNo = generateOrderNo();
+
+if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+    return res.status(400).json({
+        success: false,
+        error: '此課程尚未設定有效價格，無法建立匯款訂單'
+    });
+}
+
+const discountAmount = 0;
+const amount = originalAmount;
+const orderNo = generateOrderNo();
 
         const { data: order, error: orderError } = await supabase
             .from('orders')
@@ -4290,8 +4298,8 @@ if (existingPendingOrder) {
                 order_type: 'course',
 subscription_plan: null,
 subscription_months: null,
-provider: amount === 0 ? 'free' : 'manual_transfer',
-provider_status: amount === 0 ? 'free_checkout' : 'awaiting_transfer_info',
+provider: 'manual_transfer',
+provider_status: 'awaiting_transfer_info',
 provider_order_id: null,
 provider_payment_id: null,
 payment_url: null,
@@ -4311,14 +4319,12 @@ paid_at: null
             },
             order,
             payment: {
-    provider: amount === 0 ? 'free' : 'manual_transfer',
+    provider: 'manual_transfer',
     originalAmount,
     discountAmount,
     amount,
-    isFreeCheckout: amount === 0,
-    nextAction: amount === 0
-        ? 'free_complete'
-        : 'show_transfer_info'
+    isFreeCheckout: false,
+    nextAction: 'show_transfer_info'
 }
         });
 
@@ -4546,126 +4552,6 @@ async function markOrderProviderStatus({
 
     return data;
 }
-
-app.post('/api/checkout/mock-course-paid', async (req, res) => {
-    try {
-        const { username, orderId } = req.body;
-
-        if (!username || !orderId) {
-            return res.status(400).json({
-                error: '缺少 username 或 orderId'
-            });
-        }
-
-        const { data: order, error: orderError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', orderId)
-            .eq('username', username)
-            .maybeSingle();
-
-        if (orderError) throw orderError;
-
-        if (!order) {
-            return res.status(404).json({
-                error: '找不到課程訂單'
-            });
-        }
-
-        if (order.order_type !== 'course') {
-            return res.status(400).json({
-                error: '這不是單堂課程訂單'
-            });
-        }
-
-        await markOrderProviderStatus({
-    orderId,
-    providerStatus: 'confirmed',
-    providerPayload: {
-        provider: 'mock',
-        type: 'course',
-        confirmedAt: new Date().toISOString()
-    }
-});
-
-const completed = await completePaidOrderByType({
-    orderId,
-    expectedUsername: username,
-    providerPaymentId: `mock-course-${orderId}`,
-    paidAmount: Number(order.amount || 0)
-});
-
-const result = completed.result;
-
-        res.json({
-            success: true,
-            message: '模擬付款成功，已加入課程',
-            result
-        });
-
-    } catch (err) {
-        console.error('模擬課程付款失敗:', err);
-
-        res.status(500).json({
-            error: '模擬課程付款失敗',
-            detail: err.message
-        });
-    }
-});
-
-app.post('/api/checkout/free-complete', async (req, res) => {
-    try {
-        const { orderId, username } = req.body;
-
-        if (!orderId || !username) {
-            return res.status(400).json({
-                error: '缺少 orderId 或 username'
-            });
-        }
-
-        const { data: order, error: orderError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', orderId)
-            .eq('username', username)
-            .maybeSingle();
-
-        if (orderError) throw orderError;
-
-        if (!order) {
-            return res.status(404).json({
-                error: '找不到訂單'
-            });
-        }
-
-        if (Number(order.amount || 0) !== 0) {
-            return res.status(400).json({
-                error: '此訂單不是免費封測訂單，不能直接完成'
-            });
-        }
-
-        const completed = await completePaidOrderByType({
-            orderId,
-            expectedUsername: username
-        });
-
-        const result = completed.result;
-
-        res.json({
-            success: true,
-            message: '免費封測加入課程成功',
-            result
-        });
-
-    } catch (err) {
-        console.error('免費封測通關失敗:', err);
-
-        res.status(500).json({
-            error: '免費封測通關失敗',
-            detail: err.message
-        });
-    }
-});
 
 app.get('/api/courses/enrolled', async (req, res) => {
     try {

@@ -272,20 +272,24 @@ async function createCourseOrder() {
       <p><strong>${data.course.course_name}</strong></p>
     `;
 
-    const amount = Number(data.payment.amount || 0);
+   const amount = Number(data.payment.amount || 0);
 
-    if (amount === 0 || data.payment.isFreeCheckout) {
-      paymentInfoEl.innerHTML = `
-        <strong>免費課程訂單已建立</strong><br>
-        訂單編號：${data.order.order_no || data.order.id}<br>
-        課程原價：NT$${data.payment.originalAmount}<br>
-        應付金額：<strong style="color:#4ade80;">NT$0</strong><br>
-        訂單狀態：${data.order.status}
-      `;
+if (!Number.isFinite(amount) || amount <= 0) {
+  paymentInfoEl.innerHTML = `
+    <strong class="error">此課程尚未設定有效價格</strong><br>
+    課程原價：NT$${data.payment.originalAmount || 0}<br>
+    應付金額：NT$${data.payment.amount || 0}<br><br>
+    <span style="color:#94a3b8;">
+      線上課程目前必須走銀行匯款與人工審核，請先到後台確認此課程 price 是否大於 0。
+    </span>
+  `;
 
-      await completeFreeCourseOrder(data.order.id);
-      return;
-    }
+  messageEl.innerHTML =
+    '<span class="error">此課程價格為 0，無法建立匯款審核流程，請先設定課程價格。</span>';
+
+  currentOrder = null;
+  return;
+}
 
     paymentInfoEl.innerHTML = `
       <strong>課程匯款訂單已建立</strong><br>
@@ -401,37 +405,6 @@ currentOrder = null;
 setTimeout(() => {
   window.location.href = `/?username=${encodeURIComponent(username)}&course_payment_submitted=1`;
 }, 900);
-
-  } catch (err) {
-    messageEl.innerHTML = `<span class="error">${err.message}</span>`;
-  }
-}
-
-async function completeFreeCourseOrder(orderId) {
-  const messageEl = document.getElementById('message');
-
-  try {
-    const res = await fetch('/api/checkout/free-complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        orderId
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || data.error || '免費課程加入失敗');
-    }
-
-    messageEl.innerHTML =
-      '<span class="success">免費課程已加入！正在返回大廳...</span>';
-
-    setTimeout(() => {
-      window.location.href = `/?username=${encodeURIComponent(username)}&course_paid=success`;
-    }, 900);
 
   } catch (err) {
     messageEl.innerHTML = `<span class="error">${err.message}</span>`;
