@@ -145,6 +145,16 @@ function getTutorDisplayName(user) {
     );
 }
 
+function getTutorSystemName(user) {
+    return normalizeTutorDisplayText(
+        user?.username ||
+        user?.name ||
+        user?.displayName ||
+        user?.studentName ||
+        '學員'
+    );
+}
+
 function getTutorRoomCode() {
     const params = new URLSearchParams(window.location.search);
     return params.get('room') || params.get('roomId') || window.currentTutorRoomCode || null;
@@ -918,7 +928,7 @@ function renderTutorRankList(users) {
     rankEl.innerHTML = students.map((u, index) => {
     const name = getTutorDisplayName(u);
 const safeName = escapeTutorHtml(name);
-const avatarSeed = encodeURIComponent(name);
+const avatarSeed = encodeURIComponent(getTutorSystemName(u));
 
     const status = u.status || 'FOCUSED';
 

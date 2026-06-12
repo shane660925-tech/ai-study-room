@@ -815,7 +815,7 @@ function renderStudents() {
 const displayName = getTutorDisplayName(student);
 const safeDisplayName = escapeTutorHtml(displayName);
 const safeSystemNameForJs = escapeTutorJs(systemName);
-const avatarSeed = encodeURIComponent(displayName);
+const avatarSeed = encodeURIComponent(systemName);
         const isStandalone = student.isStandalone || false;
         
         // 雙機圖示處理
@@ -859,8 +859,12 @@ const avatarSeed = encodeURIComponent(displayName);
         card.innerHTML = `
             <div class="flex flex-col items-center w-full">
                 <div class="flex flex-col items-center mb-3">
-                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}"
-                    ${dualDeviceIcons}
+                    <img
+    src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}"
+    class="w-20 h-20 rounded-2xl bg-black/50 border border-amber-500/30 p-1 shadow-[0_0_18px_rgba(245,158,11,0.15)]"
+    alt="${safeDisplayName}"
+>
+${dualDeviceIcons}
                 </div>
                 
                 <h3 class="font-bold text-white text-lg tracking-wide mb-2">${safeDisplayName}</h3>
