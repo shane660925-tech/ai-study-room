@@ -7467,20 +7467,152 @@ socket.on('get_attendance', (data) => {
     // ==========================================
     // 新增：特約教室/一般教室的違規轉發橋樑
     // ==========================================
-    socket.on('violation', (data) => {
+    socket.on('violation', async (data) => {
     const targetRoom =
         data?.roomId ||
         data?.room ||
+        data?.roomCode ||
         socket.roomId ||
+        socket.currentTutorRoom ||
         data?.roomMode;
 
-    if (targetRoom) {
-        io.to(targetRoom).emit('violation', data);
-        io.to(targetRoom).emit('student_violation', data);
-    } else {
-        socket.broadcast.emit('violation', data);
-        socket.broadcast.emit('student_violation', data);
+    const username = normalizeUsername(
+        data?.username ||
+        data?.name ||
+        data?.studentName ||
+        socket.username
+    );
+
+    const reasonStr = String(
+        data?.type ||
+        data?.reason ||
+        data?.violationType ||
+        'AI 偵測異常'
+    );
+
+    const normalizedData = {
+        ...data,
+        name: username,
+        username,
+        type: reasonStr,
+        reason: reasonStr,
+        roomId: targetRoom,
+        room: targetRoom,
+        roomCode: targetRoom,
+        roomMode: targetRoom
+    };
+
+    const isReturnSeatUpdate =
+        reasonStr.includes('【更新狀態】學生已回位');
+
+    if (!isReturnSeatUpdate && username) {
+        try {
+            const user =
+                onlineUsers.find(u => u.name === username) ||
+                onlineUsers.find(u => u.id === socket.id);
+
+            let integrityPenalty = 2;
+            let expPenalty = 0;
+
+            if (reasonStr.includes('手機')) {
+                integrityPenalty = 10;
+                expPenalty = 500;
+            } else if (reasonStr.includes('趴睡') || reasonStr.includes('睡')) {
+                integrityPenalty = 5;
+                expPenalty = 300;
+            } else if (reasonStr.includes('離座') || reasonStr.includes('離位')) {
+                integrityPenalty = 3;
+                expPenalty = 200;
+            } else if (reasonStr.includes('分頁')) {
+                integrityPenalty = 3;
+                expPenalty = 100;
+            } else if (
+                reasonStr.includes('翻轉') ||
+                reasonStr.includes('翻開') ||
+                reasonStr.includes('重新連線')
+            ) {
+                integrityPenalty = 2;
+                expPenalty = 100;
+            }
+
+            if (user) {
+                user.integrity_score = Math.max(
+                    0,
+                    Number(user.integrity_score ?? 100) - integrityPenalty
+                );
+
+                user.accumulatedPenaltyExp =
+                    Number(user.accumulatedPenaltyExp || 0) + expPenalty;
+
+                user.roomMode = targetRoom || user.roomMode;
+            }
+
+            const { data: dbUser, error: findUserError } = await supabase
+                .from('users')
+                .select('username, integrity_score')
+                .eq('username', username)
+                .maybeSingle();
+
+            if (findUserError) throw findUserError;
+
+            if (dbUser) {
+                const currentIntegrity = Number(dbUser.integrity_score ?? 100);
+                const nextIntegrity = Math.max(
+                    0,
+                    currentIntegrity - integrityPenalty
+                );
+
+                await supabase
+                    .from('users')
+                    .update({
+                        integrity_score: nextIntegrity,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('username', username);
+            }
+
+            await supabase
+                .from('violation_history')
+                .insert([{
+                    username,
+                    reason: reasonStr,
+                    penalty_points: integrityPenalty
+                }]);
+
+            addTeacherLog(
+                `❌ 懲罰: ${username} 因 [${reasonStr}] 扣除誠信分 ${integrityPenalty} 點, EXP 扣除 ${expPenalty} 點`,
+                targetRoom || 'tutor'
+            );
+
+        } catch (err) {
+            console.error('特約教室 violation 後端紀錄失敗:', err);
+        }
     }
+
+    if (targetRoom) {
+        io.to(targetRoom).emit('violation', normalizedData);
+        io.to(targetRoom).emit('student_violation', normalizedData);
+
+        io.to(targetRoom).emit('teacher_update', {
+            logs: teacherLogsByRoom[targetRoom] || [],
+            snaps: [{
+                id: Date.now(),
+                name: username,
+                reason: reasonStr,
+                image: data?.image || data?.img || null,
+                time: new Date().toLocaleTimeString('zh-TW', {
+                    timeZone: 'Asia/Taipei',
+                    hour12: false
+                }),
+                roomMode: targetRoom
+            }]
+        });
+    } else {
+        socket.broadcast.emit('violation', normalizedData);
+        socket.broadcast.emit('student_violation', normalizedData);
+    }
+
+    broadcastUpdateRank();
 });
 
     // 新增：切換分頁的專屬轉發

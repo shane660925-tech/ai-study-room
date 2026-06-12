@@ -253,6 +253,71 @@ window.triggerViolation = function(reason) {
     }
 };
 
+function showTutorCameraViolationWarning(reason) {
+    const overlay = document.getElementById('violation-overlay');
+    const reasonText = document.getElementById('violation-reason');
+
+    if (overlay && reasonText) {
+        reasonText.innerText =
+            reason || '系統偵測到違規行為，請立即調整。';
+
+        overlay.style.display = 'flex';
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+    }
+
+    if (window.activeWarningAudio) {
+        window.activeWarningAudio.pause();
+        window.activeWarningAudio.currentTime = 0;
+    }
+
+    const alertSound =
+        document.getElementById('alertSound') ||
+        document.getElementById('warningSound');
+
+    if (alertSound) {
+        window.activeWarningAudio = alertSound;
+        alertSound.currentTime = 0;
+        alertSound.play().catch(() => {});
+    }
+
+    if (navigator.vibrate) {
+        navigator.vibrate([250, 120, 250]);
+    }
+}
+
+function captureTutorCameraSnapshot() {
+    try {
+        const videoElementObj = document.querySelector('video');
+
+        if (videoElementObj && videoElementObj.readyState === 4) {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElementObj.videoWidth;
+            canvas.height = videoElementObj.videoHeight;
+
+            canvas
+                .getContext('2d')
+                .drawImage(videoElementObj, 0, 0, canvas.width, canvas.height);
+
+            return canvas.toDataURL('image/jpeg', 0.5);
+        }
+    } catch (error) {
+        console.warn('特約教室截圖失敗:', error);
+    }
+
+    return null;
+}
+
+function getCurrentTutorSystemUsername(fallbackName = '') {
+    return (
+        localStorage.getItem('studyVerseUser') ||
+        localStorage.getItem('username') ||
+        document.getElementById('inputName')?.value ||
+        fallbackName ||
+        '未知學員'
+    );
+}
+
 // 更新上方狀態列
 window.updateTutorStatus = function(statusType, text) {
     const statusBar = document.getElementById('status-bar');
@@ -982,77 +1047,93 @@ const avatarSeed = encodeURIComponent(getTutorSystemName(u));
 window.isLeaveSeatActive = false; // 離座鎖定狀態
 
 document.addEventListener('CameraViolation', (e) => {
-    // 🛑 【豁免機制】如果是休息時間，無視所有鏡頭違規 (離座、趴睡、手機)
+    // 休息時間 / 重連踢出流程中，不記鏡頭違規
     if (window.isAIPaused || window.isTutorReconnectKicking) return;
 
-    const { name, reason } = e.detail; 
+    const detail = e.detail || {};
+    const rawReason = String(detail.reason || detail.type || 'AI 偵測異常');
+    const systemName = getCurrentTutorSystemUsername(detail.name);
+    const roomId = getTutorRoomCode();
 
-    if (reason.includes("離座")) {
-        if (window.isLeaveSeatActive) return; 
-        
+    // 統一分類文字
+    let finalReason = rawReason;
+
+    if (rawReason.includes('手機') || rawReason === 'PHONE_IN_VIDEO') {
+        finalReason = '📱 使用手機 / 手機入鏡';
+    } else if (rawReason.includes('趴睡') || rawReason.includes('睡') || rawReason === 'SLEEPING') {
+        finalReason = '💤 偵測趴睡';
+    } else if (rawReason.includes('離座') || rawReason.includes('離位') || rawReason === 'LEFT_SEAT') {
+        finalReason = '🪑 偵測離座';
+    }
+
+    // 離座：保留原本離座專用全螢幕提醒
+    if (finalReason.includes('離座')) {
+        if (window.isLeaveSeatActive) return;
+
         window.isLeaveSeatActive = true;
-        
-        if (typeof window.totalViolationCount !== 'undefined') window.totalViolationCount++;
+
+        if (typeof window.totalViolationCount !== 'undefined') {
+            window.totalViolationCount++;
+        }
+
         if (typeof window.violationDetails !== 'undefined') {
-            window.violationDetails["🪑 偵測離座"] = (window.violationDetails["🪑 偵測離座"] || 0) + 1;
+            window.violationDetails['🪑 偵測離座'] =
+                (window.violationDetails['🪑 偵測離座'] || 0) + 1;
         }
 
-        showLeaveSeatModal(); 
-        
-        let snapImg = null;
-        try {
-            const videoElementObj = document.querySelector('video'); 
-            if (videoElementObj && videoElementObj.readyState === 4) {
-                const canvas = document.createElement('canvas');
-                canvas.width = videoElementObj.videoWidth;
-                canvas.height = videoElementObj.videoHeight;
-                canvas.getContext('2d').drawImage(videoElementObj, 0, 0, canvas.width, canvas.height);
-                snapImg = canvas.toDataURL('image/jpeg', 0.5); 
-            }
-        } catch (error) {}
+        showLeaveSeatModal();
 
-        if (typeof socket !== 'undefined') {
-            const leaveTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-            emitTutorViolation({ 
-                name: name, 
-                type: `🪑 離座 (離位時間: ${leaveTime} / 尚未回位)`, 
-                image: snapImg 
-            });
-        }
-        return; 
-    }
+        const snapImg = captureTutorCameraSnapshot();
+        const leaveTime = new Date().toLocaleTimeString('zh-TW', {
+            hour12: false
+        });
 
-    if (typeof window.totalViolationCount !== 'undefined') window.totalViolationCount++;
-    if (typeof window.violationDetails !== 'undefined') {
-        if (reason.includes("手機")) {
-            window.violationDetails["📱 使用手機"] = (window.violationDetails["📱 使用手機"] || 0) + 1;
-        } else if (reason.includes("趴睡")) {
-            window.violationDetails["💤 偵測趴睡"] = (window.violationDetails["💤 偵測趴睡"] || 0) + 1;
-        } else {
-            window.violationDetails[reason] = (window.violationDetails[reason] || 0) + 1;
-        }
-    }
-
-    let snapImg = null;
-    try {
-        const videoElementObj = document.querySelector('video'); 
-        if (videoElementObj && videoElementObj.readyState === 4) {
-            const canvas = document.createElement('canvas');
-            canvas.width = videoElementObj.videoWidth;
-            canvas.height = videoElementObj.videoHeight;
-            canvas.getContext('2d').drawImage(videoElementObj, 0, 0, canvas.width, canvas.height);
-            snapImg = canvas.toDataURL('image/jpeg', 0.5); 
-        }
-    } catch (error) {}
-
-    if (typeof socket !== 'undefined') {
         emitTutorViolation({
-    name: name,
-    type: reason,
-    image: snapImg,
-    roomId: getTutorRoomCode()
-});
+            name: systemName,
+            username: systemName,
+            type: `🪑 離座 (離位時間: ${leaveTime} / 尚未回位)`,
+            image: snapImg,
+            roomId,
+            room: roomId,
+            roomCode: roomId,
+            source: 'camera_ai'
+        });
+
+        return;
     }
+
+    // 手機 / 趴睡 / 其他鏡頭違規：現在也要跳學生端警示
+    showTutorCameraViolationWarning(finalReason);
+
+    if (typeof window.totalViolationCount !== 'undefined') {
+        window.totalViolationCount++;
+    }
+
+    if (typeof window.violationDetails !== 'undefined') {
+        if (finalReason.includes('手機')) {
+            window.violationDetails['📱 使用手機'] =
+                (window.violationDetails['📱 使用手機'] || 0) + 1;
+        } else if (finalReason.includes('趴睡')) {
+            window.violationDetails['💤 偵測趴睡'] =
+                (window.violationDetails['💤 偵測趴睡'] || 0) + 1;
+        } else {
+            window.violationDetails[finalReason] =
+                (window.violationDetails[finalReason] || 0) + 1;
+        }
+    }
+
+    const snapImg = captureTutorCameraSnapshot();
+
+    emitTutorViolation({
+        name: systemName,
+        username: systemName,
+        type: finalReason,
+        image: snapImg,
+        roomId,
+        room: roomId,
+        roomCode: roomId,
+        source: 'camera_ai'
+    });
 });
 
 window.handleReturnSeat = function() {
@@ -1064,14 +1145,18 @@ window.handleReturnSeat = function() {
     
     window.isLeaveSeatActive = false; 
     
-    const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
+    const myName = getCurrentTutorSystemUsername();
     if (typeof socket !== 'undefined') {
         const returnTime = new Date().toLocaleTimeString('zh-TW', { hour12: false });
         emitTutorViolation({ 
-    name: myName, 
-    type: `【更新狀態】學生已回位 (回位時間: ${returnTime})`, 
+    name: myName,
+    username: myName,
+    type: `【更新狀態】學生已回位 (回位時間: ${returnTime})`,
     image: null,
-    roomId: getTutorRoomCode()
+    roomId: getTutorRoomCode(),
+    room: getTutorRoomCode(),
+    roomCode: getTutorRoomCode(),
+    source: 'camera_ai'
 });
     }
 };

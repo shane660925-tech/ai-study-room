@@ -949,8 +949,23 @@ function saveAndRenderViolation(studentName, type, img, roomCode) {
 socket.on('teacher_update', (data) => {
     if (data.snaps && data.snaps.length > 0) {
         data.snaps.forEach(snap => {
-            if (!activeStudents.some(s => s.name === snap.name)) return;
-            saveAndRenderViolation(snap.name, snap.reason, snap.image || snap.img);
+            const matchedStudent = activeStudents.find(s =>
+    getTutorSystemName(s) === snap.name ||
+    s.name === snap.name ||
+    s.username === snap.name ||
+    getTutorDisplayName(s) === snap.name
+);
+
+const systemName = matchedStudent
+    ? getTutorSystemName(matchedStudent)
+    : snap.name;
+
+saveAndRenderViolation(
+    systemName,
+    snap.reason,
+    snap.image || snap.img,
+    snap.roomMode || window.currentTutorRoomCode
+);
         });
     }
     if (data.logs && data.logs.length > 0) {
@@ -965,8 +980,12 @@ socket.on('teacher_update', (data) => {
 });
 
 function handleDirectViolation(data) {
-    const name = data.name || data.studentName || data.username;
-    if (!name) return;
+    const rawName =
+        data?.username ||
+        data?.name ||
+        data?.studentName;
+
+    if (!rawName) return;
 
     const eventRoom =
         data.roomId ||
@@ -974,16 +993,42 @@ function handleDirectViolation(data) {
         data.roomCode ||
         window.currentTutorRoomCode;
 
-    const ownedRoomCodes = (window.tutorRoomsCache || []).map(room => room.room_code);
+    const ownedRoomCodes = (window.tutorRoomsCache || [])
+        .map(room => room.room_code)
+        .filter(Boolean);
 
-    if (eventRoom && ownedRoomCodes.length > 0 && !ownedRoomCodes.includes(eventRoom)) {
+    if (
+        eventRoom &&
+        ownedRoomCodes.length > 0 &&
+        !ownedRoomCodes.includes(eventRoom)
+    ) {
         return;
     }
 
-    const type = data.type || data.reason || data.violationType || '異常行為';
-    const img = data.image || data.img || data.screenshot || null;
+    const matchedStudent = activeStudents.find(s =>
+        getTutorSystemName(s) === rawName ||
+        s.name === rawName ||
+        s.username === rawName ||
+        getTutorDisplayName(s) === rawName
+    );
 
-    saveAndRenderViolation(name, type, img, eventRoom);
+    const systemName = matchedStudent
+        ? getTutorSystemName(matchedStudent)
+        : rawName;
+
+    const type =
+        data.type ||
+        data.reason ||
+        data.violationType ||
+        '異常行為';
+
+    const img =
+        data.image ||
+        data.img ||
+        data.screenshot ||
+        null;
+
+    saveAndRenderViolation(systemName, type, img, eventRoom);
 }
 socket.on('student_violation', handleDirectViolation);
 socket.on('violation', handleDirectViolation);
