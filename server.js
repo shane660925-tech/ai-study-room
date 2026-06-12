@@ -7590,27 +7590,12 @@ socket.on('get_attendance', (data) => {
     }
 
     if (targetRoom) {
-        io.to(targetRoom).emit('violation', normalizedData);
-        io.to(targetRoom).emit('student_violation', normalizedData);
-
-        io.to(targetRoom).emit('teacher_update', {
-            logs: teacherLogsByRoom[targetRoom] || [],
-            snaps: [{
-                id: Date.now(),
-                name: username,
-                reason: reasonStr,
-                image: data?.image || data?.img || null,
-                time: new Date().toLocaleTimeString('zh-TW', {
-                    timeZone: 'Asia/Taipei',
-                    hour12: false
-                }),
-                roomMode: targetRoom
-            }]
-        });
-    } else {
-        socket.broadcast.emit('violation', normalizedData);
-        socket.broadcast.emit('student_violation', normalizedData);
-    }
+    // 特約教室違規統一只走 student_violation
+    // 不再另外 emit violation / teacher_update.snaps，避免教師端重複紀錄
+    io.to(targetRoom).emit('student_violation', normalizedData);
+} else {
+    socket.broadcast.emit('student_violation', normalizedData);
+}
 
     broadcastUpdateRank();
 });

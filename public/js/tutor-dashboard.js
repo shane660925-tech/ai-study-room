@@ -947,27 +947,6 @@ function saveAndRenderViolation(studentName, type, img, roomCode) {
 }
 
 socket.on('teacher_update', (data) => {
-    if (data.snaps && data.snaps.length > 0) {
-        data.snaps.forEach(snap => {
-            const matchedStudent = activeStudents.find(s =>
-    getTutorSystemName(s) === snap.name ||
-    s.name === snap.name ||
-    s.username === snap.name ||
-    getTutorDisplayName(s) === snap.name
-);
-
-const systemName = matchedStudent
-    ? getTutorSystemName(matchedStudent)
-    : snap.name;
-
-saveAndRenderViolation(
-    systemName,
-    snap.reason,
-    snap.image || snap.img,
-    snap.roomMode || window.currentTutorRoomCode
-);
-        });
-    }
     if (data.logs && data.logs.length > 0) {
         data.logs.forEach(log => {
             const logStr = String(log);
@@ -1031,17 +1010,7 @@ function handleDirectViolation(data) {
     saveAndRenderViolation(systemName, type, img, eventRoom);
 }
 socket.on('student_violation', handleDirectViolation);
-socket.on('violation', handleDirectViolation);
 socket.on('ai_violation', handleDirectViolation);
-
-socket.on('flip_failed', (data) => {
-    const name = data.name || data.username || '未知學員';
-    if (activeStudents.some(s => s.name === name)) saveAndRenderViolation(name, "📱 翻轉中斷 (超過5秒強制踢出教室)", null);
-});
-socket.on('tab_switched', (data) => {
-    const name = data.name || data.username || '未知學員';
-    if (activeStudents.some(s => s.name === name)) saveAndRenderViolation(name, "🚫 切換分頁 (離開自習室畫面)", null);
-});
 
 function renderViolationsList() {
     const container = document.getElementById('tab-violations');

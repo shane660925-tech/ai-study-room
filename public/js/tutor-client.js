@@ -72,12 +72,6 @@ socket.emit('flip_failed', {
     name: myName,
     roomId
 });
-
-emitTutorViolation({ 
-    name: myName, 
-    type: '📱 手機翻轉中斷（超過5秒，已強制踢出教室）', 
-    image: null
-});
             }
             
             setTimeout(async () => {
@@ -165,7 +159,9 @@ function emitTutorViolation(payload) {
 
     socket.emit('violation', {
         ...payload,
-        roomId: getTutorRoomCode()
+        roomId: payload.roomId || getTutorRoomCode(),
+        room: payload.room || getTutorRoomCode(),
+        roomCode: payload.roomCode || getTutorRoomCode()
     });
 }
 

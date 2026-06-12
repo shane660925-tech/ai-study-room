@@ -304,6 +304,28 @@ function handleDistractionBuffer(issue, now) {
 // 5. 違規截圖與資料上傳
 // ==========================================
 async function captureViolation(reason) {
+        // 特約教室的 AI 鏡頭違規統一交給 CameraViolation → tutor-client.js → violation → student_violation。
+    // 不再走 report_violation，避免特約教室找不到 onlineUsers 或重複紀錄。
+    if (
+        currentRoomMode === 'tutor' &&
+        !reason.includes("中斷") &&
+        !reason.includes("踢出") &&
+        !reason.includes("分頁") &&
+        !reason.includes("擅自翻開")
+    ) {
+        return;
+    }
+        // 特約教室的鏡頭 AI 違規統一交給 CameraViolation → tutor-client.js → violation 處理。
+    // 避免同時送 report_violation，造成特約教室找不到 onlineUsers 或重複紀錄。
+    if (
+        currentRoomMode === 'tutor' &&
+        !reason.includes("中斷") &&
+        !reason.includes("踢出") &&
+        !reason.includes("分頁") &&
+        !reason.includes("擅自翻開")
+    ) {
+        return;
+    }
     if (currentRoomMode !== 'tutor' || reason.includes("中斷") || reason.includes("踢出")) {
         window.totalViolationCount++;
         if (reason.includes("手機") && !reason.includes("中斷") && !reason.includes("踢出")) window.violationDetails["📱 使用手機"]++;
