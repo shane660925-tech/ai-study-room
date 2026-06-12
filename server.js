@@ -100,6 +100,22 @@ function normalizeUsername(value) {
         .trim();
 }
 
+function normalizeProfileText(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isProfileCompleted(user) {
+    return !!(
+        user &&
+        normalizeProfileText(user.nickname) &&
+        normalizeProfileText(user.real_name) &&
+        user.profile_completed_at
+    );
+}
+
 function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
 }
@@ -195,9 +211,191 @@ async function generateUniqueLineBindShortCode() {
     return code;
 }
 // ==========================================
-// 2. API 路由設定
+// User Profile API - 暱稱 / 真實姓名
 // ==========================================
 
+app.get('/api/profile', async (req, res) => {
+    const username = normalizeUsername(req.query.username);
+
+    if (!username) {
+        return res.status(400).json({
+            success: false,
+            error: '缺少 username'
+        });
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('username, role, nickname, real_name, provider_display_name, profile_completed_at, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到使用者'
+            });
+        }
+
+        if (user.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                error: '此帳號已被停用'
+            });
+        }
+
+        res.json({
+            success: true,
+            profile: {
+                username: user.username,
+                role: user.role || 'student',
+                nickname: user.nickname || '',
+                real_name: user.real_name || '',
+                provider_display_name: user.provider_display_name || '',
+                profile_completed_at: user.profile_completed_at || null,
+                profile_completed: isProfileCompleted(user)
+            }
+        });
+
+    } catch (err) {
+        console.error('讀取個人資料失敗:', err);
+        res.status(500).json({
+            success: false,
+            error: '讀取個人資料失敗'
+        });
+    }
+});
+
+app.post('/api/profile/update', async (req, res) => {
+    const username = normalizeUsername(req.body.username);
+    const nickname = normalizeProfileText(req.body.nickname);
+    const realName = normalizeProfileText(req.body.real_name);
+
+    if (!username) {
+        return res.status(400).json({
+            success: false,
+            error: '缺少 username'
+        });
+    }
+
+    if (!nickname) {
+        return res.status(400).json({
+            success: false,
+            error: '請填寫暱稱'
+        });
+    }
+
+    if (!realName) {
+        return res.status(400).json({
+            success: false,
+            error: '請填寫真實姓名'
+        });
+    }
+
+    if (nickname.length < 2 || nickname.length > 20) {
+        return res.status(400).json({
+            success: false,
+            error: '暱稱請輸入 2～20 個字'
+        });
+    }
+
+    if (realName.length < 2 || realName.length > 30) {
+        return res.status(400).json({
+            success: false,
+            error: '真實姓名請輸入 2～30 個字'
+        });
+    }
+
+    try {
+        const { data: currentUser, error: currentUserError } = await supabase
+            .from('users')
+            .select('username, role, is_blocked')
+            .eq('username', username)
+            .maybeSingle();
+
+        if (currentUserError) throw currentUserError;
+
+        if (!currentUser) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到使用者'
+            });
+        }
+
+        if (currentUser.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                error: '此帳號已被停用'
+            });
+        }
+
+        const { data: usersWithNickname, error: nicknameCheckError } = await supabase
+            .from('users')
+            .select('username, nickname')
+            .not('nickname', 'is', null);
+
+        if (nicknameCheckError) throw nicknameCheckError;
+
+        const duplicatedNickname = (usersWithNickname || []).find(user => {
+            if (user.username === username) return false;
+            return normalizeProfileText(user.nickname).toLowerCase() === nickname.toLowerCase();
+        });
+
+        if (duplicatedNickname) {
+            return res.status(400).json({
+                success: false,
+                error: '這個暱稱已被使用，請換一個暱稱'
+            });
+        }
+
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({
+                nickname,
+                real_name: realName,
+                profile_completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('username', username)
+            .select('username, role, nickname, real_name, provider_display_name, profile_completed_at')
+            .single();
+
+        if (updateError) {
+            if (updateError.code === '23505') {
+                return res.status(400).json({
+                    success: false,
+                    error: '這個暱稱已被使用，請換一個暱稱'
+                });
+            }
+
+            throw updateError;
+        }
+
+        res.json({
+            success: true,
+            message: '個人資料已更新',
+            profile: {
+                username: updatedUser.username,
+                role: updatedUser.role || 'student',
+                nickname: updatedUser.nickname || '',
+                real_name: updatedUser.real_name || '',
+                provider_display_name: updatedUser.provider_display_name || '',
+                profile_completed_at: updatedUser.profile_completed_at || null,
+                profile_completed: true
+            }
+        });
+
+    } catch (err) {
+        console.error('更新個人資料失敗:', err);
+        res.status(500).json({
+            success: false,
+            error: '更新個人資料失敗'
+        });
+    }
+});
 // ==========================================
 // Admin Panel API - Platform Admin
 // ==========================================
@@ -2724,10 +2922,16 @@ app.post('/api/register', async (req, res) => {
 
         const trialFields = buildNewStudentTrialFields();
 
+const cleanNickname = normalizeProfileText(username);
+
 const { error } = await supabase.from('users').insert([{ 
     username: String(username), 
     account: String(account),
     password: String(password),
+    nickname: cleanNickname,
+    real_name: null,
+    provider_display_name: null,
+    profile_completed_at: null,
     total_seconds: 0, 
     streak: 1, 
     last_login: today, 
@@ -3531,7 +3735,7 @@ app.get('/api/subscription/status', async (req, res) => {
             });
         }
 
-        const { data: user, error } = await supabase
+                let { data: user, error } = await supabase
             .from('users')
             .select(`
                 username,
@@ -5270,27 +5474,31 @@ if (nameCheck) {
     }
     : buildNewStudentTrialFields();
 
-            const { data: newUser, error: insErr } = await supabase
-                .from('users')
-                .insert([{
-                    username: String(finalName),
-                    account: String(email),
-                    password: String(googleId),
-                    total_seconds: 0,
-                    streak: 1,
-                    last_login: new Date().toISOString().split('T')[0],
-                    role: state === 'teacher_apply'
-    ? 'teacher_pending'
-    : 'student',
-                    integrity_score: 100,
-link_code: newLinkCode,
-...trialFields
-                }])
-                .select()
-                .single();
+           const { data: newUser, error: insErr } = await supabase
+    .from('users')
+    .insert([{
+        username: String(finalName),
+        account: String(email),
+        password: String(googleId),
+        nickname: String(finalName),
+        real_name: null,
+        provider_display_name: normalizeProfileText(name),
+        profile_completed_at: null,
+        total_seconds: 0,
+        streak: 1,
+        last_login: new Date().toISOString().split('T')[0],
+        role: state === 'teacher_apply'
+            ? 'teacher_pending'
+            : 'student',
+        integrity_score: 100,
+        link_code: newLinkCode,
+        ...trialFields
+    }])
+    .select()
+    .single();
 
-            if (insErr) throw insErr;
-            user = newUser;
+if (insErr) throw insErr;
+user = newUser;
         }
 
         console.log('🔐 Google 登入使用者檢查:', {
@@ -5586,6 +5794,10 @@ if (state) {
     username: String(finalUsername),
     account: String(lineId),
     password: String(lineId), // 用 LINE ID 當作密碼欄位佔位
+    nickname: String(finalUsername),
+    real_name: null,
+    provider_display_name: normalizeProfileText(displayName),
+    profile_completed_at: null,
     total_seconds: 0,
     streak: 1,
     last_login: today,

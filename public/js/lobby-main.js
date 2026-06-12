@@ -88,6 +88,294 @@ setInterval(() => {
     }
 }, 500);
 
+// =========================================================
+// Student Profile Modal
+// 暱稱 / 真實姓名：第一次進大廳強制填寫，之後點頭像可修改
+// =========================================================
+
+window.studyVerseProfile = null;
+
+function normalizeProfileInput(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function updateLobbyProfileDisplay(profile) {
+    if (!profile) return;
+
+    window.studyVerseProfile = profile;
+
+    const displayName = profile.nickname || profile.username || '學員';
+
+    const navName = document.getElementById('navName');
+    if (navName) {
+        navName.innerText = displayName;
+    }
+
+    const navAvatar = document.getElementById('navAvatar');
+    if (navAvatar) {
+        navAvatar.src =
+            `https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=b6e3f4`;
+    }
+}
+
+window.fetchStudyVerseProfile = async function() {
+    const username = localStorage.getItem('studyVerseUser');
+
+    if (!username) return null;
+
+    try {
+        const res = await fetch(`/api/profile?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            console.error('讀取個人資料失敗:', data);
+            return null;
+        }
+
+        updateLobbyProfileDisplay(data.profile);
+        return data.profile;
+
+    } catch (err) {
+        console.error('讀取個人資料失敗:', err);
+        return null;
+    }
+};
+
+window.openStudyVerseProfileModal = function(force = false) {
+    const username = localStorage.getItem('studyVerseUser');
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (!username) return;
+
+    // 教師 / 管理員先不強制填學生個資
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return;
+    }
+
+    const oldModal = document.getElementById('studyVerseProfileModal');
+    if (oldModal) oldModal.remove();
+
+    const profile = window.studyVerseProfile || {};
+    const nickname = normalizeProfileInput(profile.nickname || username);
+    const realName = normalizeProfileInput(profile.real_name || '');
+
+    const modal = document.createElement('div');
+    modal.id = 'studyVerseProfileModal';
+    modal.className =
+        'fixed inset-0 z-[100001] flex items-center justify-center bg-black/85 backdrop-blur-md p-4';
+
+    modal.innerHTML = `
+        <div class="w-full max-w-lg bg-[#0f172a] border border-blue-400/30 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-7 border-b border-white/10 bg-gradient-to-b from-blue-500/10 to-transparent">
+                <div class="text-blue-300 text-xs font-black tracking-[0.2em] uppercase mb-3">
+                    Student Profile
+                </div>
+
+                <h2 class="text-3xl font-black text-white mb-3">
+                    完成你的個人資料
+                </h2>
+
+                <p class="text-gray-300 text-sm leading-relaxed">
+                    <b class="text-white">暱稱</b>會顯示在沉浸式自習室、主題教室、小隊共學與一般排行榜。<br>
+                    <b class="text-white">真實姓名</b>只會用於特約教室、課程報名、教師點名、白名單辨識，以及未來 Google Meet 課程驗證。
+                    一般公開共學場景不會顯示你的真實姓名。
+                </p>
+
+                ${force ? `
+                    <div class="mt-4 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 p-4 text-yellow-200 text-xs font-bold leading-relaxed">
+                        第一次進入大廳需要先完成這兩項資料，完成後才能開始使用功能。
+                    </div>
+                ` : ''}
+            </div>
+
+            <div class="p-7 grid gap-4">
+                <div>
+                    <label class="block text-xs font-black text-blue-300 mb-2 tracking-widest uppercase">
+                        暱稱 nickname
+                    </label>
+                    <input
+                        id="profileNicknameInput"
+                        value="${nickname.replace(/"/g, '&quot;')}"
+                        maxlength="20"
+                        class="w-full bg-black/60 border border-white/10 focus:border-blue-400 outline-none rounded-2xl px-4 py-4 text-white font-bold"
+                        placeholder="請輸入暱稱">
+                    <p class="mt-2 text-[11px] text-gray-500">
+                        暱稱不可重複，會顯示在一般自習與共學場景。
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-black text-green-300 mb-2 tracking-widest uppercase">
+                        真實姓名 real name
+                    </label>
+                    <input
+                        id="profileRealNameInput"
+                        value="${realName.replace(/"/g, '&quot;')}"
+                        maxlength="30"
+                        class="w-full bg-black/60 border border-white/10 focus:border-green-400 outline-none rounded-2xl px-4 py-4 text-white font-bold"
+                        placeholder="請輸入真實姓名">
+                    <p class="mt-2 text-[11px] text-gray-500">
+                        真實姓名會用於教師辨識、特約教室、報名與白名單，不會顯示在一般自習室。
+                    </p>
+                </div>
+
+                <div id="profileMessage" class="hidden text-sm font-bold rounded-2xl px-4 py-3"></div>
+
+                <button
+                    id="saveProfileBtn"
+                    onclick="saveStudyVerseProfile(${force ? 'true' : 'false'})"
+                    class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all">
+                    儲存並進入大廳
+                </button>
+
+                <div class="grid ${force ? 'grid-cols-1' : 'grid-cols-2'} gap-3">
+                    ${force ? '' : `
+                        <button
+                            onclick="closeStudyVerseProfileModal()"
+                            class="w-full bg-white/5 hover:bg-white/10 text-gray-300 font-bold py-3 rounded-2xl transition-all">
+                            取消
+                        </button>
+                    `}
+
+                    <button
+                        onclick="logout()"
+                        class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 font-bold py-3 rounded-2xl transition-all">
+                        登出
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+        const input = document.getElementById(realName ? 'profileNicknameInput' : 'profileRealNameInput');
+        if (input) input.focus();
+    }, 80);
+};
+
+window.closeStudyVerseProfileModal = function() {
+    const modal = document.getElementById('studyVerseProfileModal');
+    if (modal) modal.remove();
+};
+
+window.saveStudyVerseProfile = async function(force = false) {
+    const username = localStorage.getItem('studyVerseUser');
+    const nickname = normalizeProfileInput(document.getElementById('profileNicknameInput')?.value);
+    const realName = normalizeProfileInput(document.getElementById('profileRealNameInput')?.value);
+    const messageBox = document.getElementById('profileMessage');
+    const saveBtn = document.getElementById('saveProfileBtn');
+
+    function showMessage(text, type = 'error') {
+        if (!messageBox) return;
+        messageBox.classList.remove('hidden');
+        messageBox.className =
+            type === 'success'
+                ? 'text-sm font-bold rounded-2xl px-4 py-3 bg-green-500/10 text-green-300 border border-green-500/20'
+                : 'text-sm font-bold rounded-2xl px-4 py-3 bg-red-500/10 text-red-300 border border-red-500/20';
+        messageBox.innerText = text;
+    }
+
+    if (!username) {
+        showMessage('登入狀態異常，請重新登入。');
+        return;
+    }
+
+    if (!nickname) {
+        showMessage('請填寫暱稱。');
+        return;
+    }
+
+    if (!realName) {
+        showMessage('請填寫真實姓名。');
+        return;
+    }
+
+    if (nickname.length < 2 || nickname.length > 20) {
+        showMessage('暱稱請輸入 2～20 個字。');
+        return;
+    }
+
+    if (realName.length < 2 || realName.length > 30) {
+        showMessage('真實姓名請輸入 2～30 個字。');
+        return;
+    }
+
+    try {
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerText = '儲存中...';
+        }
+
+        const res = await fetch('/api/profile/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username,
+                nickname,
+                real_name: realName
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || '儲存個人資料失敗');
+        }
+
+        updateLobbyProfileDisplay(data.profile);
+
+        showMessage('個人資料已儲存。', 'success');
+
+        setTimeout(() => {
+            closeStudyVerseProfileModal();
+
+            if (force && typeof window.applyLobbySubscriptionVisualLocks === 'function') {
+                window.applyLobbySubscriptionVisualLocks();
+            }
+        }, 450);
+
+    } catch (err) {
+        showMessage(err.message || '儲存個人資料失敗');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = '儲存並進入大廳';
+        }
+    }
+};
+
+window.ensureStudyVerseProfileCompleted = async function(options = {}) {
+    const force = options.force === true;
+    const username = localStorage.getItem('studyVerseUser');
+    const role = localStorage.getItem('studyVerseRole') || 'student';
+
+    if (!username) return false;
+
+    if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
+        return true;
+    }
+
+    const profile = await window.fetchStudyVerseProfile();
+
+    if (!profile) {
+        return false;
+    }
+
+    if (profile.profile_completed === true) {
+        return true;
+    }
+
+    window.openStudyVerseProfileModal(force);
+    return false;
+};
+
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
@@ -680,11 +968,6 @@ if (typeof window.showBetaModeBanner === 'function') {
 }
 
 // 隱私權確認完成並回到大廳後，立即啟動新手導覽
-if (typeof startIntroTutorial === 'function') {
-    requestAnimationFrame(() => {
-        startIntroTutorial();
-    });
-}
 };
 
 async function checkPrivacyConsent() {
@@ -2323,6 +2606,14 @@ async function finishIntroTutorial() {
     }
 
     clearIntroHighlight();
+
+if (typeof window.ensureStudyVerseProfileCompleted === 'function') {
+    const profileReady = await window.ensureStudyVerseProfileCompleted({ force: true });
+
+    if (!profileReady) {
+        return;
+    }
+}
 
 if (typeof window.showSubscriptionIntroModalOnce === 'function') {
     window.showSubscriptionIntroModalOnce();

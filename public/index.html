@@ -143,7 +143,13 @@
 <p id="displayLinkCode" class="text-[10px] text-green-400 font-bold tracking-widest hidden">CODE: ------</p>
 <p class="text-[10px] text-blue-500 font-bold uppercase tracking-widest opacity-80">Online</p>
                 </div>
-                <img id="navAvatar" src="" class="w-10 h-10 rounded-xl border-2 border-gray-700 bg-gray-800 object-cover" alt="User Avatar">
+                <img
+    id="navAvatar"
+    src=""
+    onclick="openStudyVerseProfileModal(false)"
+    class="w-10 h-10 rounded-xl border-2 border-gray-700 bg-gray-800 object-cover cursor-pointer hover:border-blue-400 transition-all"
+    alt="User Avatar"
+    title="修改個人資料">
                 <button onclick="logout()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-500 transition-all text-gray-500" title="登出">
                     <i class="fas fa-sign-out-alt text-sm"></i>
                 </button>
