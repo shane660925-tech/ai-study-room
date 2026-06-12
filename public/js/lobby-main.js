@@ -957,17 +957,55 @@ window.pageSpecificInit = async function() {
     if (!canContinue) return;
 
     initSyncQRCode();
-initLineBindQRCode();
+    initLineBindQRCode();
 
-if (typeof window.applyLobbySubscriptionVisualLocks === 'function') {
-    window.applyLobbySubscriptionVisualLocks();
-}
+    if (typeof window.applyLobbySubscriptionVisualLocks === 'function') {
+        window.applyLobbySubscriptionVisualLocks();
+    }
 
-if (typeof window.showBetaModeBanner === 'function') {
-    window.showBetaModeBanner();
-}
+    if (typeof window.showBetaModeBanner === 'function') {
+        window.showBetaModeBanner();
+    }
 
-// 隱私權確認完成並回到大廳後，立即啟動新手導覽
+    const runProfileAndPlanAfterIntro = async () => {
+        if (typeof window.ensureStudyVerseProfileCompleted === 'function') {
+            const profileReady = await window.ensureStudyVerseProfileCompleted({
+                force: true
+            });
+
+            if (!profileReady) {
+                return;
+            }
+        }
+
+        if (typeof window.showSubscriptionIntroModalOnce === 'function') {
+            window.showSubscriptionIntroModalOnce();
+        }
+    };
+
+    const introKey = `studyVerseIntroCompleted:${username}`;
+
+    if (typeof startIntroTutorial === 'function') {
+        requestAnimationFrame(async () => {
+            await startIntroTutorial();
+
+            const introCompleted =
+                localStorage.getItem(introKey) === 'true';
+
+            const introOverlay =
+                document.getElementById('intro-overlay');
+
+            // 如果導覽已經完成，就直接檢查個人資料。
+            // 如果導覽正在顯示，等 finishIntroTutorial() 結束後再檢查。
+            if (introCompleted && !introOverlay) {
+                await runProfileAndPlanAfterIntro();
+            }
+        });
+
+        return;
+    }
+
+    await runProfileAndPlanAfterIntro();
 };
 
 async function checkPrivacyConsent() {
