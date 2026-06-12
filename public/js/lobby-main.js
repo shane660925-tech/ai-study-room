@@ -3741,9 +3741,16 @@ window.enrollTutorProgram = async function(programId) {
     }
 
     if (program.is_enrolled) {
-        alert('你已經報名過此特約教室。');
-        return;
-    }
+    const roomCode = program.room_code || program.program_room_code || '未取得';
+
+    alert(
+        `你已經報名過此特約教室。\n\n` +
+        `課程代碼：${roomCode}\n\n` +
+        `請在大廳輸入此代碼進入特約教室。`
+    );
+
+    return;
+}
 
     if (program.is_full) {
         alert('此特約教室已額滿。');
@@ -3806,11 +3813,22 @@ window.enrollTutorProgram = async function(programId) {
                 : `${newCount} / 不限`;
         }
 
-        alert(
-            `✅ 報名成功！\n\n` +
-            `你已加入此特約教室白名單。\n` +
-            `系統已將課程代碼與課程資訊發送到大廳通知。`
-        );
+        const roomCode =
+    data.program?.room_code ||
+    program.room_code ||
+    '未取得';
+
+alert(
+    `✅ 報名成功！\n\n` +
+    `你已加入此特約教室白名單。\n\n` +
+    `課程代碼：${roomCode}\n\n` +
+    `請在大廳輸入此代碼進入特約教室。\n` +
+    `系統也會嘗試將課程資訊發送到大廳通知。`
+);
+
+if (typeof loadNotifications === 'function') {
+    await loadNotifications();
+}
 
         await loadTutorProgramStoreModalList();
 

@@ -921,6 +921,116 @@ function getTutorProgramTimeRangeTextForNotification(program) {
 
     return `${formatTutorProgramMinutes(startMinutes)} - ${formatTutorProgramMinutes(endMinutes)}`;
 }
+
+function buildTutorProgramEnrollmentMessage(program) {
+    const weekdaysText = formatTutorProgramWeekdays(program.weekdays);
+    const timeRangeText = getTutorProgramTimeRangeTextForNotification(program);
+
+    return (
+        `你已成功報名 ${program.teacher_username} 教師的「${program.title || '特約教室'}」。\n` +
+        `日期：${program.start_date} ~ ${program.end_date}\n` +
+        `星期：${weekdaysText || '未設定'}\n` +
+        `時間：${timeRangeText}\n` +
+        `課程代碼：${program.room_code}`
+    );
+}
+
+async function safeCreateTutorProgramEnrollmentNotification(username, program) {
+    try {
+        await createNotification({
+            username,
+            type: 'tutor_program_enrolled',
+            title: '特約教室報名成功',
+            message: buildTutorProgramEnrollmentMessage(program)
+        });
+    } catch (notificationError) {
+        console.error('⚠️ 特約教室報名成功，但建立通知失敗:', notificationError);
+    }
+}
+
+function getTutorProgramEndAt(program) {
+    const dateText = String(program?.end_date || '').slice(0, 10);
+    const startMinutes = parseTutorProgramTimeToMinutes(program?.start_time);
+
+    if (!dateText || startMinutes === null) {
+        return null;
+    }
+
+    const periods = Number(program?.periods || 1);
+    const classMinutes = Number(program?.class_minutes || 50);
+    const restMinutes = Number(program?.rest_minutes || 10);
+
+    const totalMinutes =
+        periods * classMinutes +
+        ((periods > 1) ? (periods - 1) * restMinutes : 0);
+
+    const startTimeText = formatTutorProgramMinutes(startMinutes);
+    const startAt = new Date(`${dateText}T${startTimeText}:00+08:00`);
+
+    if (Number.isNaN(startAt.getTime())) {
+        return null;
+    }
+
+    return new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+}
+
+function isTutorProgramExpired(program, now = new Date()) {
+    const endAt = getTutorProgramEndAt(program);
+
+    if (!endAt) {
+        return false;
+    }
+
+    return now > endAt;
+}
+
+async function hideExpiredTutorProgramsFromStore() {
+    const { data: programs, error } = await supabase
+        .from('tutor_programs')
+        .select('id, end_date, start_time, periods, class_minutes, rest_minutes, status, is_public')
+        .eq('is_public', true)
+        .eq('status', 'open');
+
+    if (error) throw error;
+
+    const now = new Date();
+
+    const expiredProgramIds = (programs || [])
+        .filter(program => isTutorProgramExpired(program, now))
+        .map(program => program.id);
+
+    if (expiredProgramIds.length === 0) {
+        return [];
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const { error: hideProgramError } = await supabase
+        .from('tutor_programs')
+        .update({
+            is_public: false,
+            updated_at: nowIso
+        })
+        .in('id', expiredProgramIds);
+
+    if (hideProgramError) throw hideProgramError;
+
+    const { error: endScheduleError } = await supabase
+        .from('tutor_schedules')
+        .update({
+            status: 'ended',
+            updated_at: nowIso
+        })
+        .in('program_id', expiredProgramIds)
+        .in('status', ['scheduled', 'live']);
+
+    if (endScheduleError) throw endScheduleError;
+
+    console.log(`🧹 已從課程商店隱藏 ${expiredProgramIds.length} 個過期特約教室`);
+
+    return expiredProgramIds;
+}
+
 // 課程商店：取得可報名的週期特約教室
 app.get('/api/tutor-programs/store', async (req, res) => {
     try {
@@ -964,6 +1074,8 @@ app.get('/api/tutor-programs/store', async (req, res) => {
             user = dbUser;
             access = getTutorProgramAccessFromUser(user);
         }
+
+        await hideExpiredTutorProgramsFromStore();
 
         const { data: programs, error: programError } = await supabase
             .from('tutor_programs')
@@ -1138,6 +1250,15 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
             });
         }
 
+        if (isTutorProgramExpired(program)) {
+    await hideExpiredTutorProgramsFromStore();
+
+    return res.status(410).json({
+        success: false,
+        error: '此特約教室已過期，無法報名'
+    });
+}
+
         const maxStudents = Number(program.max_students || 0);
         const currentEnrolledCount = Number(program.enrolled_count || 0);
 
@@ -1159,14 +1280,22 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         if (existingError) throw existingError;
 
         if (existingEnrollment) {
-            return res.json({
-                success: true,
-                alreadyEnrolled: true,
-                enrollment: existingEnrollment,
-                program,
-                message: '你已經報名過此特約教室'
-            });
-        }
+    await safeCreateTutorProgramEnrollmentNotification(username, program);
+
+    return res.json({
+        success: true,
+        alreadyEnrolled: true,
+        enrollment: existingEnrollment,
+        student: {
+            username: user.username,
+            nickname: user.nickname || '',
+            real_name: user.real_name || '',
+            display_name: studentDisplayName
+        },
+        program,
+        message: `你已經報名過此特約教室，課程代碼：${program.room_code}`
+    });
+}
 
         const { data: enrollment, error: insertError } = await supabase
             .from('tutor_program_enrollments')
@@ -1184,12 +1313,20 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
                 insertError.code === '23505' ||
                 String(insertError.message || '').includes('duplicate')
             ) {
-                return res.json({
-                    success: true,
-                    alreadyEnrolled: true,
-                    program,
-                    message: '你已經報名過此特約教室'
-                });
+                await safeCreateTutorProgramEnrollmentNotification(username, program);
+
+return res.json({
+    success: true,
+    alreadyEnrolled: true,
+    student: {
+        username: user.username,
+        nickname: user.nickname || '',
+        real_name: user.real_name || '',
+        display_name: studentDisplayName
+    },
+    program,
+    message: `你已經報名過此特約教室，課程代碼：${program.room_code}`
+});
             }
 
             throw insertError;
@@ -1224,20 +1361,7 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
             })
             .eq('program_id', program.id);
 
-        const weekdaysText = formatTutorProgramWeekdays(program.weekdays);
-const timeRangeText = getTutorProgramTimeRangeTextForNotification(program);
-
-await createNotification({
-    username,
-    type: 'tutor_program_enrolled',
-    title: '特約教室報名成功',
-    message:
-        `你已成功報名 ${program.teacher_username} 教師的「${program.title || '特約教室'}」。\n` +
-        `日期：${program.start_date} ~ ${program.end_date}\n` +
-        `星期：${weekdaysText || '未設定'}\n` +
-        `時間：${timeRangeText}\n` +
-        `課程代碼：${program.room_code}`
-});
+        await safeCreateTutorProgramEnrollmentNotification(username, program);
 
         res.json({
     success: true,
