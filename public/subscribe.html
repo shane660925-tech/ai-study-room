@@ -529,7 +529,8 @@ const PLAN_LABELS = {
   free: '免費版',
   trial: '14 天免費體驗',
   pro: '訂閱版',
-  expired: '免費版'
+  expired: '免費版',
+  beta: '封測免費使用中'
 };
 
 function goBackToLobby() {
@@ -537,6 +538,12 @@ function goBackToLobby() {
 }
 
 function goCheckout(planId) {
+  
+    if (window.studyVerseSubscribeBetaMode === true) {
+    alert('目前為封閉測試期間，訂閱付款尚未開放。封測期間所有開放功能暫時免費使用，正式上線後才會開始 14 天免費體驗。');
+    return;
+  }
+  
   if (!username) {
     alert('缺少登入資訊，請重新登入後再選擇方案。');
     window.location.href = '/index.html';
@@ -579,6 +586,24 @@ async function loadCurrentPlan() {
     }
 
     const accessLevel = data.accessLevel || 'free';
+        window.studyVerseSubscribeBetaMode =
+      data.betaMode === true || accessLevel === 'beta';
+
+    if (window.studyVerseSubscribeBetaMode) {
+      pill.innerHTML = '封測免費使用中';
+      text.textContent =
+        '目前為封閉測試期間，所有開放功能暫時免費使用，不會收取費用，也不會開始計算正式 14 天免費體驗。正式上線前，平台會另行公告訂閱方案、付款方式與匯款資訊。';
+
+      document.querySelectorAll('.checkout-btn').forEach(btn => {
+        btn.textContent = '封測期間暫不開放付款';
+        btn.disabled = true;
+        btn.style.opacity = '0.55';
+        btn.style.cursor = 'not-allowed';
+      });
+
+      return;
+    }
+    
     const label = PLAN_LABELS[accessLevel] || '免費版';
 
     pill.innerHTML = `${label}`;

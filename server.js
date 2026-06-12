@@ -19,6 +19,10 @@ const PUBLIC_BASE_URL = (
         : 'http://localhost:3000')
 ).trim().replace(/\/+$/, '');
 
+const BETA_MODE = String(process.env.BETA_MODE || 'false').toLowerCase() === 'true';
+
+console.log(`[SV CONFIG] BETA_MODE=${BETA_MODE ? 'true' : 'false'}`);
+
 const GOOGLE_CALLBACK_URL =
     `${PUBLIC_BASE_URL}/api/auth/google/callback`;
 
@@ -101,14 +105,27 @@ function generateSessionId() {
 }
 
 function buildNewStudentTrialFields() {
+    if (BETA_MODE) {
+        return {
+            membership_level: 'free',
+            is_subscribed: false,
+            subscription_status: 'none',
+            subscription_started_at: null,
+            subscription_end_date: null,
+            trial_started_at: null,
+            trial_ends_at: null,
+
+            // 封測期間不要跳 14 天訂閱介紹
+            has_seen_subscription_intro: true
+        };
+    }
+
     const trialStartedAt = new Date();
     const trialEndsAt = new Date(
         trialStartedAt.getTime() + 14 * 24 * 60 * 60 * 1000
     );
 
     return {
-        // 注意：資料庫欄位先維持舊系統相容值
-        // 真正的 trial 權限由 trial_ends_at 判斷
         membership_level: 'free',
         is_subscribed: false,
         subscription_status: 'none',
@@ -566,6 +583,15 @@ function getTutorProgramAccessFromUser(user) {
 
     const role = user.role || 'student';
 
+        if (BETA_MODE) {
+        return {
+            accessLevel: 'beta',
+            canEnrollTutorProgram: true,
+            roleBypass: false,
+            betaMode: true
+        };
+    }
+    
     if (role === 'teacher' || role === 'admin' || role === 'teacher_pending') {
         return {
             accessLevel: 'pro',
@@ -1178,7 +1204,7 @@ async function getTutorEntryUserAccess(username) {
         };
     }
 
-    const { data: user, error } = await supabase
+    let { data: user, error } = await supabase
         .from('users')
         .select(`
             username,
@@ -3566,6 +3592,55 @@ app.get('/api/subscription/status', async (req, res) => {
             });
         }
 
+                if (BETA_MODE) {
+            return res.json({
+                username: user.username,
+                role,
+                membership_level: 'beta',
+                is_subscribed: false,
+                subscription_status: 'beta_free',
+                subscription_started_at: user.subscription_started_at,
+                subscription_end_date: user.subscription_end_date,
+                trial_started_at: user.trial_started_at,
+                trial_ends_at: user.trial_ends_at,
+                has_seen_subscription_intro: true,
+
+                accessLevel: 'beta',
+                canUseFullFeatures: true,
+                betaMode: true,
+                message: '目前為封閉測試期間，所有開放功能暫時免費使用，不計算 14 天正式免費體驗。'
+            });
+        }
+
+                const shouldStartOfficialTrial =
+            !BETA_MODE &&
+            role === 'student' &&
+            user.is_subscribed !== true &&
+            user.subscription_status !== 'active' &&
+            !user.trial_started_at &&
+            !user.trial_ends_at &&
+            !user.subscription_end_date;
+
+        if (shouldStartOfficialTrial) {
+            const trialFields = buildNewStudentTrialFields();
+
+            const { data: trialUpdatedUser, error: trialUpdateError } = await supabase
+                .from('users')
+                .update({
+                    ...trialFields,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('username', user.username)
+                .select()
+                .single();
+
+            if (trialUpdateError) {
+                console.error('正式上線後啟動 14 天體驗失敗:', trialUpdateError);
+            } else if (trialUpdatedUser) {
+                user = trialUpdatedUser;
+            }
+        }
+
         const now = Date.now();
 
         const subscriptionEndTime = user.subscription_end_date
@@ -3685,6 +3760,14 @@ app.post('/api/subscription/create-order', async (req, res) => {
         if (!username) {
             return res.status(400).json({
                 error: '缺少 username'
+            });
+        }
+
+                if (BETA_MODE) {
+            return res.status(403).json({
+                success: false,
+                betaMode: true,
+                error: '目前為封閉測試期間，訂閱付款尚未開放。封測期間所有開放功能暫時免費使用，正式上線後才會開始 14 天免費體驗與訂閱付款。'
             });
         }
 
@@ -4207,6 +4290,14 @@ app.post('/api/checkout/create-order', async (req, res) => {
         if (!username || !courseId) {
             return res.status(400).json({
                 error: '缺少 username 或 courseId'
+            });
+        }
+
+                if (BETA_MODE) {
+            return res.status(403).json({
+                success: false,
+                betaMode: true,
+                error: '目前為封閉測試期間，線上課程付款尚未開放。正式收費前，平台會公告課程付款方式與匯款資訊。'
             });
         }
 
@@ -5263,7 +5354,7 @@ link_code: newLinkCode,
             !user.trial_started_at &&
             !user.trial_ends_at;
 
-        if (shouldBackfillTrial) {
+                if (shouldBackfillTrial && !BETA_MODE) {
             const trialFields = buildNewStudentTrialFields();
 
             const { data: trialUpdatedUser, error: trialUpdateError } = await supabase

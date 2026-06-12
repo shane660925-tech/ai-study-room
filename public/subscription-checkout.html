@@ -507,6 +507,7 @@ const BANK_TRANSFER_INFO = {
 };
 
 let currentOrder = null;
+let betaMode = false;
 
 function goBack() {
   window.location.href = `/subscribe.html?username=${encodeURIComponent(username)}`;
@@ -558,7 +559,7 @@ function hasAcceptedCheckoutAgreement() {
   return true;
 }
 
-function initPage() {
+async function initPage() {
   if (!username) {
     setMessage('<span class="error">缺少 username，請重新登入。</span>');
   }
@@ -569,6 +570,53 @@ function initPage() {
   setText('originalAmountText', `NT$${selectedPlan.amount}`);
   setText('discountAmountText', '尚未套用');
   setText('amountText', `NT$${selectedPlan.amount}`);
+
+  if (!username) return;
+
+  try {
+    const res = await fetch(`/api/subscription/status?username=${encodeURIComponent(username)}`);
+    const data = await res.json();
+
+    betaMode = data.betaMode === true || data.accessLevel === 'beta';
+
+    if (betaMode) {
+      const createOrderBtn = document.getElementById('createOrderBtn');
+      const payBtn = document.getElementById('mockPayBtn');
+      const transferFormBox = document.getElementById('transferFormBox');
+      const paymentInfo = document.getElementById('paymentInfo');
+      const discountCodeInput = document.getElementById('discountCodeInput');
+
+      if (createOrderBtn) {
+        createOrderBtn.disabled = true;
+        createOrderBtn.textContent = '封測期間暫不開放付款';
+      }
+
+      if (payBtn) {
+        payBtn.style.display = 'none';
+      }
+
+      if (transferFormBox) {
+        transferFormBox.style.display = 'none';
+      }
+
+      if (discountCodeInput) {
+        discountCodeInput.disabled = true;
+      }
+
+      if (paymentInfo) {
+        paymentInfo.innerHTML = `
+          <strong style="color:#facc15;">目前為封閉測試期間</strong><br>
+          封測期間所有開放功能暫時免費使用，不會收取費用，也不會開始計算正式 14 天免費體驗。<br><br>
+          正式上線前，平台會另行公告訂閱方案、付款方式、匯款資訊與退款規則。
+        `;
+      }
+
+      setMessage('<span class="warning">封測期間暫不開放建立訂閱匯款訂單。</span>');
+    }
+
+  } catch (err) {
+    console.error('讀取封測狀態失敗:', err);
+  }
 }
 
 async function createOrder() {
@@ -584,6 +632,11 @@ if (transferFormBox) transferFormBox.style.display = 'none';
 currentOrder = null;
 
 if (!hasAcceptedCheckoutAgreement()) {
+  return;
+}
+
+if (betaMode) {
+  setMessage('<span class="warning">目前為封閉測試期間，訂閱付款尚未開放。</span>');
   return;
 }
 

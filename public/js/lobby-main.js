@@ -92,6 +92,39 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
+window.isStudyVerseBetaMode = function() {
+    const access = window.studyVerseAccess || {};
+    const storedAccessLevel = localStorage.getItem('studyVerseAccessLevel');
+
+    return (
+        access.betaMode === true ||
+        access.accessLevel === 'beta' ||
+        storedAccessLevel === 'beta'
+    );
+};
+
+window.showBetaModeBanner = function() {
+    if (!window.isStudyVerseBetaMode()) return;
+
+    if (document.getElementById('studyVerseBetaBanner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'studyVerseBetaBanner';
+    banner.className =
+        'fixed bottom-5 left-1/2 -translate-x-1/2 z-[99999] max-w-[92vw] bg-yellow-400 text-gray-950 px-5 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-black border border-yellow-200';
+
+    banner.innerHTML = `
+        <i class="fas fa-flask mr-2"></i>
+        封閉測試中：目前開放功能暫時免費使用，不計算正式 14 天免費體驗。
+    `;
+
+    document.body.appendChild(banner);
+
+    setTimeout(() => {
+        banner.remove();
+    }, 6500);
+};
+
 // =========================================================
 // Student Subscription Guard
 // free / expired：只能使用沉浸式教室
@@ -108,6 +141,10 @@ window.isStudentFullFeatureUnlocked = function() {
     }
 
     const access = window.studyVerseAccess || {};
+
+        if (window.isStudyVerseBetaMode && window.isStudyVerseBetaMode()) {
+        return true;
+    }
 
     // 優先相信本頁剛從 API 拿到的權限，而且必須是同一個 username
     if (access.username && access.username === username) {
@@ -201,6 +238,14 @@ window.showSubscriptionIntroModalOnce = async function() {
             return;
         }
 
+                if (data.betaMode === true || data.accessLevel === 'beta') {
+            localStorage.setItem(localSeenKey, 'true');
+            if (typeof window.showBetaModeBanner === 'function') {
+                window.showBetaModeBanner();
+            }
+            return;
+        }
+
         if (data.has_seen_subscription_intro === true) {
             localStorage.setItem(localSeenKey, 'true');
             return;
@@ -274,6 +319,14 @@ if (btnClose) {
 };
 
 window.showSubscriptionUpgradePrompt = function(featureName = '此功能') {
+    
+        if (window.isStudyVerseBetaMode && window.isStudyVerseBetaMode()) {
+        if (typeof window.showBetaModeBanner === 'function') {
+            window.showBetaModeBanner();
+        }
+        return;
+    }
+
     const username = localStorage.getItem('studyVerseUser') || '';
 
     const goSubscribe = confirm(
@@ -376,6 +429,11 @@ window.lockLobbyFeatureElement = function(element, featureName = '此功能') {
 };
 
 window.applyLobbySubscriptionVisualLocks = function() {
+   
+        if (window.isStudyVerseBetaMode && window.isStudyVerseBetaMode()) {
+        return;
+    }
+
     if (window.isStudentFullFeatureUnlocked()) {
         return;
     }
@@ -615,6 +673,10 @@ initLineBindQRCode();
 
 if (typeof window.applyLobbySubscriptionVisualLocks === 'function') {
     window.applyLobbySubscriptionVisualLocks();
+}
+
+if (typeof window.showBetaModeBanner === 'function') {
+    window.showBetaModeBanner();
 }
 
 // 隱私權確認完成並回到大廳後，立即啟動新手導覽
