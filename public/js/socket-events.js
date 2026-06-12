@@ -68,11 +68,24 @@ socket.emit("update_status", {
                 }
 
                 if (window.isFlipWarningActive) {
-                    socket.emit('violation', {
-                        name: myUsername,
-                        type: '📱 翻開手機 (已於5秒內及時蓋回)',
-                        image: null 
-                    });
+                    const currentTutorRoomCode =
+    new URLSearchParams(window.location.search).get('room') ||
+    new URLSearchParams(window.location.search).get('roomId') ||
+    window.currentTutorRoomCode ||
+    window.currentRoomCode ||
+    null;
+
+socket.emit('violation', {
+    name: myUsername,
+    username: myUsername,
+    type: '📱 翻開手機 (已於5秒內及時蓋回)',
+    reason: '📱 翻開手機 (已於5秒內及時蓋回)',
+    image: null,
+    roomId: currentTutorRoomCode,
+    room: currentTutorRoomCode,
+    roomCode: currentTutorRoomCode,
+    source: 'phone_flip_recovered'
+});
                     window.totalViolationCount++;
                     window.violationDetails["📱 使用手機"] = (window.violationDetails["📱 使用手機"] || 0) + 1;
                 }

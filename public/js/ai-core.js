@@ -284,7 +284,28 @@ function handleDistractionBuffer(issue, now) {
                 const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
                 const violationReason = issue || "🚫 鏡頭違規：離座/趴睡/手機"; 
                 
-                document.dispatchEvent(new CustomEvent('CameraViolation', { detail: { name: myName, reason: violationReason } }));
+                const tutorViolationDetail = {
+    name: myName,
+    username: myName,
+    reason: violationReason,
+    type: violationReason,
+    roomId:
+        new URLSearchParams(window.location.search).get('room') ||
+        new URLSearchParams(window.location.search).get('roomId') ||
+        window.currentTutorRoomCode ||
+        null
+};
+
+if (
+    currentRoomMode === 'tutor' &&
+    typeof window.handleTutorCameraViolationFromAI === 'function'
+) {
+    window.handleTutorCameraViolationFromAI(tutorViolationDetail);
+} else {
+    document.dispatchEvent(new CustomEvent('CameraViolation', {
+        detail: tutorViolationDetail
+    }));
+}
             }
         }
     } else {
@@ -304,17 +325,6 @@ function handleDistractionBuffer(issue, now) {
 // 5. 違規截圖與資料上傳
 // ==========================================
 async function captureViolation(reason) {
-        // 特約教室的 AI 鏡頭違規統一交給 CameraViolation → tutor-client.js → violation → student_violation。
-    // 不再走 report_violation，避免特約教室找不到 onlineUsers 或重複紀錄。
-    if (
-        currentRoomMode === 'tutor' &&
-        !reason.includes("中斷") &&
-        !reason.includes("踢出") &&
-        !reason.includes("分頁") &&
-        !reason.includes("擅自翻開")
-    ) {
-        return;
-    }
         // 特約教室的鏡頭 AI 違規統一交給 CameraViolation → tutor-client.js → violation 處理。
     // 避免同時送 report_violation，造成特約教室找不到 onlineUsers 或重複紀錄。
     if (

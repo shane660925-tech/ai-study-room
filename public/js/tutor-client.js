@@ -1042,27 +1042,32 @@ const avatarSeed = encodeURIComponent(getTutorSystemName(u));
 // 🚀 VIP 專屬：監聽來自 ai-core.js 的違規廣播
 window.isLeaveSeatActive = false; // 離座鎖定狀態
 
-document.addEventListener('CameraViolation', (e) => {
+window.handleTutorCameraViolationFromAI = function(detail = {}) {
     // 休息時間 / 重連踢出流程中，不記鏡頭違規
     if (window.isAIPaused || window.isTutorReconnectKicking) return;
 
-    const detail = e.detail || {};
     const rawReason = String(detail.reason || detail.type || 'AI 偵測異常');
     const systemName = getCurrentTutorSystemUsername(detail.name);
     const roomId = getTutorRoomCode();
 
-    // 統一分類文字
     let finalReason = rawReason;
 
     if (rawReason.includes('手機') || rawReason === 'PHONE_IN_VIDEO') {
         finalReason = '📱 使用手機 / 手機入鏡';
-    } else if (rawReason.includes('趴睡') || rawReason.includes('睡') || rawReason === 'SLEEPING') {
+    } else if (
+        rawReason.includes('趴睡') ||
+        rawReason.includes('睡') ||
+        rawReason === 'SLEEPING'
+    ) {
         finalReason = '💤 偵測趴睡';
-    } else if (rawReason.includes('離座') || rawReason.includes('離位') || rawReason === 'LEFT_SEAT') {
+    } else if (
+        rawReason.includes('離座') ||
+        rawReason.includes('離位') ||
+        rawReason === 'LEFT_SEAT'
+    ) {
         finalReason = '🪑 偵測離座';
     }
 
-    // 離座：保留原本離座專用全螢幕提醒
     if (finalReason.includes('離座')) {
         if (window.isLeaveSeatActive) return;
 
@@ -1098,7 +1103,7 @@ document.addEventListener('CameraViolation', (e) => {
         return;
     }
 
-    // 手機 / 趴睡 / 其他鏡頭違規：現在也要跳學生端警示
+    // 手機 / 趴睡 / 其他鏡頭違規：學生端跳警示
     showTutorCameraViolationWarning(finalReason);
 
     if (typeof window.totalViolationCount !== 'undefined') {
@@ -1130,6 +1135,10 @@ document.addEventListener('CameraViolation', (e) => {
         roomCode: roomId,
         source: 'camera_ai'
     });
+};
+
+document.addEventListener('CameraViolation', (e) => {
+    window.handleTutorCameraViolationFromAI(e.detail || {});
 });
 
 window.handleReturnSeat = function() {

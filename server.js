@@ -7512,11 +7512,15 @@ socket.on('get_attendance', (data) => {
                 onlineUsers.find(u => u.id === socket.id);
 
             let integrityPenalty = 2;
-            let expPenalty = 0;
+let expPenalty = 0;
 
-            if (reasonStr.includes('手機')) {
-                integrityPenalty = 10;
-                expPenalty = 500;
+if (reasonStr.includes('已於5秒內及時蓋回')) {
+    // 只記錄提醒，不當作嚴重違規扣分
+    integrityPenalty = 0;
+    expPenalty = 0;
+} else if (reasonStr.includes('手機')) {
+    integrityPenalty = 10;
+    expPenalty = 500;
             } else if (reasonStr.includes('趴睡') || reasonStr.includes('睡')) {
                 integrityPenalty = 5;
                 expPenalty = 300;
