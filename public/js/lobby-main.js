@@ -967,7 +967,7 @@ window.pageSpecificInit = async function() {
         window.showBetaModeBanner();
     }
 
-    const runProfileAndPlanAfterIntro = async () => {
+    const runProfileAndPlan = async () => {
         if (typeof window.ensureStudyVerseProfileCompleted === 'function') {
             const profileReady = await window.ensureStudyVerseProfileCompleted({
                 force: true
@@ -984,28 +984,30 @@ window.pageSpecificInit = async function() {
     };
 
     const introKey = `studyVerseIntroCompleted:${username}`;
+    const localIntroCompleted = localStorage.getItem(introKey) === 'true';
 
-    if (typeof startIntroTutorial === 'function') {
-        requestAnimationFrame(async () => {
-            await startIntroTutorial();
+    let serverIntroCompleted = false;
 
-            const introCompleted =
-                localStorage.getItem(introKey) === 'true';
+    try {
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
 
-            const introOverlay =
-                document.getElementById('intro-overlay');
+        serverIntroCompleted = data?.user?.has_seen_intro === true;
+    } catch (err) {
+        console.error('讀取新手導覽狀態失敗:', err);
+    }
 
-            // 如果導覽已經完成，就直接檢查個人資料。
-            // 如果導覽正在顯示，等 finishIntroTutorial() 結束後再檢查。
-            if (introCompleted && !introOverlay) {
-                await runProfileAndPlanAfterIntro();
-            }
+    const introCompleted = localIntroCompleted || serverIntroCompleted;
+
+    if (!introCompleted && typeof startIntroTutorial === 'function') {
+        requestAnimationFrame(() => {
+            startIntroTutorial();
         });
 
         return;
     }
 
-    await runProfileAndPlanAfterIntro();
+    await runProfileAndPlan();
 };
 
 async function checkPrivacyConsent() {
@@ -2645,17 +2647,19 @@ async function finishIntroTutorial() {
 
     clearIntroHighlight();
 
-if (typeof window.ensureStudyVerseProfileCompleted === 'function') {
-    const profileReady = await window.ensureStudyVerseProfileCompleted({ force: true });
+    if (typeof window.ensureStudyVerseProfileCompleted === 'function') {
+        const profileReady = await window.ensureStudyVerseProfileCompleted({
+            force: true
+        });
 
-    if (!profileReady) {
-        return;
+        if (!profileReady) {
+            return;
+        }
     }
-}
 
-if (typeof window.showSubscriptionIntroModalOnce === 'function') {
-    window.showSubscriptionIntroModalOnce();
-}
+    if (typeof window.showSubscriptionIntroModalOnce === 'function') {
+        window.showSubscriptionIntroModalOnce();
+    }
 }
 
 window.openTeacherApplyModal = function() {
