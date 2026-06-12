@@ -116,6 +116,35 @@ if (typeof window.socket === 'undefined') {
     window.socket = typeof io !== 'undefined' ? io() : null;
 }
 const socket = window.socket;
+function normalizeTutorDisplayText(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function escapeTutorHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getTutorDisplayName(user) {
+    return normalizeTutorDisplayText(
+        user?.displayName ||
+        user?.studentName ||
+        user?.real_name ||
+        user?.realName ||
+        user?.nickname ||
+        user?.name ||
+        user?.username ||
+        '學員'
+    );
+}
+
 function getTutorRoomCode() {
     const params = new URLSearchParams(window.location.search);
     return params.get('room') || params.get('roomId') || window.currentTutorRoomCode || null;
@@ -550,7 +579,9 @@ if (reconnectModal && reconnectStatus) {
     });
 
     renderTutorRankList(users);
-            const standaloneUsers = users.filter(u => u.isStandalone).map(u => u.name);
+            const standaloneUsers = users
+    .filter(u => u.isStandalone)
+    .map(u => getTutorDisplayName(u));
             
             setTimeout(() => {
                 const allFrames = document.querySelectorAll('#othersContainer .aspect-video, #othersContainer .is-mobile-flip');
@@ -885,7 +916,9 @@ function renderTutorRankList(users) {
 
     rankEl.className = "absolute inset-0 p-3 space-y-2 overflow-y-auto scroll-hide";
     rankEl.innerHTML = students.map((u, index) => {
-    const name = u.name || u.username || '學員';
+    const name = getTutorDisplayName(u);
+const safeName = escapeTutorHtml(name);
+const avatarSeed = encodeURIComponent(name);
 
     const status = u.status || 'FOCUSED';
 
@@ -909,13 +942,13 @@ function renderTutorRankList(users) {
                 </div>
 
                 <img
-                    src="https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}"
+                    src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}"
                     class="w-9 h-9 rounded-full border border-yellow-500/30 bg-gray-800"
                 >
 
                 <div class="min-w-0">
                     <div class="text-white font-bold truncate">
-                        ${name}
+                        ${safeName}
                     </div>
 
                     <div class="text-cyan-400 text-xs font-bold">

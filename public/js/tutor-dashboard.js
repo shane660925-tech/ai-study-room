@@ -33,6 +33,52 @@ function restartTutorTimerSyncLoop(roomCode) {
     }, 1000);
 }
 
+function normalizeTutorDisplayText(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function escapeTutorHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeTutorJs(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/[\r\n]+/g, ' ');
+}
+
+function getTutorDisplayName(student) {
+    return normalizeTutorDisplayText(
+        student?.displayName ||
+        student?.studentName ||
+        student?.real_name ||
+        student?.realName ||
+        student?.nickname ||
+        student?.name ||
+        student?.username ||
+        '學員'
+    );
+}
+
+function getTutorSystemName(student) {
+    return normalizeTutorDisplayText(
+        student?.username ||
+        student?.name ||
+        student?.displayName ||
+        student?.studentName ||
+        '學員'
+    );
+}
+
 function getCurrentTeacherUsername() {
     const params = new URLSearchParams(window.location.search);
 
@@ -368,8 +414,7 @@ socket.on('update_rank', (users) => {
     );
 });
 
-    activeStudents.forEach(s => knownTutorNames.add(s.name));
-
+    activeStudents.forEach(s => knownTutorNames.add(getTutorSystemName(s)));
     if (typeof renderStudents === 'function') {
         renderStudents();
     }
@@ -389,7 +434,7 @@ socket.on('tutor_students_update', (students) => {
         );
     });
 
-    activeStudents.forEach(s => knownTutorNames.add(s.name));
+    activeStudents.forEach(s => knownTutorNames.add(getTutorSystemName(s)));
 
     if (typeof renderStudents === 'function') {
         renderStudents();
@@ -421,8 +466,7 @@ socket.on('student_joined', (student) => {
         });
     }
 
-    knownTutorNames.add(student.name || student.username);
-
+    knownTutorNames.add(getTutorSystemName(student));
     if (typeof renderStudents === 'function') {
         renderStudents();
     }
@@ -458,7 +502,7 @@ socket.on('update_attendance', (users) => {
 });
 
     activeStudents = window.latestAttendanceData;
-    activeStudents.forEach(s => knownTutorNames.add(s.name));
+    activeStudents.forEach(s => knownTutorNames.add(getTutorSystemName(s)));
 
     if (typeof renderStudents === 'function') {
         renderStudents();
@@ -473,13 +517,17 @@ socket.on('update_attendance', (users) => {
     const tableBody = document.getElementById('attendanceTableBody');
     if (!tableBody) return;
     
-    tableBody.innerHTML = users.map(u => `
+    tableBody.innerHTML = users.map(u => {
+    const displayName = getTutorDisplayName(u);
+
+    return `
         <tr class="border-b border-amber-500/20">
-            <td class="p-2 text-white">${u.name}</td>
-            <td class="p-2 text-green-400">${u.joinTime || '-'}</td>
-            <td class="p-2 text-red-400">${u.leaveTime || '上課中'}</td>
+            <td class="p-2 text-white">${escapeTutorHtml(displayName)}</td>
+            <td class="p-2 text-green-400">${escapeTutorHtml(u.joinTime || '-')}</td>
+            <td class="p-2 text-red-400">${escapeTutorHtml(u.leaveTime || '上課中')}</td>
         </tr>
-    `).join('');
+    `;
+}).join('');
 });
 
 // ==========================================
@@ -642,16 +690,22 @@ function renderAttendanceData() {
         const statusClass = isOnline ? 'text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded' : 'text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded';
         const statusText = isOnline ? '🟢 持續專注中' : `🔴 離線 (${u.leaveTime})`;
         
-        return `
-            <tr class="hover:bg-amber-500/5 transition-colors group">
-                <td class="px-4 py-4 font-bold text-white text-base flex items-center gap-2">
-                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" class="w-8 h-8 rounded-full bg-black/50 border border-amber-500/30">
-                    ${u.name}
-                </td>
-                <td class="px-4 py-4 text-slate-300 font-mono">${u.joinTime || '未知'}</td>
-                <td class="px-4 py-4"><span class="${statusClass}">${statusText}</span></td>
-            </tr>
-        `;
+        const displayName = getTutorDisplayName(u);
+const avatarSeed = encodeURIComponent(displayName);
+
+return `
+    <tr class="hover:bg-amber-500/5 transition-colors group">
+        <td class="px-4 py-4 font-bold text-white text-base flex items-center gap-2">
+            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" class="w-8 h-8 rounded-full bg-black/50 border border-amber-500/30">
+            <div class="flex flex-col">
+                <span>${escapeTutorHtml(displayName)}</span>
+                <span class="text-[10px] text-slate-500 font-mono">ID：${escapeTutorHtml(getTutorSystemName(u))}</span>
+            </div>
+        </td>
+        <td class="px-4 py-4 text-slate-300 font-mono">${escapeTutorHtml(u.joinTime || '未知')}</td>
+        <td class="px-4 py-4"><span class="${statusClass}">${escapeTutorHtml(statusText)}</span></td>
+    </tr>
+`;
     }).join('');
 }
 
@@ -756,6 +810,12 @@ function renderStudents() {
 
     grid.innerHTML = '';
     filteredStudents.forEach(student => {
+
+        const systemName = getTutorSystemName(student);
+const displayName = getTutorDisplayName(student);
+const safeDisplayName = escapeTutorHtml(displayName);
+const safeSystemNameForJs = escapeTutorJs(systemName);
+const avatarSeed = encodeURIComponent(displayName);
         const isStandalone = student.isStandalone || false;
         
         // 雙機圖示處理
@@ -769,7 +829,7 @@ function renderStudents() {
         `;
 
         // 🚀 修正：改為判斷「過去 10 秒內是否有發生違規」
-        const records = violationStorage[student.name];
+        const records = violationStorage[systemName];
         let isWarning = false;
         
         if (records && records.length > 0) {
@@ -799,11 +859,12 @@ function renderStudents() {
         card.innerHTML = `
             <div class="flex flex-col items-center w-full">
                 <div class="flex flex-col items-center mb-3">
-                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${student.name}" class="w-16 h-16 rounded-full bg-black border-2 border-amber-500/30 relative z-0">
+                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}"
                     ${dualDeviceIcons}
                 </div>
                 
-                <h3 class="font-bold text-white text-lg tracking-wide mb-2">${student.name}</h3>
+                <h3 class="font-bold text-white text-lg tracking-wide mb-2">${safeDisplayName}</h3>
+<p class="text-[10px] text-gray-500 font-mono mb-2">ID：${escapeTutorHtml(systemName)}</p>
                 
                 <div class="mb-3">
                     ${statusText}
@@ -815,7 +876,7 @@ function renderStudents() {
             </div>
             
             <div class="w-full mt-auto pt-4 border-t border-amber-500/10">
-                <button onclick="sendWarning('${student.name}')" class="w-full bg-red-900/20 hover:bg-red-600/80 text-red-400 hover:text-white py-2 rounded-lg text-xs font-bold border border-red-900/50 transition-colors flex justify-center items-center gap-1">
+                <button onclick="sendWarning('${safeSystemNameForJs}')" class="w-full bg-red-900/20 hover:bg-red-600/80 text-red-400 hover:text-white py-2 rounded-lg text-xs font-bold border border-red-900/50 transition-colors flex justify-center items-center gap-1">
                     <i class="fas fa-exclamation-triangle"></i> 警告
                 </button>
             </div>
