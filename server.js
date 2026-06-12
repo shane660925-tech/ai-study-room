@@ -6404,20 +6404,37 @@ async function broadcastUpdateRank() {
 
 let activeTeams = [];
 
+const TEAM_EMPTY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
+
 function broadcastActiveTeams() {
     const now = Date.now();
+
     activeTeams.forEach(team => {
         const teamState = teamLeaderStates[team.id];
-        team.currentMembers = teamState ? teamState.members.length : 0;
+        const memberCount = teamState ? teamState.members.length : 0;
+
+        team.currentMembers = memberCount;
+
+        if (memberCount > 0) {
+            team.emptySince = null;
+        } else {
+            if (!team.emptySince) {
+                team.emptySince = now;
+            }
+        }
     });
 
     activeTeams = activeTeams.filter(team => {
         if (team.currentMembers > 0) return true;
-        if (!team.createdAt) team.createdAt = now;
-        if (now - team.createdAt > 60000) {
-            console.log(`🗑️ [系統清理] 隊伍 ${team.id} 因超過 60 秒無人加入已移除。`);
+
+        const emptySince = team.emptySince || team.createdAt || now;
+
+        if (now - emptySince > TEAM_EMPTY_TTL_MS) {
+            delete teamLeaderStates[team.id];
+            console.log(`🗑️ [系統清理] 隊伍 ${team.id} 因超過 7 天無人在線已移除。`);
             return false;
         }
+
         return true;
     });
 
@@ -6429,22 +6446,34 @@ function removeUserFromTeam(username, roomId) {
     if (!team) return;
 
     team.members = team.members.filter(name => name !== username);
-    
+
+    const activeTeam = activeTeams.find(t => t.id === roomId);
+
     if (team.members.length === 0) {
-        delete teamLeaderStates[roomId];
-        activeTeams = activeTeams.filter(t => t.id !== roomId);
-        console.log(`🗑️ [系統] 隊伍 ${roomId} 已無成員，自動解散。`);
+        if (activeTeam) {
+            activeTeam.currentMembers = 0;
+            activeTeam.emptySince = Date.now();
+        }
+
+        console.log(`⏳ [系統] 隊伍 ${roomId} 已無成員，將保留 7 天後再自動清理。`);
     } else if (team.leader === username) {
         team.leader = team.members[0];
-        io.to(roomId).emit('team_leader_update', { leader: team.leader });
-        io.to(roomId).emit('admin_action', { type: 'BLACKBOARD', content: `隊長已移交給 ${team.leader}` });
+
+        io.to(roomId).emit('team_leader_update', {
+            leader: team.leader
+        });
+
+        io.to(roomId).emit('admin_action', {
+            type: 'BLACKBOARD',
+            content: `隊長已移交給 ${team.leader}`
+        });
     }
-    
+
     const user = onlineUsers.find(u => u.name === username);
     if (user) user.teamId = null;
 
     broadcastActiveTeams();
-    broadcastUpdateRank(); 
+    broadcastUpdateRank();
 }
 
 const pendingJoinRequestsMap = {};
@@ -7187,6 +7216,10 @@ console.log(`📱 手機 ${studentName || '未知學員'} 已加入 sync room: $
         const team = teamLeaderStates[roomId];
         const activeTeamData = activeTeams.find(t => t.id === roomId);
 
+        if (activeTeamData) {
+    activeTeamData.emptySince = null;
+}
+
         if (!team || !activeTeamData) {
             return socket.emit('join_team_error', { message: '該隊伍不存在或已解散！' });
         }
@@ -7278,8 +7311,14 @@ onlineUsers.find(u => u.name === team.leader);
         const roomId = data.teamName;
         const team = teamLeaderStates[roomId];
         if (team && !team.members.includes(data.username)) {
-            team.members.push(data.username);
-        }
+    team.members.push(data.username);
+}
+
+const activeTeam = activeTeams.find(t => t.id === roomId);
+if (activeTeam) {
+    activeTeam.emptySince = null;
+    activeTeam.currentMembers = team ? team.members.length : 0;
+}
         socket.join(roomId);
         socket.username = data.username;
         socket.currentRoom = roomId;
@@ -7290,8 +7329,9 @@ onlineUsers.find(u => u.name === team.leader);
 
     socket.on('create_team', (teamData) => {
         teamData.createdAt = Date.now();
-        teamData.currentMembers = 1;
-        activeTeams.push(teamData);
+teamData.emptySince = null;
+teamData.currentMembers = 1;
+activeTeams.push(teamData);
         teamLeaderStates[teamData.id] = {
             leader: teamData.creator || '匿名使用者',
             auditMode: teamData.auditMode || 'none',
