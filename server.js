@@ -116,6 +116,14 @@ function isProfileCompleted(user) {
     );
 }
 
+function getTutorStudentDisplayName(user, fallbackUsername = '') {
+    const realName = normalizeProfileText(user?.real_name);
+    const nickname = normalizeProfileText(user?.nickname);
+    const username = normalizeUsername(user?.username || fallbackUsername);
+
+    return realName || nickname || username || '學員';
+}
+
 function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
 }
@@ -1069,19 +1077,22 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         }
 
         const { data: user, error: userError } = await supabase
-            .from('users')
-            .select(`
-                username,
-                role,
-                is_blocked,
-                membership_level,
-                is_subscribed,
-                subscription_status,
-                subscription_end_date,
-                trial_ends_at
-            `)
-            .eq('username', username)
-            .maybeSingle();
+    .from('users')
+    .select(`
+        username,
+        nickname,
+        real_name,
+        profile_completed_at,
+        role,
+        is_blocked,
+        membership_level,
+        is_subscribed,
+        subscription_status,
+        subscription_end_date,
+        trial_ends_at
+    `)
+    .eq('username', username)
+    .maybeSingle();
 
         if (userError) throw userError;
 
@@ -1100,6 +1111,7 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         }
 
         const access = getTutorProgramAccessFromUser(user);
+        const studentDisplayName = getTutorStudentDisplayName(user, username);
 
         if (!access.canEnrollTutorProgram) {
             return res.status(403).json({
@@ -1228,15 +1240,21 @@ await createNotification({
 });
 
         res.json({
-            success: true,
-            alreadyEnrolled: false,
-            enrollment,
-            program: {
-                ...program,
-                enrolled_count: finalEnrolledCount
-            },
-            message: '報名成功，已加入特約教室白名單'
-        });
+    success: true,
+    alreadyEnrolled: false,
+    enrollment,
+    student: {
+        username: user.username,
+        nickname: user.nickname || '',
+        real_name: user.real_name || '',
+        display_name: studentDisplayName
+    },
+    program: {
+        ...program,
+        enrolled_count: finalEnrolledCount
+    },
+    message: '報名成功，已加入特約教室白名單'
+});
 
     } catch (err) {
         console.error('報名週期特約教室失敗:', err);
@@ -1405,15 +1423,18 @@ async function getTutorEntryUserAccess(username) {
     let { data: user, error } = await supabase
         .from('users')
         .select(`
-            username,
-            role,
-            is_blocked,
-            membership_level,
-            is_subscribed,
-            subscription_status,
-            subscription_end_date,
-            trial_ends_at
-        `)
+    username,
+    nickname,
+    real_name,
+    profile_completed_at,
+    role,
+    is_blocked,
+    membership_level,
+    is_subscribed,
+    subscription_status,
+    subscription_end_date,
+    trial_ends_at
+`)
         .eq('username', username)
         .maybeSingle();
 
@@ -7126,7 +7147,7 @@ socket.currentTutorRoom = roomId;
 
     const { data: dbUser } = await supabase
     .from('users')
-    .select('username, is_blocked')
+    .select('username, nickname, real_name, profile_completed_at, is_blocked')
     .eq('username', username)
     .maybeSingle();
 
@@ -7137,6 +7158,11 @@ if (dbUser && dbUser.is_blocked) {
     socket.disconnect(true);
     return;
 }
+
+const tutorDisplayName = getTutorStudentDisplayName(dbUser, username);
+const tutorRealName = normalizeProfileText(dbUser?.real_name);
+const tutorNickname = normalizeProfileText(dbUser?.nickname);
+
     socket.username = username;
     socket.deviceType = data.deviceType || 'pc';
 
@@ -7145,15 +7171,25 @@ if (dbUser && dbUser.is_blocked) {
     }
 
     tutorAttendanceByRoom.get(roomId).set(username, {
-        id: socket.id,
-        name: username,
-        roomId,
-        roomMode: 'tutor',
-        role: 'student',
-        status: 'FOCUSED',
-        joinTime: getTaiwanTimeString(),
-        leaveTime: null
-    });
+    id: socket.id,
+
+    // name 先保留 username，避免舊版前端 / 違規 / 踢出邏輯壞掉
+    name: username,
+
+    // 新顯示欄位：特約教室畫面之後改讀 displayName
+    displayName: tutorDisplayName,
+    studentName: tutorDisplayName,
+    real_name: tutorRealName,
+    nickname: tutorNickname,
+    username,
+
+    roomId,
+    roomMode: 'tutor',
+    role: 'student',
+    status: 'FOCUSED',
+    joinTime: getTaiwanTimeString(),
+    leaveTime: null
+});
 
     const currentAttendance = getTutorAttendance(roomId);
 
@@ -7172,8 +7208,17 @@ io.to(roomId).emit('tutor_students_update', activeTutorStudents);
 io.to(roomId).emit('student_joined', {
     id: socket.id,
     socketId: socket.id,
+
+    // 舊欄位：保留 username 當系統識別
     name: username,
     username,
+
+    // 新欄位：給特約教室 UI 顯示
+    displayName: tutorDisplayName,
+    studentName: tutorDisplayName,
+    real_name: tutorRealName,
+    nickname: tutorNickname,
+
     roomId,
     room: roomId,
     roomCode: roomId,
