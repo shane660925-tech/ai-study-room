@@ -4,6 +4,42 @@
 
 // 宣告在全域，讓其他檔案可以存取
 window.flipCountdownInterval = null;
+function normalizeRoomUserText(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getRoomUserSystemName(user) {
+    return normalizeRoomUserText(
+        user?.username ||
+        user?.name ||
+        user?.displayName ||
+        user?.studentName ||
+        '學員'
+    );
+}
+
+function getRoomUserDisplayName(user) {
+    return normalizeRoomUserText(
+        user?.displayName ||
+        user?.studentName ||
+        user?.nickname ||
+        user?.name ||
+        user?.username ||
+        '學員'
+    );
+}
+
+function escapeRoomUserHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 window.showFlipCountdownModal = function() {
     let modal = document.getElementById('flipCountdownModal');
@@ -66,8 +102,10 @@ window.showPublicShamingToast = function(userName) {
 // 排行榜與其他學員畫面渲染
 // ==========================================
 window.renderRankAndUsers = function(users, myUsername, currentTeamLeader) {
+    const safeUsers = Array.isArray(users) ? users : [];
+
     // 1. 更新自己的專注時間
-    const me = users.find(u => u.name === myUsername);
+    const me = safeUsers.find(u => getRoomUserSystemName(u) === myUsername);
     if (me) {
         const myFocusTimeEl = document.getElementById('myFocusTime');
         if (myFocusTimeEl) myFocusTimeEl.innerText = `${me.focusMinutes || 0}m`;
@@ -76,62 +114,84 @@ window.renderRankAndUsers = function(users, myUsername, currentTeamLeader) {
     // 2. 渲染右側排行榜
     const rankContainer = document.getElementById("tab-rank");
     if (rankContainer) {
-        const sortedUsers = [...users].sort((a, b) => (b.score || 0) - (a.score || 0));
-        rankContainer.innerHTML = sortedUsers.map((u, index) => `
-            <div class="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 mb-2 transition-all">
-                <span class="font-mono font-bold ${index < 3 ? 'text-yellow-500' : 'text-gray-500'}">#${index + 1}</span>
-                <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" class="w-8 h-8 rounded-full border border-gray-700">
-                <div class="flex-1 min-w-0">
-                    <p class="text-xs font-bold text-white truncate">
-                        ${u.name} 
-                        ${(u.isCaptain || currentTeamLeader === u.name) ? '<i class="fas fa-crown text-yellow-400 ml-1" title="隊長"></i>' : ''}
-                    </p>
-                    <p class="text-[10px] text-blue-400 truncate">${u.status === 'BREAK' ? '🚽 暫時離開' : (u.goal || '專注中')}</p>
+        const sortedUsers = [...safeUsers].sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        rankContainer.innerHTML = sortedUsers.map((u, index) => {
+            const systemName = getRoomUserSystemName(u);
+            const displayName = getRoomUserDisplayName(u);
+            const safeDisplayName = escapeRoomUserHtml(displayName);
+            const avatarSeed = encodeURIComponent(systemName);
+            const isCaptain = u.isCaptain || currentTeamLeader === systemName;
+
+            return `
+                <div class="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 mb-2 transition-all">
+                    <span class="font-mono font-bold ${index < 3 ? 'text-yellow-500' : 'text-gray-500'}">#${index + 1}</span>
+                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" class="w-8 h-8 rounded-full border border-gray-700">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-white truncate">
+                            ${safeDisplayName}
+                            ${isCaptain ? '<i class="fas fa-crown text-yellow-400 ml-1" title="隊長"></i>' : ''}
+                        </p>
+                        <p class="text-[10px] text-blue-400 truncate">${u.status === 'BREAK' ? '🚽 暫時離開' : (escapeRoomUserHtml(u.goal || '專注中'))}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-mono text-gray-300">${u.focusMinutes || 0} min</p>
+                        <div class="w-1.5 h-1.5 rounded-full ${u.status === 'FOCUSED' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : (u.status === 'BREAK' ? 'bg-blue-500' : 'bg-red-500 shadow-[0_0_5px_#ef4444]')} ml-auto mt-1"></div>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <p class="text-xs font-mono text-gray-300">${u.focusMinutes || 0} min</p>
-                    <div class="w-1.5 h-1.5 rounded-full ${u.status === 'FOCUSED' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : (u.status === 'BREAK' ? 'bg-blue-500' : 'bg-red-500 shadow-[0_0_5px_#ef4444]')} ml-auto mt-1"></div>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     // 3. 渲染中央其他學員卡片
     const othersContainer = document.getElementById("othersContainer");
     if (othersContainer) {
-        const others = users.filter(u => u.name !== myUsername);
+        const others = safeUsers.filter(u => getRoomUserSystemName(u) !== myUsername);
+
         othersContainer.innerHTML = others.map(u => {
+            const systemName = getRoomUserSystemName(u);
+            const displayName = getRoomUserDisplayName(u);
+            const safeDisplayName = escapeRoomUserHtml(displayName);
+            const avatarSeed = encodeURIComponent(systemName);
+            const safeGoal = escapeRoomUserHtml(u.goal || '專注進行中...');
+            const statusText = escapeRoomUserHtml(
+                u.status === 'FOCUSED'
+                    ? '深度專注中'
+                    : (u.status || '連線中')
+            );
+
             if (u.isFlipped) {
                 return `
-                <div id="user-card-${u.name}" class="relative flex flex-col items-center justify-center p-2 w-full animate-fade-in transition-all duration-300" style="aspect-ratio: 3/4; background: transparent; border: none; box-shadow: none;">
+                <div id="user-card-${systemName}" class="relative flex flex-col items-center justify-center p-2 w-full animate-fade-in transition-all duration-300" style="aspect-ratio: 3/4; background: transparent; border: none; box-shadow: none;">
                     <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-blue-500 shadow-lg flex-shrink-0 bg-gray-800 flex items-center justify-center overflow-visible">
-                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
                         <div class="absolute -bottom-1 -right-1 bg-blue-600 rounded-full w-8 h-8 border-2 border-[#05070a] flex items-center justify-center z-10">
                             <i class="fas fa-mobile-alt text-white text-[14px]"></i>
                         </div>
                     </div>
                     <div class="mt-4 text-center z-10 w-full">
-                        <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${u.name}</div>
+                        <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${safeDisplayName}</div>
                         <div class="text-sm text-gray-400 font-semibold drop-shadow-md mt-1 flex items-center justify-center gap-1">
                             <i class="fas fa-clock"></i> ${u.focusMinutes || 0} min
                         </div>
                     </div>
                 </div>`;
-            } else {
-                return `
-                <div id="user-card-${u.name}" class="relative w-full h-full flex items-center justify-center animate-fade-in bg-transparent">
+            }
+
+            return `
+                <div id="user-card-${systemName}" class="relative w-full h-full flex items-center justify-center animate-fade-in bg-transparent">
                     <div class="inner-card relative h-fit w-fit min-w-[160px] max-w-[180px] bg-[#111827] rounded-2xl shadow-2xl border border-gray-700/50 flex flex-col items-center gap-2.5 py-4 px-3 transition-all duration-300 hover:border-blue-400/50">
                         <div class="relative w-16 h-16 rounded-full border-2 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)] flex-shrink-0 bg-gray-800 flex items-center justify-center z-10">
-                            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${u.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
                         </div>
                         <div class="flex flex-col items-center w-full space-y-1.5 z-10">
-                            <div class="text-base font-bold text-white truncate w-full text-center px-1">${u.name}</div>
+                            <div class="text-base font-bold text-white truncate w-full text-center px-1">${safeDisplayName}</div>
                             <div class="w-full bg-blue-900/30 text-blue-200 text-xs px-2 py-1.5 rounded border border-blue-500/30 text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-inner">
-                                🎯 ${u.goal || '專注進行中...'}
+                                🎯 ${safeGoal}
                             </div>
                             <div class="w-full bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30 flex items-center justify-center gap-1.5 shadow-inner whitespace-nowrap">
                                 <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
-                                <span class="font-bold tracking-wider truncate">${u.status === 'FOCUSED' ? '深度專注中' : (u.status || '連線中')}</span>
+                                <span class="font-bold tracking-wider truncate">${statusText}</span>
                             </div>
                             <div class="text-sm text-gray-400 font-bold flex items-center justify-center gap-1 whitespace-nowrap w-full">
                                 <i class="fas fa-clock text-gray-500"></i> ${u.focusMinutes || 0} 分鐘
@@ -139,7 +199,6 @@ window.renderRankAndUsers = function(users, myUsername, currentTeamLeader) {
                         </div>
                     </div>
                 </div>`;
-            }
         }).join('');
     }
 };

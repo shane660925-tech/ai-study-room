@@ -124,6 +124,13 @@ function getTutorStudentDisplayName(user, fallbackUsername = '') {
     return realName || nickname || username || '學員';
 }
 
+function getPublicStudentDisplayName(user, fallbackUsername = '') {
+    const nickname = normalizeProfileText(user?.nickname);
+    const username = normalizeUsername(user?.username || fallbackUsername);
+
+    return nickname || username || '學員';
+}
+
 function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
 }
@@ -7888,6 +7895,8 @@ activeTeams.push(teamData);
                 .eq('username', username)
                 .maybeSingle();
 
+            const publicDisplayName = getPublicStudentDisplayName(dbUser, username);
+const publicNickname = normalizeProfileText(dbUser?.nickname);
             if (dbUser && dbUser.is_blocked) {
     socket.emit('blocked_account', {
         message: '此帳號已被平台停用，無法進入教室。'
@@ -7904,6 +7913,15 @@ activeTeams.push(teamData);
             if (user.isPlaceholder) {
                 // 補齊資料
                 user.isPlaceholder = false;
+                user.username = username;
+
+// name 保留 username，給系統判斷、違規、結算、手機連動使用
+user.name = username;
+
+// 畫面顯示用
+user.displayName = publicDisplayName;
+user.studentName = publicDisplayName;
+user.nickname = publicNickname;
                 user.teamId = data.teamId || null;
                 user.goal = data.goal || '專注學習';
                 user.focusMinutes = 0;
@@ -7922,19 +7940,25 @@ activeTeams.push(teamData);
                 else if (user.roomMode === 'simulated') roomName = "模擬教室";
                 else if (user.roomMode === '1') roomName = "線上課程";
                 
-                addTeacherLog(`👤 ${username} 進入了[${roomName}] (誠信分: ${user.integrity_score})`,
+                addTeacherLog(`👤 ${publicDisplayName} 進入了[${roomName}] (誠信分: ${user.integrity_score})`,
     user.roomMode
 );
-                io.to(user.roomMode).emit('community_event', {
+io.to(user.roomMode).emit('community_event', {
     type: 'ENTER',
-    message: `${username} 進入了自習室。`
+    message: `${publicDisplayName} 進入了自習室。`,
+    username,
+    displayName: publicDisplayName
 });
             } else {
                 // 如果不是佔位符，代表是重新連線或重複發送
                 user.status = 'FOCUSED'; 
+                user.username = username;
+user.name = username;
+user.displayName = publicDisplayName;
+user.studentName = publicDisplayName;
+user.nickname = publicNickname;
                 user.leaveTime = null; 
                 user.integrity_score = dbUser ? (dbUser.integrity_score ?? 100) : user.integrity_score;
-                if (data.roomMode) user.roomMode = data.roomMode;
                 if (data.roomMode) user.roomMode = data.roomMode;
 
 if (data.roomId || data.room) {
@@ -7942,8 +7966,7 @@ if (data.roomId || data.room) {
 }
 
 if (data.teamId) user.teamId = data.teamId;
-                if (data.teamId) user.teamId = data.teamId;
-                addTeacherLog(`🔄 ${username} 重新連線成功`,
+                addTeacherLog(`🔄 ${publicDisplayName} 重新連線成功`,
     user.roomMode
 );
             }
@@ -8003,6 +8026,12 @@ if (blackboardByRoom[user.roomMode]) {
 
     socket.on('update_status', (data) => {
         const { name, isFlipped, isStandalone, roomMode } = data;
+const incomingDisplayName = normalizeProfileText(
+    data.displayName ||
+    data.studentName ||
+    data.nickname ||
+    ''
+);
         if (name) {
             if (!globalUserStatus[name]) globalUserStatus[name] = {};
             if (isFlipped !== undefined) globalUserStatus[name].isFlipped = isFlipped;
@@ -8012,6 +8041,18 @@ if (blackboardByRoom[user.roomMode]) {
 
         const user = onlineUsers.find(u => u.name === name || u.id === socket.id);
         if (user) {
+            if (incomingDisplayName) {
+    user.displayName = incomingDisplayName;
+    user.studentName = incomingDisplayName;
+    user.nickname = incomingDisplayName;
+}
+
+const statusDisplayName =
+    user.displayName ||
+    user.studentName ||
+    user.nickname ||
+    user.name;
+
             const oldStatus = user.status;
             if (roomMode) {
     user.roomMode = roomMode;
@@ -8020,7 +8061,7 @@ if (blackboardByRoom[user.roomMode]) {
             if (isFlipped !== undefined) {
                 const prevFlipped = user.isFlipped;
                 user.isFlipped = isFlipped;
-                if (!prevFlipped && user.isFlipped) addTeacherLog(`📱 ${user.name} 已翻轉手機進入深度專注`,
+                if (!prevFlipped && user.isFlipped) addTeacherLog(`📱 ${statusDisplayName} 已翻轉手機進入深度專注`,
     user.roomMode
 );
             }
@@ -8029,10 +8070,10 @@ if (blackboardByRoom[user.roomMode]) {
                 else user.status = data.status;
             }
             if (oldStatus !== user.status) {
-                if (user.status === 'BREAK') addTeacherLog(`🚽 ${user.name} 申請生理需求 (${data.reason || '未註明'})`,
+                if (user.status === 'BREAK') addTeacherLog(`🚽 ${statusDisplayName} 申請生理需求 (${data.reason || '未註明'})`,
     user.roomMode
 );
-                else if (user.status === 'DISTRACTED') addTeacherLog(`🚨 ${user.name} 偵測到違規行為`,
+                else if (user.status === 'DISTRACTED') addTeacherLog(`🚨 ${statusDisplayName} 偵測到違規行為`,
     user.roomMode
 );
             }
@@ -8366,7 +8407,13 @@ socket.on('admin_action', (data) => {
         );
 
         disconnectTimeouts[username] = setTimeout(() => {
-            addTeacherLog(`👋 ${username} 離開了教室`, oldRoomMode);
+            const leaveDisplayName =
+    user.displayName ||
+    user.studentName ||
+    user.nickname ||
+    username;
+
+addTeacherLog(`👋 ${leaveDisplayName} 離開了教室`, oldRoomMode);
 
             onlineUsers = onlineUsers.filter(u => u.name !== username);
 
@@ -8381,7 +8428,9 @@ socket.on('admin_action', (data) => {
 
             io.to(oldRoomMode).emit('community_event', {
                 type: 'LEAVE',
-                message: `${username} 離開了教室。`
+                message: `${leaveDisplayName} 離開了教室。`,
+username,
+displayName: leaveDisplayName
             });
 
             broadcastUpdateRank();
@@ -8447,19 +8496,24 @@ setInterval(() => {
 async function broadcastWeeklyRank() {
     try {
         const { data: topUsers } = await supabase
-            .from('users')
-            .select('username, total_seconds')
+    .from('users')
+    .select('username, nickname, total_seconds')
             .order('total_seconds', { ascending: false })
             .limit(5);
 
         if (topUsers) {
             const rankData = topUsers.map(u => {
                 const onlineUser = onlineUsers.find(ou => ou.name === u.username);
-                return {
-                    name: u.username,
-                    weeklyHours: (u.total_seconds || 0) / 3600,
-                    status: onlineUser ? (onlineUser.isFlipped ? '深度專注中' : '連線中') : '離線休息中'
-                };
+                const displayName = getPublicStudentDisplayName(u, u.username);
+
+return {
+    name: displayName,
+    username: u.username,
+    displayName,
+    nickname: u.nickname || '',
+    weeklyHours: (u.total_seconds || 0) / 3600,
+    status: onlineUser ? (onlineUser.isFlipped ? '深度專注中' : '連線中') : '離線休息中'
+};
             });
             io.emit('update_weekly_rank', rankData);
         }

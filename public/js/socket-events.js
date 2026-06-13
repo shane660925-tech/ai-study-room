@@ -2,6 +2,32 @@
  * Socket Events - 專門處理所有來自伺服器的 Socket 廣播與通訊事件
  */
 window.setupSocketEvents = function(socket, myUsername) {
+        function getPublicDisplayName(user) {
+        return String(
+            user?.displayName ||
+            user?.studentName ||
+            user?.nickname ||
+            user?.name ||
+            user?.username ||
+            '學員'
+        )
+            .replace(/[\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function getPublicSystemName(user) {
+        return String(
+            user?.username ||
+            user?.name ||
+            user?.displayName ||
+            user?.studentName ||
+            '學員'
+        )
+            .replace(/[\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
     if (!socket) {
         console.warn("[Socket] 找不到 Socket 實例，無法註冊事件。");
         return;
@@ -28,7 +54,10 @@ console.log("🧪 Socket connect roomMode =", finalRoomMode);
 
 socket.emit("update_status", { 
     status: window.myStatus || "FOCUSED", 
-    name: myUsername, 
+    name: myUsername,
+    username: myUsername,
+    displayName: window.myDisplayName || myUsername,
+    studentName: window.myDisplayName || myUsername,
     isFlipped: window.isPhoneFlipped,
     isCaptain: window.isAuditMode,
     roomMode: finalRoomMode
@@ -50,7 +79,14 @@ socket.emit("update_status", {
             if (data.type === 'FLIP_WARNING') {
                 window.isFlipWarningActive = true;
                 window.myStatus = "DISTRACTED";
-                socket.emit("update_status", { status: "DISTRACTED", name: myUsername, isFlipped: false });
+                socket.emit("update_status", {
+    status: "DISTRACTED",
+    name: myUsername,
+    username: myUsername,
+    displayName: window.myDisplayName || myUsername,
+    studentName: window.myDisplayName || myUsername,
+    isFlipped: false
+});
                 
                 if (!window.alertAudio) {
                     window.alertAudio = new Audio('https://www.myinstants.com/media/sounds/iphone-emergency-alert.mp3');
@@ -96,7 +132,14 @@ socket.emit('violation', {
                 if (window.RoomUI) window.RoomUI.hideWarning();
                 if (window.hideFlipCountdownModal) window.hideFlipCountdownModal();
 
-                socket.emit("update_status", { status: "FOCUSED", name: myUsername, isFlipped: true });
+                socket.emit("update_status", {
+    status: "FOCUSED",
+    name: myUsername,
+    username: myUsername,
+    displayName: window.myDisplayName || myUsername,
+    studentName: window.myDisplayName || myUsername,
+    isFlipped: true
+});
             }
         }
     });
@@ -207,16 +250,17 @@ socket.on("update_rank", (users) => {
     }
 
     const rankSignature = JSON.stringify(
-        (users || []).map(u => ({
-            name: u.name,
-            status: u.status,
-            focusMinutes: u.focusMinutes,
-            isFlipped: u.isFlipped,
-            isCaptain: u.isCaptain,
-            teamId: u.teamId,
-            roomMode: u.roomMode
-        }))
-    );
+    (users || []).map(u => ({
+        systemName: getPublicSystemName(u),
+        displayName: getPublicDisplayName(u),
+        status: u.status,
+        focusMinutes: u.focusMinutes,
+        isFlipped: u.isFlipped,
+        isCaptain: u.isCaptain,
+        teamId: u.teamId,
+        roomMode: u.roomMode
+    }))
+);
 
     if (rankSignature === lastRankRenderSignature) {
         return;
@@ -225,8 +269,21 @@ socket.on("update_rank", (users) => {
     lastRankRenderSignature = rankSignature;
 
     if (window.renderRankAndUsers) {
-        window.renderRankAndUsers(users, myUsername, window.currentTeamLeader);
-    }
+    const displayUsers = (users || []).map(u => ({
+        ...u,
+
+        // name 保留 username，避免舊邏輯壞掉
+        name: getPublicSystemName(u),
+        username: getPublicSystemName(u),
+
+        // 新增畫面顯示欄位
+        displayName: getPublicDisplayName(u),
+        studentName: getPublicDisplayName(u),
+        nickname: u.nickname || ''
+    }));
+
+    window.renderRankAndUsers(displayUsers, myUsername, window.currentTeamLeader);
+}
 });
 
     // 9. 管理員動作 (叫醒、黑板)

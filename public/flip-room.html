@@ -152,8 +152,21 @@
 
     <script>
         const socket = io();
-        const username = localStorage.getItem('studyVerseUser') || "游擊隊員";
-        window.myUsername = username; 
+        const params = new URLSearchParams(window.location.search);
+
+const username =
+    params.get('username') ||
+    params.get('name') ||
+    localStorage.getItem('studyVerseUser') ||
+    "游擊隊員";
+
+const standaloneDisplayName =
+    params.get('displayName') ||
+    localStorage.getItem('studyVerseNickname') ||
+    username;
+
+window.myUsername = username;
+window.myDisplayName = standaloneDisplayName;
 
         let pendingRoomType = 'managed-room.html';
         let targetStandaloneRoomUrl = '';
@@ -279,9 +292,20 @@ function applyStandaloneSubscriptionLocks() {
 }
 
         document.addEventListener('DOMContentLoaded', async () => {
-    document.getElementById('welcomeName').innerText = username;
-    document.getElementById('userAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${username}`;
-    socket.emit("join_room", { name: username, roomMode: 'lobby', status: 'LOBBY' });
+    document.getElementById('welcomeName').innerText = standaloneDisplayName;
+
+// 頭像 seed 用 username，避免暱稱修改後頭像一直變
+document.getElementById('userAvatar').src =
+    `https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(username)}`;
+
+socket.emit("join_room", {
+    name: username,
+    username,
+    displayName: standaloneDisplayName,
+    studentName: standaloneDisplayName,
+    roomMode: 'lobby',
+    status: 'LOBBY'
+});
 
     await loadStandaloneSubscriptionAccess();
     applyStandaloneSubscriptionLocks();
@@ -487,11 +511,29 @@ window.showThemeRoomModal = openStandaloneThemeRoomModal;
 
             // 取得要跳轉的教室與參數
             const targetRoom = targetStandaloneRoomUrl || 'managed-room.html';
-            const currentUser = localStorage.getItem('studyVerseUser') || "游擊隊員";
+            const params = new URLSearchParams(window.location.search);
+
+const currentUser =
+    params.get('username') ||
+    localStorage.getItem('studyVerseUser') ||
+    "游擊隊員";
+
+const currentDisplayName =
+    params.get('displayName') ||
+    window.studyVerseProfile?.nickname ||
+    document.getElementById('welcomeName')?.innerText ||
+    currentUser;
             
             // 組合最終 URL (帶上 standalone=true)
 const separator = targetRoom.includes('?') ? '&' : '?';
-let finalUrl = `/${targetRoom}${separator}username=${encodeURIComponent(currentUser)}&name=${encodeURIComponent(currentUser)}&goal=${encodeURIComponent(goal)}&duration=${time}&standalone=true`;
+let finalUrl =
+    `/${targetRoom}${separator}` +
+    `username=${encodeURIComponent(currentUser)}` +
+    `&name=${encodeURIComponent(currentUser)}` +
+    `&displayName=${encodeURIComponent(currentDisplayName)}` +
+    `&goal=${encodeURIComponent(goal)}` +
+    `&duration=${time}` +
+    `&standalone=true`;
             
             // 若是加入隊伍進來的，把隊伍參數也接上
             if (window.tempTeamParams) {

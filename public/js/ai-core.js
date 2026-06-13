@@ -8,6 +8,10 @@ let myStatus = "FOCUSED", distractionStartTime = 0, lastObjectCheckTime = 0;
 let isPhoneDetected = false, lastFaceCheckTime = 0, currentRoomMode = "1";
 let lastVideoTime = -1;
 let myUsername = localStorage.getItem('studyVerseUser') || "學員"; 
+let myDisplayName =
+    new URLSearchParams(window.location.search).get('displayName') ||
+    localStorage.getItem('studyVerseNickname') ||
+    myUsername;
 
 let distractionCounter = 0; 
 const STABLE_THRESHOLD = 3; 
@@ -33,7 +37,8 @@ Object.defineProperties(window, {
     "remoteUsers": { get: () => remoteUsers, set: (v) => remoteUsers = v },
     "currentRoomMode": { get: () => currentRoomMode, set: (v) => currentRoomMode = v },
     "isAuditMode": { get: () => isAuditMode, set: (v) => isAuditMode = v },
-    "myUsername": { get: () => myUsername, set: (v) => myUsername = v }
+    "myUsername": { get: () => myUsername, set: (v) => myUsername = v },
+"myDisplayName": { get: () => myDisplayName, set: (v) => myDisplayName = v }
 });
 
 // 違規計數器
@@ -74,6 +79,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentPath = window.location.pathname;
     
     const urlParams = new URLSearchParams(window.location.search);
+    const urlUsername = urlParams.get('username') || urlParams.get('name');
+const urlDisplayName = urlParams.get('displayName');
+
+if (urlUsername) {
+    myUsername = urlUsername;
+}
+
+if (urlDisplayName) {
+    myDisplayName = urlDisplayName;
+}
 const themeSlug = urlParams.get('theme');
 const mode = urlParams.get('mode');
 

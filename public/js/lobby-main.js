@@ -108,6 +108,8 @@ function updateLobbyProfileDisplay(profile) {
     window.studyVerseProfile = profile;
 
     const displayName = profile.nickname || profile.username || '學員';
+    localStorage.setItem('studyVerseNickname', displayName);
+localStorage.setItem('studyVerseRealName', profile.real_name || '');
 
     const navName = document.getElementById('navName');
     if (navName) {
@@ -914,8 +916,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnRoleSensor) {
         btnRoleSensor.addEventListener('click', () => {
             closeAllEntryModals();
-            const currentName = localStorage.getItem('studyVerseUser') || '';
-            window.location.href = `/flip-room.html?name=${encodeURIComponent(currentName)}`; 
+            const currentUsername = localStorage.getItem('studyVerseUser') || '';
+const currentDisplayName =
+    window.studyVerseProfile?.nickname ||
+    document.getElementById('navName')?.innerText ||
+    currentUsername;
+
+window.location.href =
+    `/flip-room.html?username=${encodeURIComponent(currentUsername)}` +
+    `&name=${encodeURIComponent(currentUsername)}` +
+    `&displayName=${encodeURIComponent(currentDisplayName)}`;
         });
     }
 

@@ -6,6 +6,43 @@
 
 let warningCheckTimer = null; 
 
+function normalizeRoomDisplayText(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getRoomSystemName(user) {
+    return normalizeRoomDisplayText(
+        user?.username ||
+        user?.name ||
+        user?.displayName ||
+        user?.studentName ||
+        '學員'
+    );
+}
+
+function getRoomDisplayName(user) {
+    return normalizeRoomDisplayText(
+        user?.displayName ||
+        user?.studentName ||
+        user?.nickname ||
+        user?.name ||
+        user?.username ||
+        '學員'
+    );
+}
+
+function escapeRoomHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // ==========================================
 // 個人資訊：今日累積專注時間
 // 顯示在左下角原本 Streak 的位置
@@ -575,9 +612,14 @@ function initializeTeamUIHook() {
         window.appSocket.on('update_rank', (users) => {
             const urlParams = new URLSearchParams(window.location.search);
             const inputNameEl = document.getElementById('inputName');
-            const myName = String(inputNameEl?.value || urlParams.get('name') || "Commander").trim();
-            
-            const me = users.find(u => u.name === myName);
+            const mySystemName = String(
+    inputNameEl?.value ||
+    urlParams.get('username') ||
+    urlParams.get('name') ||
+    "Commander"
+).trim();
+
+const me = users.find(u => getRoomSystemName(u) === mySystemName);
             if (!me || !me.teamId) return; 
             
             const teamMembers = users.filter(u => u.teamId === me.teamId);
@@ -585,7 +627,10 @@ function initializeTeamUIHook() {
             window.myCurrentTeamData = { teamId: me.teamId, totalFocus, count: teamMembers.length };
 
             const webcamEl = document.getElementById('webcam');
-            const localCard = document.getElementById(`user-card-${myName}`) || webcamEl?.closest('.user-card') || webcamEl?.parentElement;
+            const localCard =
+    document.getElementById(`user-card-${mySystemName}`) ||
+    webcamEl?.closest('.user-card') ||
+    webcamEl?.parentElement;
             const grid = localCard?.parentElement;
             
             if (grid) {
@@ -593,10 +638,21 @@ function initializeTeamUIHook() {
                 const flagColor = `hsl(${hue}, 80%, 55%)`;
 
                 teamMembers.forEach(member => {
-                    if (member.name === myName) return; 
+    const memberSystemName = getRoomSystemName(member);
+    const memberDisplayName = getRoomDisplayName(member);
+    const safeMemberDisplayName = escapeRoomHtml(memberDisplayName);
+    const memberAvatarSeed = encodeURIComponent(memberSystemName);
 
-                    const card = document.getElementById(`user-card-${member.name}`) || 
-                                 Array.from(grid.children).find(el => el.innerHTML.includes(member.name) && el !== localCard);
+    if (memberSystemName === mySystemName) return;
+
+    const card =
+        document.getElementById(`user-card-${memberSystemName}`) ||
+        Array.from(grid.children).find(el =>
+            (
+                el.innerHTML.includes(memberSystemName) ||
+                el.innerHTML.includes(memberDisplayName)
+            ) && el !== localCard
+        );
                     
                     if (card) {
                         if (card.parentElement === grid) {
@@ -611,13 +667,13 @@ function initializeTeamUIHook() {
                             
                             card.innerHTML = `
                                 <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-blue-500 shadow-lg flex-shrink-0 bg-gray-800 flex items-center justify-center overflow-visible">
-                                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${member.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                                    <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${memberAvatarSeed}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
                                     <div class="absolute -bottom-1 -right-1 bg-blue-600 rounded-full w-8 h-8 border-2 border-[#05070a] flex items-center justify-center z-10">
                                         <i class="fas fa-mobile-alt text-white text-[14px]"></i>
                                     </div>
                                 </div>
                                 <div class="mt-4 text-center z-10 w-full">
-                                    <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${member.name}</div>
+                                    <div class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate w-full px-2">${safeMemberDisplayName}</div>
                                     <div class="text-sm text-gray-400 font-semibold drop-shadow-md mt-1 flex items-center justify-center gap-1">
                                         <i class="fas fa-clock"></i> ${member.focusMinutes || 0} min
                                     </div>
@@ -632,11 +688,11 @@ function initializeTeamUIHook() {
                                 <div class="inner-card relative h-fit w-fit min-w-[160px] max-w-[180px] bg-[#111827] rounded-2xl shadow-2xl border border-gray-700/50 flex flex-col items-center gap-2.5 py-4 px-3 transition-all duration-300 hover:border-blue-400/50">
                                     
                                     <div class="relative w-16 h-16 rounded-full border-2 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)] flex-shrink-0 bg-gray-800 flex items-center justify-center z-10">
-                                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${member.name}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
+                                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${memberAvatarSeed}" alt="Avatar" class="w-full h-full object-cover rounded-full m-0 p-0">
                                     </div>
                                     
                                     <div class="flex flex-col items-center w-full space-y-1.5 z-10">
-                                        <div class="text-base font-bold text-white truncate w-full text-center px-1">${member.name}</div>
+                                        <div class="text-base font-bold text-white truncate w-full text-center px-1">${safeMemberDisplayName}</div>
                                         
                                         <div class="w-full bg-blue-900/30 text-blue-200 text-xs px-2 py-1.5 rounded border border-blue-500/30 text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-inner">
                                             🎯 ${member.goal || '專注進行中...'}
