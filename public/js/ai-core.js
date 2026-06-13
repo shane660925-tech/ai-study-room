@@ -339,14 +339,32 @@ async function predictLoop() {
         }
 
         if (didCheckRun) {
-            let currentIssue = null;
-            let shouldWarnPhone = (currentRoomMode === 'tutor') ? isPhoneDetected : (isPhoneDetected && !isPhoneFlipped);
+    let currentIssue = null;
+    let shouldWarnPhone = (currentRoomMode === 'tutor') ? isPhoneDetected : (isPhoneDetected && !isPhoneFlipped);
 
-            if (shouldWarnPhone) currentIssue = "📱 使用手機";
-            else currentIssue = aiFaceIssue;
+    if (shouldWarnPhone) currentIssue = "📱 使用手機";
+    else currentIssue = aiFaceIssue;
+
+    // Debug：確認實際 AI 有沒有偵測到手機 / 離座 / 趴睡
+    window.__lastAiCameraState = {
+        currentRoomMode,
+        currentTutorPhase: window.currentTutorPhase,
+        isAIPaused: window.isAIPaused,
+        isFlipWarningActive,
+        isAuditMode,
+        isPhoneDetected,
+        aiFaceIssue,
+        currentIssue,
+        distractionCounter,
+        time: new Date().toLocaleTimeString('zh-TW', { hour12: false })
+    };
+
+    if (currentRoomMode === 'tutor') {
+        console.log('[AICore Tutor Detection]', window.__lastAiCameraState);
+    }
             
-            handleDistractionBuffer(currentIssue, now);
-        }
+    handleDistractionBuffer(currentIssue, now);
+}
     }
     requestAnimationFrame(predictLoop);
 }
@@ -394,6 +412,65 @@ function sendTutorCameraViolation(issue) {
 
 function handleDistractionBuffer(issue, now) {
     let prevStatus = myStatus;
+
+        // 特約教室 AI 違規保底：避免模型偵測斷斷續續，永遠累積不到 STABLE_THRESHOLD
+    if (currentRoomMode === 'tutor') {
+        const currentPhase = window.currentTutorPhase || '';
+        const isTutorClassActive =
+            !window.isAIPaused &&
+            !isFlipWarningActive &&
+            !isAuditMode &&
+            (
+                currentPhase === 'CLASS' ||
+                currentPhase === 'STUDYING'
+            );
+
+        if (!window.__tutorAiIssueBuffer) {
+            window.__tutorAiIssueBuffer = {
+                issue: null,
+                count: 0
+            };
+        }
+
+        if (issue && isTutorClassActive) {
+            if (window.__tutorAiIssueBuffer.issue === issue) {
+                window.__tutorAiIssueBuffer.count++;
+            } else {
+                window.__tutorAiIssueBuffer.issue = issue;
+                window.__tutorAiIssueBuffer.count = 1;
+            }
+
+            console.log('[AICore Tutor Issue Buffer]', {
+                issue,
+                count: window.__tutorAiIssueBuffer.count,
+                currentPhase,
+                isAIPaused: window.isAIPaused
+            });
+
+            const currentNow = Date.now();
+
+            if (
+                window.__tutorAiIssueBuffer.count >= 2 &&
+                currentNow - window.lastCameraViolationTime > 5000
+            ) {
+                window.lastCameraViolationTime = currentNow;
+                sendTutorCameraViolation(issue);
+            }
+        } else {
+            window.__tutorAiIssueBuffer.issue = null;
+            window.__tutorAiIssueBuffer.count = 0;
+
+            if (issue && !isTutorClassActive) {
+                console.warn('[AICore Tutor Issue Ignored] 目前不是上課中，AI 違規不記錄:', {
+                    issue,
+                    currentPhase,
+                    isAIPaused: window.isAIPaused,
+                    isFlipWarningActive,
+                    isAuditMode
+                });
+            }
+        }
+    }
     
     if (window.isAIPaused || issue === "✍️ 抄筆記中...") {
         distractionCounter = 0; 
