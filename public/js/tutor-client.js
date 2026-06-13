@@ -1700,28 +1700,87 @@ function updateStudentTimerUI(time, label, status, progress) {
 // VIP 結算防重複鎖
 // 防止手機翻轉、AI、room-ui、課程結束同時觸發 endSession
 // ==========================================
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        if (typeof window.endSession !== 'function') {
-            console.warn("⚠️ 找不到 window.endSession，防重複鎖尚未套用");
-            return;
+function markStandaloneTutorFrameIfNeeded() {
+    if (!isStandalone) return;
+
+    const myName = inputName ? inputName.value : '未知學員';
+
+    if (typeof socket !== 'undefined') {
+        socket.emit('update_status', {
+            name: myName,
+            username: myName,
+            displayName: window.myDisplayName || myName,
+            studentName: window.myDisplayName || myName,
+            isStandalone: true
+        });
+    }
+
+    const myFrame = document.getElementById('myDeskFrame');
+
+    if (myFrame) {
+        myFrame.classList.remove('aspect-video');
+        myFrame.classList.add('is-mobile-flip');
+
+        if (!myFrame.querySelector('.mobile-badge')) {
+            const badge = document.createElement('div');
+            badge.className = 'mobile-badge';
+            badge.innerHTML = '<i class="fas fa-mobile-alt animate-pulse"></i> VIP 手機端';
+            myFrame.appendChild(badge);
+        }
+    }
+}
+
+function autoStartTutorAiCore() {
+    if (window.__tutorAutoStartedAI) return;
+
+    const startBtn = document.getElementById('startBtn');
+    const dashboardGoal = document.getElementById('dashboardGoal');
+
+    if (typeof window.initApp === 'function') {
+        window.__tutorAutoStartedAI = true;
+
+        console.log('✅ [TutorClient] initApp 已就緒，啟動特約教室 AI');
+
+        window.initApp();
+
+        if (dashboardGoal && dashboardGoal.innerText.includes('等待專屬任務')) {
+            dashboardGoal.innerText = inputGoal?.value || '跟隨導師排程';
         }
 
-        if (window.__originalEndSession) return;
+        markStandaloneTutorFrameIfNeeded();
+        return;
+    }
 
-        window.__originalEndSession = window.endSession;
+    if (startBtn && typeof startBtn.onclick === 'function') {
+        window.__tutorAutoStartedAI = true;
 
-        window.endSession = async function(...args) {
-            if (window.hasTutorSessionEnded) {
-                console.log("⚠️ 已結算過，略過重複 endSession");
-                return;
-            }
+        console.log('✅ [TutorClient] 使用 startBtn.onclick 啟動特約教室 AI');
 
-            window.hasTutorSessionEnded = true;
+        startBtn.onclick();
 
-            return await window.__originalEndSession.apply(this, args);
-        };
+        if (dashboardGoal && dashboardGoal.innerText.includes('等待專屬任務')) {
+            dashboardGoal.innerText = inputGoal?.value || '跟隨導師排程';
+        }
 
-        console.log("✅ VIP endSession 防重複鎖已啟用");
-    }, 1500);
+        markStandaloneTutorFrameIfNeeded();
+        return;
+    }
+
+    console.warn('⏳ [TutorClient] initApp 尚未就緒，稍後重試');
+}
+
+let tutorAutoStartRetryCount = 0;
+
+const tutorAutoStartTimer = setInterval(() => {
+    tutorAutoStartRetryCount++;
+
+    autoStartTutorAiCore();
+
+    if (window.__tutorAutoStartedAI || tutorAutoStartRetryCount >= 30) {
+        clearInterval(tutorAutoStartTimer);
+    }
+}, 300);
+
+window.addEventListener('load', () => {
+    setTimeout(autoStartTutorAiCore, 300);
 });

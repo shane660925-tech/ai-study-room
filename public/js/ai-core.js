@@ -471,6 +471,65 @@ function handleDistractionBuffer(issue, now) {
             }
         }
     }
+
+        // 特約教室 AI 違規保底：避免模型偵測斷斷續續，永遠累積不到 STABLE_THRESHOLD
+    if (currentRoomMode === 'tutor') {
+        const currentPhase = window.currentTutorPhase || '';
+        const isTutorClassActive =
+            !window.isAIPaused &&
+            !isFlipWarningActive &&
+            !isAuditMode &&
+            (
+                currentPhase === 'CLASS' ||
+                currentPhase === 'STUDYING'
+            );
+
+        if (!window.__tutorAiIssueBuffer) {
+            window.__tutorAiIssueBuffer = {
+                issue: null,
+                count: 0
+            };
+        }
+
+        if (issue && isTutorClassActive) {
+            if (window.__tutorAiIssueBuffer.issue === issue) {
+                window.__tutorAiIssueBuffer.count++;
+            } else {
+                window.__tutorAiIssueBuffer.issue = issue;
+                window.__tutorAiIssueBuffer.count = 1;
+            }
+
+            console.log('[AICore Tutor Issue Buffer]', {
+                issue,
+                count: window.__tutorAiIssueBuffer.count,
+                currentPhase,
+                isAIPaused: window.isAIPaused
+            });
+
+            const currentNow = Date.now();
+
+            if (
+                window.__tutorAiIssueBuffer.count >= 2 &&
+                currentNow - window.lastCameraViolationTime > 5000
+            ) {
+                window.lastCameraViolationTime = currentNow;
+                sendTutorCameraViolation(issue);
+            }
+        } else {
+            window.__tutorAiIssueBuffer.issue = null;
+            window.__tutorAiIssueBuffer.count = 0;
+
+            if (issue && !isTutorClassActive) {
+                console.warn('[AICore Tutor Issue Ignored] 目前不是上課中，AI 違規不記錄:', {
+                    issue,
+                    currentPhase,
+                    isAIPaused: window.isAIPaused,
+                    isFlipWarningActive,
+                    isAuditMode
+                });
+            }
+        }
+    }
     
     if (window.isAIPaused || issue === "✍️ 抄筆記中...") {
         distractionCounter = 0; 
