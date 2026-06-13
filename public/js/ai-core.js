@@ -212,7 +212,11 @@ async function initApp() {
     }
 
     myUsername = name;
+
+// initApp 也補一次個人資料同步，避免 room-ui / tutor-client 載入順序造成顯示名稱還沒準備好
+await syncStudyVerseProfileForRoomDisplay(name);
 myDisplayName = getRoomDisplayNameForCurrentMode(name);
+
 window.sessionStartTime = Date.now();
     
     const urlParams = new URLSearchParams(window.location.search);

@@ -43,6 +43,61 @@ function escapeRoomHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function getRoomPersonalDisplayName(userName) {
+    const safeUsername = normalizeRoomDisplayText(userName);
+    const nickname = normalizeRoomDisplayText(localStorage.getItem('studyVerseNickname'));
+    const realName = normalizeRoomDisplayText(localStorage.getItem('studyVerseRealName'));
+
+    const isTutorRoom =
+        window.location.pathname.includes('tutor-room.html') ||
+        window.currentRoomMode === 'tutor';
+
+    if (isTutorRoom) {
+        return realName || window.myDisplayName || nickname || safeUsername || '學員';
+    }
+
+    return nickname || window.myDisplayName || safeUsername || '學員';
+}
+
+async function ensureRoomPersonalDisplayName(userName) {
+    const safeUsername = normalizeRoomDisplayText(userName);
+
+    if (!safeUsername) return '學員';
+
+    const isTutorRoom =
+        window.location.pathname.includes('tutor-room.html') ||
+        window.currentRoomMode === 'tutor';
+
+    const cachedNickname = normalizeRoomDisplayText(localStorage.getItem('studyVerseNickname'));
+    const cachedRealName = normalizeRoomDisplayText(localStorage.getItem('studyVerseRealName'));
+
+    // 特約教室一定優先確認 real_name，避免顯示成 username
+    if (!isTutorRoom && cachedNickname) {
+        return getRoomPersonalDisplayName(safeUsername);
+    }
+
+    if (isTutorRoom && cachedRealName) {
+        return getRoomPersonalDisplayName(safeUsername);
+    }
+
+    try {
+        const res = await fetch(`/api/profile?username=${encodeURIComponent(safeUsername)}`);
+        const data = await res.json();
+
+        if (res.ok && data.success && data.profile) {
+            const nickname = normalizeRoomDisplayText(data.profile.nickname);
+            const realName = normalizeRoomDisplayText(data.profile.real_name);
+
+            if (nickname) localStorage.setItem('studyVerseNickname', nickname);
+            if (realName) localStorage.setItem('studyVerseRealName', realName);
+        }
+    } catch (err) {
+        console.warn('room-ui 讀取個人顯示名稱失敗:', err);
+    }
+
+    return getRoomPersonalDisplayName(safeUsername);
+}
+
 // ==========================================
 // 個人資訊：今日累積專注時間
 // 顯示在左下角原本 Streak 的位置
@@ -414,17 +469,38 @@ window.dismissAlert = function() {
     }, 5000);
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
-    const userName = localStorage.getItem('studyVerseUser') || urlParams.get('name') || "指揮官";
-    const userMode = urlParams.get('mode') || "standard";
-    
-    document.getElementById('inputName').value = userName;
-    document.getElementById('inputMode').value = userMode;
-    document.getElementById('welcomeMsg').innerText = `歡迎回來，${userName}`;
-    
-    document.getElementById('mySidebarName').innerText = userName;
-document.getElementById('mySidebarAvatar').src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${userName}`;
+
+// userName 永遠維持 username，不能改成暱稱或真實姓名
+const userName =
+    localStorage.getItem('studyVerseUser') ||
+    urlParams.get('username') ||
+    urlParams.get('name') ||
+    "指揮官";
+
+const userMode = urlParams.get('mode') || "standard";
+
+// displayName 只用於畫面顯示：一般教室 nickname，特約教室 real_name
+const displayName = await ensureRoomPersonalDisplayName(userName);
+
+const inputNameEl = document.getElementById('inputName');
+if (inputNameEl) inputNameEl.value = userName;
+
+const inputModeEl = document.getElementById('inputMode');
+if (inputModeEl) inputModeEl.value = userMode;
+
+const welcomeMsgEl = document.getElementById('welcomeMsg');
+if (welcomeMsgEl) welcomeMsgEl.innerText = `歡迎回來，${displayName}`;
+
+const sidebarNameEl = document.getElementById('mySidebarName');
+if (sidebarNameEl) sidebarNameEl.innerText = displayName;
+
+const sidebarAvatarEl = document.getElementById('mySidebarAvatar');
+if (sidebarAvatarEl) {
+    sidebarAvatarEl.src =
+        `https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(userName)}`;
+}
 
 // 左下角原本 Streak 改為「今日累積」
 if (typeof window.loadTodayFocusMinutes === 'function') {
