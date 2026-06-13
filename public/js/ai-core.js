@@ -13,6 +13,77 @@ let myDisplayName =
     localStorage.getItem('studyVerseNickname') ||
     myUsername;
 
+    function normalizeStudyVerseDisplayName(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function syncStudyVerseProfileForRoomDisplay(username) {
+    const safeUsername = normalizeStudyVerseDisplayName(username);
+
+    if (!safeUsername) return null;
+
+    const cachedNickname = normalizeStudyVerseDisplayName(localStorage.getItem('studyVerseNickname'));
+    const cachedRealName = normalizeStudyVerseDisplayName(localStorage.getItem('studyVerseRealName'));
+
+    // 已經有資料就不用每次重抓
+    if (cachedNickname && cachedRealName) {
+        return {
+            nickname: cachedNickname,
+            real_name: cachedRealName
+        };
+    }
+
+    try {
+        const res = await fetch(`/api/profile?username=${encodeURIComponent(safeUsername)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success || !data.profile) {
+            return null;
+        }
+
+        const nickname = normalizeStudyVerseDisplayName(data.profile.nickname);
+        const realName = normalizeStudyVerseDisplayName(data.profile.real_name);
+
+        if (nickname) {
+            localStorage.setItem('studyVerseNickname', nickname);
+        }
+
+        if (realName) {
+            localStorage.setItem('studyVerseRealName', realName);
+        }
+
+        return {
+            nickname,
+            real_name: realName
+        };
+    } catch (err) {
+        console.warn('讀取顯示名稱失敗:', err);
+        return null;
+    }
+}
+
+function getRoomDisplayNameForCurrentMode(username) {
+    const safeUsername = normalizeStudyVerseDisplayName(username);
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const urlDisplayName = normalizeStudyVerseDisplayName(urlParams.get('displayName'));
+    const nickname = normalizeStudyVerseDisplayName(localStorage.getItem('studyVerseNickname'));
+    const realName = normalizeStudyVerseDisplayName(localStorage.getItem('studyVerseRealName'));
+
+    const isTutorRoom =
+        currentRoomMode === 'tutor' ||
+        window.location.pathname.includes('tutor-room.html');
+
+    if (isTutorRoom) {
+        return realName || urlDisplayName || nickname || safeUsername || '學員';
+    }
+
+    return nickname || urlDisplayName || safeUsername || '學員';
+}
+
 let distractionCounter = 0; 
 const STABLE_THRESHOLD = 3; 
 let aiFaceIssue = null; 
@@ -106,7 +177,11 @@ if (currentPath.includes('immersive-room.html')) {
 
     if (window.updateUIMode) window.updateUIMode(currentRoomMode, isAuditMode);
 
-    const inputName = document.getElementById('inputName');
+// 讀取暱稱 / 真實姓名：一般教室顯示暱稱，特約教室顯示真實姓名
+await syncStudyVerseProfileForRoomDisplay(myUsername);
+myDisplayName = getRoomDisplayNameForCurrentMode(myUsername);
+
+const inputName = document.getElementById('inputName');
     if (inputName && myUsername) inputName.value = myUsername;
     
     try {
@@ -136,21 +211,24 @@ async function initApp() {
         return; 
     }
 
-    myUsername = name; 
-    window.sessionStartTime = Date.now(); 
+    myUsername = name;
+myDisplayName = getRoomDisplayNameForCurrentMode(name);
+window.sessionStartTime = Date.now();
     
     const urlParams = new URLSearchParams(window.location.search);
     const currentTeamId = urlParams.get('teamId') || null;
     isAuditMode = urlParams.get('audit') === 'true'; 
 
     const sidebarName = document.getElementById("mySidebarName");
-    if (sidebarName) sidebarName.innerText = name;
+if (sidebarName) sidebarName.innerText = myDisplayName || name;
     const sidebarGoal = document.getElementById("mySidebarGoal");
     if (sidebarGoal) sidebarGoal.innerText = goal;
     const dashGoal = document.getElementById("dashboardGoal");
     if (dashGoal) dashGoal.innerText = goal;
     const avatar = document.getElementById("mySidebarAvatar");
-    if (avatar) avatar.src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${name}`;
+if (avatar) {
+    avatar.src = `https://api.dicebear.com/7.x/big-smile/svg?seed=${encodeURIComponent(name)}`;
+}
     
     if (window.updateUIMode) window.updateUIMode(currentRoomMode, isAuditMode);
 
@@ -161,14 +239,22 @@ async function initApp() {
     }
 
     if(socket) socket.emit("join_room", { 
-        name: name, 
-        goal: goal, 
-        planTime: min, 
-        roomMode: currentRoomMode,
-        teamId: currentTeamId,
-        isCaptain: isAuditMode,
-        isFlipped: isPhoneFlipped 
-    });
+    name: name,
+    username: name,
+
+    // 畫面顯示用：一般教室 nickname，特約教室 real_name
+    displayName: myDisplayName || name,
+    studentName: myDisplayName || name,
+    nickname: localStorage.getItem('studyVerseNickname') || '',
+    real_name: localStorage.getItem('studyVerseRealName') || '',
+
+    goal: goal, 
+    planTime: min, 
+    roomMode: currentRoomMode,
+    teamId: currentTeamId,
+    isCaptain: isAuditMode,
+    isFlipped: isPhoneFlipped 
+});
     
     await initAI();
 }
@@ -202,10 +288,13 @@ async function predictLoop() {
     if (socket && (now - lastHeartbeat > 10000)) {
         lastHeartbeat = now;
         socket.emit("update_status", { 
-            status: isCurrentlyBreaking ? "PAUSED" : myStatus, 
-            name: myUsername, 
-            isFlipped: isPhoneFlipped 
-        });
+    status: isCurrentlyBreaking ? "PAUSED" : myStatus, 
+    name: myUsername,
+    username: myUsername,
+    displayName: myDisplayName || getRoomDisplayNameForCurrentMode(myUsername),
+    studentName: myDisplayName || getRoomDisplayNameForCurrentMode(myUsername),
+    isFlipped: isPhoneFlipped 
+});
     }
 
     if (isCurrentlyBreaking || isFlipWarningActive || isAuditMode) { 
@@ -349,7 +438,14 @@ function handleDistractionBuffer(issue, now) {
     
     if(socket && (prevStatus !== myStatus || now - lastHeartbeat > 3000)) {
         lastHeartbeat = now;
-        socket.emit("update_status", { status: myStatus, name: myUsername, isFlipped: isPhoneFlipped });
+        socket.emit("update_status", {
+    status: myStatus,
+    name: myUsername,
+    username: myUsername,
+    displayName: myDisplayName || getRoomDisplayNameForCurrentMode(myUsername),
+    studentName: myDisplayName || getRoomDisplayNameForCurrentMode(myUsername),
+    isFlipped: isPhoneFlipped
+});
     }
 }
 
