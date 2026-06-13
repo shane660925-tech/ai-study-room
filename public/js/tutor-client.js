@@ -1050,9 +1050,32 @@ window.handleTutorCameraViolationFromAI = function(detail = {}) {
     const eventId =
         detail.eventId ||
         detail.id ||
-        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        `camera-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const isManualTest =
+        String(eventId).includes('manual-test') ||
+        detail.source === 'manual_test';
+
+    const currentPhase =
+        window.currentTutorPhase ||
+        window.previousClassStatus ||
+        '';
+
+    console.log('[TutorCameraViolation] 收到鏡頭違規事件:', {
+        eventId,
+        isManualTest,
+        currentPhase,
+        isAIPaused: window.isAIPaused,
+        isTutorReconnectKicking: window.isTutorReconnectKicking,
+        detail
+    });
+
+    if (!window.__tutorCameraViolationHandledIds) {
+        window.__tutorCameraViolationHandledIds = new Set();
+    }
 
     if (window.__tutorCameraViolationHandledIds.has(eventId)) {
+        console.log('[TutorCameraViolation] 重複事件已忽略:', eventId);
         return;
     }
 
@@ -1062,8 +1085,26 @@ window.handleTutorCameraViolationFromAI = function(detail = {}) {
         window.__tutorCameraViolationHandledIds.delete(eventId);
     }, 15000);
 
-    // 休息時間 / 重連踢出流程中，不記鏡頭違規
-    if (window.isAIPaused || window.isTutorReconnectKicking) return;
+    // 等待上課 / 休息 / 重連踢出流程中，不記真實鏡頭違規
+    // 但手動測試 manual-test 不擋，方便確認橋接是否正常
+    if (
+        !isManualTest &&
+        (
+            window.isAIPaused ||
+            window.isTutorReconnectKicking ||
+            currentPhase === 'WAITING' ||
+            currentPhase === 'REST' ||
+            currentPhase === 'BREAK' ||
+            currentPhase === 'ENDED'
+        )
+    ) {
+        console.warn('[TutorCameraViolation] 已忽略，因目前不是上課中:', {
+            currentPhase,
+            isAIPaused: window.isAIPaused,
+            isTutorReconnectKicking: window.isTutorReconnectKicking
+        });
+        return;
+    }
 
     const rawReason = String(detail.reason || detail.type || 'AI 偵測異常');
     const systemName = getCurrentTutorSystemUsername(detail.name);

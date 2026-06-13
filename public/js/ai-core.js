@@ -276,13 +276,14 @@ function sendTutorCameraViolation(issue) {
         `camera-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const tutorViolationDetail = {
-        eventId,
-        name: myName,
-        username: myName,
-        reason: violationReason,
-        type: violationReason,
-        roomId
-    };
+    eventId,
+    name: myName,
+    username: myName,
+    reason: violationReason,
+    type: violationReason,
+    roomId,
+    source: 'camera_ai'
+};
 
     // 第一條路：直接呼叫 tutor-client.js 的處理函式
     if (
