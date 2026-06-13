@@ -258,6 +258,46 @@ async function predictLoop() {
     requestAnimationFrame(predictLoop);
 }
 
+function sendTutorCameraViolation(issue) {
+    const myName =
+        localStorage.getItem('studyVerseUser') ||
+        document.getElementById('inputName')?.value ||
+        '未知學員';
+
+    const roomId =
+        new URLSearchParams(window.location.search).get('room') ||
+        new URLSearchParams(window.location.search).get('roomId') ||
+        window.currentTutorRoomCode ||
+        null;
+
+    const violationReason = issue || '🚫 鏡頭違規：離座/趴睡/手機';
+
+    const eventId =
+        `camera-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const tutorViolationDetail = {
+        eventId,
+        name: myName,
+        username: myName,
+        reason: violationReason,
+        type: violationReason,
+        roomId
+    };
+
+    // 第一條路：直接呼叫 tutor-client.js 的處理函式
+    if (
+        currentRoomMode === 'tutor' &&
+        typeof window.handleTutorCameraViolationFromAI === 'function'
+    ) {
+        window.handleTutorCameraViolationFromAI(tutorViolationDetail);
+    }
+
+    // 第二條路：仍然發 CameraViolation 事件，避免載入順序或快取造成橋接失效
+    document.dispatchEvent(new CustomEvent('CameraViolation', {
+        detail: tutorViolationDetail
+    }));
+}
+
 function handleDistractionBuffer(issue, now) {
     let prevStatus = myStatus;
     
@@ -296,24 +336,7 @@ function handleDistractionBuffer(issue, now) {
             const currentNow = Date.now();
             if (currentNow - window.lastCameraViolationTime > 5000) { 
                 window.lastCameraViolationTime = currentNow;
-                const myName = localStorage.getItem('studyVerseUser') || document.getElementById('inputName')?.value || '未知學員';
-                const violationReason = issue || "🚫 鏡頭違規：離座/趴睡/手機"; 
-                
-                const tutorViolationDetail = {
-    name: myName,
-    username: myName,
-    reason: violationReason,
-    type: violationReason,
-    roomId:
-        new URLSearchParams(window.location.search).get('room') ||
-        new URLSearchParams(window.location.search).get('roomId') ||
-        window.currentTutorRoomCode ||
-        null
-};
-
-document.dispatchEvent(new CustomEvent('CameraViolation', {
-    detail: tutorViolationDetail
-}));
+                sendTutorCameraViolation(issue);
             }
         }
     } else {

@@ -1042,7 +1042,26 @@ const avatarSeed = encodeURIComponent(getTutorSystemName(u));
 // 🚀 VIP 專屬：監聽來自 ai-core.js 的違規廣播
 window.isLeaveSeatActive = false; // 離座鎖定狀態
 
+if (!window.__tutorCameraViolationHandledIds) {
+    window.__tutorCameraViolationHandledIds = new Set();
+}
+
 window.handleTutorCameraViolationFromAI = function(detail = {}) {
+    const eventId =
+        detail.eventId ||
+        detail.id ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    if (window.__tutorCameraViolationHandledIds.has(eventId)) {
+        return;
+    }
+
+    window.__tutorCameraViolationHandledIds.add(eventId);
+
+    setTimeout(() => {
+        window.__tutorCameraViolationHandledIds.delete(eventId);
+    }, 15000);
+
     // 休息時間 / 重連踢出流程中，不記鏡頭違規
     if (window.isAIPaused || window.isTutorReconnectKicking) return;
 
