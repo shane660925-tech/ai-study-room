@@ -311,16 +311,9 @@ function handleDistractionBuffer(issue, now) {
         null
 };
 
-if (
-    currentRoomMode === 'tutor' &&
-    typeof window.handleTutorCameraViolationFromAI === 'function'
-) {
-    window.handleTutorCameraViolationFromAI(tutorViolationDetail);
-} else {
-    document.dispatchEvent(new CustomEvent('CameraViolation', {
-        detail: tutorViolationDetail
-    }));
-}
+document.dispatchEvent(new CustomEvent('CameraViolation', {
+    detail: tutorViolationDetail
+}));
             }
         }
     } else {
