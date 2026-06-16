@@ -1,7 +1,8 @@
 (() => {
     const introPanel = document.getElementById('introPanel');
-    const cameraPanel = document.getElementById('cameraPanel');
-    const flipPanel = document.getElementById('flipPanel');
+const cameraPanel = document.getElementById('cameraPanel');
+const flipPanel = document.getElementById('flipPanel');
+const summaryPanel = document.getElementById('summaryPanel');
 
     const startDemoBtn = document.getElementById('startDemoBtn');
     const openCameraBtn = document.getElementById('openCameraBtn');
@@ -33,6 +34,17 @@ const nextFlipBtn = document.getElementById('nextFlipBtn');
     const recreateFlipRoomBtn = document.getElementById('recreateFlipRoomBtn');
     const resetFlipBtn = document.getElementById('resetFlipBtn');
 
+    const summaryFromFlipBtn = document.getElementById('summaryFromFlipBtn');
+const restartFullDemoBtn = document.getElementById('restartFullDemoBtn');
+
+const summaryScore = document.getElementById('summaryScore');
+const summaryScoreText = document.getElementById('summaryScoreText');
+const summaryAway = document.getElementById('summaryAway');
+const summarySleep = document.getElementById('summarySleep');
+const summaryPhone = document.getElementById('summaryPhone');
+const summaryFlipWarning = document.getElementById('summaryFlipWarning');
+const summaryComment = document.getElementById('summaryComment');
+
     const linkLight = document.getElementById('linkLight');
 const coverLight = document.getElementById('coverLight');
 const warningLight = document.getElementById('warningLight');
@@ -48,6 +60,17 @@ const warningLight = document.getElementById('warningLight');
     let awayStartAt = 0;
     let hasCompleted = false;
     let currentDetectionMode = 'away';
+
+    let demoSummary = {
+    awayCount: 0,
+    sleepCount: 0,
+    phoneCount: 0,
+    flipWarningCount: 0,
+    flipCoveredCount: 0,
+    flipCoverBackCount: 0,
+    wasKicked: false,
+    phoneConnected: false
+};
 
     const CALIBRATION_MS = 3000;
     const AWAY_REQUIRED_MS = 1800;
@@ -83,10 +106,14 @@ let isLoadingPhoneDetector = false;
     let isKickoutShown = false;
 
     function switchPanel(next) {
-        introPanel.classList.toggle('active', next === 'intro');
-        cameraPanel.classList.toggle('active', next === 'camera');
-        flipPanel.classList.toggle('active', next === 'flip');
+    introPanel.classList.toggle('active', next === 'intro');
+    cameraPanel.classList.toggle('active', next === 'camera');
+    flipPanel.classList.toggle('active', next === 'flip');
+
+    if (summaryPanel) {
+        summaryPanel.classList.toggle('active', next === 'summary');
     }
+}
 
     function setTask(step, title, text) {
         taskStep.textContent = step;
@@ -98,6 +125,19 @@ let isLoadingPhoneDetector = false;
         const safeValue = Math.max(0, Math.min(100, value));
         progressBar.style.width = `${safeValue}%`;
     }
+
+function resetDemoSummary() {
+    demoSummary = {
+        awayCount: 0,
+        sleepCount: 0,
+        phoneCount: 0,
+        flipWarningCount: 0,
+        flipCoveredCount: 0,
+        flipCoverBackCount: 0,
+        wasKicked: false,
+        phoneConnected: false
+    };
+}
 
     function nowText() {
         return new Date().toLocaleTimeString('zh-TW', {
@@ -289,6 +329,7 @@ function isSleepPosture(baselineBox, currentBox) {
 
         successOverlay.classList.add('active');
         setProgress(100);
+        demoSummary.awayCount += 1;
 
         addLog(
             '離座提醒',
@@ -321,6 +362,7 @@ nextFlipBtn.hidden = true;
 
     successOverlay.classList.add('active');
     setProgress(100);
+    demoSummary.sleepCount += 1;
 
     const successStrong = successOverlay.querySelector('strong');
     const successSpan = successOverlay.querySelector('span');
@@ -701,6 +743,7 @@ function completePhoneDetection(phonePrediction) {
 
     successOverlay.classList.add('active');
     setProgress(100);
+    demoSummary.phoneCount += 1;
 
     const successStrong = successOverlay.querySelector('strong');
     const successSpan = successOverlay.querySelector('span');
@@ -777,6 +820,9 @@ sleepStartAt = 0;
 
         openCameraBtn.hidden = false;
         retryBtn.hidden = true;
+        nextSleepBtn.hidden = true;
+nextPhoneDetectBtn.hidden = true;
+nextFlipBtn.hidden = true;
     }
 
     function stopCamera() {
@@ -938,6 +984,7 @@ function setFlipKickoutUI() {
         hasDemoSocketListeners = true;
 
         demoFlipSocket.on('demo_flip_phone_connected', () => {
+            demoSummary.phoneConnected = true;
             clearFlipWarningTimer();
             kickoutBox.hidden = true;
             resetFlipBtn.hidden = true;
@@ -978,6 +1025,7 @@ function setFlipKickoutUI() {
             }
 
             if (state === 'face_down') {
+                demoSummary.flipCoveredCount += 1;
                 clearFlipWarningTimer();
                 kickoutBox.hidden = true;
                 resetFlipBtn.hidden = true;
@@ -997,6 +1045,7 @@ function setFlipKickoutUI() {
             }
 
             if (state === 'cover_back') {
+                demoSummary.flipCoverBackCount += 1;
                 clearFlipWarningTimer();
                 kickoutBox.hidden = true;
                 resetFlipBtn.hidden = true;
@@ -1015,6 +1064,7 @@ function setFlipKickoutUI() {
         if (isFlipWarningActive || isKickoutShown) return;
 
         isFlipWarningActive = true;
+        demoSummary.flipWarningCount += 1;
         flipWarningCount = 5;
         flipCountdown.textContent = '5';
         flipWarningBox.hidden = false;
@@ -1042,6 +1092,108 @@ function setFlipKickoutUI() {
     clearFlipWarningTimer();
 
     isKickoutShown = true;
+    function calculateDemoScore() {
+    let score = 100;
+
+    score -= demoSummary.awayCount * 12;
+    score -= demoSummary.sleepCount * 14;
+    score -= demoSummary.phoneCount * 12;
+    score -= demoSummary.flipWarningCount * 8;
+
+    if (demoSummary.wasKicked) {
+        score -= 18;
+    }
+
+    if (demoSummary.phoneConnected && demoSummary.flipCoveredCount > 0) {
+        score += 4;
+    }
+
+    if (demoSummary.flipCoverBackCount > 0 && !demoSummary.wasKicked) {
+        score += 4;
+    }
+
+    return Math.max(0, Math.min(100, score));
+}
+
+function getSummaryComment(score) {
+    const issues = [];
+
+    if (demoSummary.awayCount > 0) {
+        issues.push('中途離座');
+    }
+
+    if (demoSummary.sleepCount > 0) {
+        issues.push('趴睡或明顯低頭');
+    }
+
+    if (demoSummary.phoneCount > 0) {
+        issues.push('手機進入讀書視線範圍');
+    }
+
+    if (demoSummary.flipWarningCount > 0) {
+        issues.push('手機曾被翻開');
+    }
+
+    if (demoSummary.wasKicked) {
+        return '這次體驗中，手機翻開超過限制時間，因此系統判定本次自習中斷。正式使用時，這類提醒不是為了責備學生，而是讓學生知道自己在什麼時候離開了專注狀態。';
+    }
+
+    if (issues.length === 0) {
+        return '這次體驗中沒有明顯中斷專注的狀態。正式使用時，系統會把這類穩定自習紀錄整理成正向回饋，幫助學生累積成就感。';
+    }
+
+    if (score >= 75) {
+        return `這次體驗中出現了 ${issues.join('、')} 的提醒，但整體仍能回到自習狀態。正式使用時，這些提醒會被整理成回顧紀錄，幫助學生知道下次可以從哪裡調整。`;
+    }
+
+    return `這次體驗中出現了 ${issues.join('、')} 等多個容易中斷專注的狀態。正式使用時，STUDY VERSE 會協助學生把這些狀態看見，而不是只用「有沒有坐在書桌前」判斷讀書成效。`;
+}
+
+function renderLearningSummary() {
+    const score = calculateDemoScore();
+
+    if (summaryScore) {
+        summaryScore.textContent = `${score}`;
+    }
+
+    if (summaryScoreText) {
+        if (score >= 85) {
+            summaryScoreText.textContent = '本次體驗狀態穩定，干擾較少。';
+        } else if (score >= 70) {
+            summaryScoreText.textContent = '本次體驗有少量中斷，但仍能回到專注狀態。';
+        } else {
+            summaryScoreText.textContent = '本次體驗出現較多中斷，適合用來理解學習總結的價值。';
+        }
+    }
+
+    if (summaryAway) {
+        summaryAway.textContent = `${demoSummary.awayCount} 次`;
+    }
+
+    if (summarySleep) {
+        summarySleep.textContent = `${demoSummary.sleepCount} 次`;
+    }
+
+    if (summaryPhone) {
+        summaryPhone.textContent = `${demoSummary.phoneCount} 次`;
+    }
+
+    if (summaryFlipWarning) {
+        summaryFlipWarning.textContent = `${demoSummary.flipWarningCount} 次`;
+    }
+
+    if (summaryComment) {
+        summaryComment.textContent = getSummaryComment(score);
+    }
+}
+
+function showLearningSummary() {
+    stopCamera();
+    clearFlipWarningTimer();
+    renderLearningSummary();
+    switchPanel('summary');
+}
+    demoSummary.wasKicked = true;
     kickoutBox.hidden = false;
     resetFlipBtn.hidden = false;
 
@@ -1075,8 +1227,9 @@ function setFlipKickoutUI() {
     }
 
     startDemoBtn.addEventListener('click', () => {
-        switchPanel('camera');
-    });
+    resetDemoSummary();
+    switchPanel('camera');
+});
 
     openCameraBtn.addEventListener('click', openCamera);
 
@@ -1108,9 +1261,19 @@ recreateFlipRoomBtn.addEventListener('click', () => {
     createDemoFlipRoom();
 });
 
-resetFlipBtn.addEventListener('click', () => {
-    resetFlipRoom();
-});
+if (summaryFromFlipBtn) {
+    summaryFromFlipBtn.addEventListener('click', () => {
+        showLearningSummary();
+    });
+}
+
+if (restartFullDemoBtn) {
+    restartFullDemoBtn.addEventListener('click', () => {
+        resetDemoSummary();
+        resetDemo();
+        switchPanel('camera');
+    });
+}
 
 window.addEventListener('beforeunload', () => {
     if (rafId) cancelAnimationFrame(rafId);

@@ -89,16 +89,16 @@
                         </div>
 
                         <div class="camera-actions">
-                            <button id="openCameraBtn" class="demo-btn primary">
-                                <i class="fas fa-video"></i>
-                                開啟鏡頭
-                            </button>
+    <button id="summaryFromFlipBtn" class="demo-btn primary">
+        <i class="fas fa-chart-simple"></i>
+        查看本次學習總結
+    </button>
 
-                            <button id="retryBtn" class="demo-btn ghost" hidden>
-                                <i class="fas fa-rotate-right"></i>
-                                重新體驗
-                            </button>
-                        </div>
+    <button id="resetFlipBtn" class="demo-btn secondary" hidden>
+        <i class="fas fa-rotate-right"></i>
+        重新測手機翻轉
+    </button>
+</div>
 
                         <div id="resultPanel" class="result-panel" hidden>
                             <h3>離座提醒代表什麼？</h3>
@@ -244,6 +244,77 @@
                 正式使用時，如果學生中途翻開手機，系統會先跳出提醒。
                 超過限制時間仍沒有蓋回，就會結束本次自習，避免孩子一邊讀書一邊被手機拉走。
             </p>
+        </div>
+    </div>
+</div>
+<div id="summaryPanel" class="demo-panel">
+    <div class="camera-header">
+        <div>
+            <span class="demo-kicker">Study Summary</span>
+            <h2>本次 AI 自習體驗總結</h2>
+        </div>
+        <a href="/landing.html" class="back-link">回介紹頁</a>
+    </div>
+
+    <p class="camera-note">
+        這份總結只根據剛剛的免註冊體驗產生，不會登入、不會寫入資料庫，也不會保存影像。
+        正式使用時，STUDY VERSE 會在自習結束後把類似狀態整理成學生可以回顧的學習紀錄。
+    </p>
+
+    <div class="summary-report-card">
+        <div class="summary-score-box">
+            <span>本次體驗專注穩定度</span>
+            <strong id="summaryScore">--</strong>
+            <small id="summaryScoreText">正在整理本次體驗狀態...</small>
+        </div>
+
+        <div class="summary-grid">
+            <article>
+                <span>離座提醒</span>
+                <strong id="summaryAway">0 次</strong>
+            </article>
+
+            <article>
+                <span>趴睡提醒</span>
+                <strong id="summarySleep">0 次</strong>
+            </article>
+
+            <article>
+                <span>手機入鏡</span>
+                <strong id="summaryPhone">0 次</strong>
+            </article>
+
+            <article>
+                <span>手機翻開警示</span>
+                <strong id="summaryFlipWarning">0 次</strong>
+            </article>
+        </div>
+
+        <div class="summary-ai-comment">
+            <h3>AI 回饋</h3>
+            <p id="summaryComment">
+                正在產生本次體驗回饋...
+            </p>
+        </div>
+
+        <div class="summary-next-box">
+            <h3>這代表什麼？</h3>
+            <p>
+                STUDY VERSE 的重點不是「一直看著學生」，而是把自習中容易中斷專注的狀態整理出來。
+                學生可以在結束後看懂自己剛剛發生了什麼，下一次就比較容易調整讀書方式。
+            </p>
+        </div>
+
+        <div class="result-actions">
+            <button id="restartFullDemoBtn" class="demo-btn secondary">
+                <i class="fas fa-rotate-right"></i>
+                重新體驗一次
+            </button>
+
+            <a href="/landing.html" class="demo-btn primary">
+                <i class="fas fa-arrow-right"></i>
+                回到平台介紹
+            </a>
         </div>
     </div>
 </div>
