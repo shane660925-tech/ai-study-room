@@ -25,8 +25,9 @@ const nextFlipBtn = document.getElementById('nextFlipBtn');
     const taskText = document.getElementById('taskText');
     const progressBar = document.getElementById('progressBar');
 
-    const emptyLog = document.getElementById('emptyLog');
-    const eventLog = document.getElementById('eventLog');
+    const demoSideCard = document.getElementById('demoSideCard');
+const emptyLog = document.getElementById('emptyLog');
+const eventLog = document.getElementById('eventLog');
 
     const demoQrBox = document.getElementById('demoQrBox');
     const demoRoomCode = document.getElementById('demoRoomCode');
@@ -156,6 +157,18 @@ function resetDemoLog() {
 
     if (emptyLog) {
         emptyLog.classList.remove('hidden');
+    }
+}
+
+function showDemoSideCard() {
+    if (demoSideCard) {
+        demoSideCard.hidden = false;
+    }
+}
+
+function hideDemoSideCard() {
+    if (demoSideCard) {
+        demoSideCard.hidden = true;
     }
 }
 
@@ -797,7 +810,7 @@ phase = 'detectingPhone';
         await loadPhoneDetector();
 
         setTask(
-            'Step 3',
+            'Step 1',
             '請把手機拿到鏡頭畫面中。',
             '系統會偵測畫面中是否出現手機。請讓手機停留在畫面中約 1 秒。'
         );
@@ -1349,6 +1362,7 @@ function showKickoutScreen() {
     startDemoBtn.addEventListener('click', () => {
     resetDemoSummary();
     resetDemoLog();
+    showDemoSideCard();
     switchPanel('camera');
 });
 
@@ -1397,6 +1411,7 @@ if (restartFullDemoBtn) {
         resetDemoSummary();
         resetDemoLog();
         resetDemo();
+        showDemoSideCard();
         switchPanel('camera');
     });
 }
