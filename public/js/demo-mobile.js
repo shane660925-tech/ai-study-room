@@ -39,9 +39,11 @@
     }
 
     function showError(text) {
-        errorText.textContent = text || '請重新掃描電腦畫面上的 QR Code。';
-        showPanel('error');
-    }
+    const finalText = text || '請重新掃描電腦畫面上的 QR Code。';
+    errorText.textContent = finalText;
+    console.error('[DemoMobile Error]', finalText);
+    showPanel('error');
+}
 
     function setPhoneUI(type, title, text) {
         phoneStatusBox.classList.remove('waiting', 'covered', 'open');
@@ -83,43 +85,70 @@
     }
 
     function connectSocket() {
-        return new Promise((resolve, reject) => {
-            if (!roomId) {
-                reject(new Error('缺少 roomId'));
-                return;
+    return new Promise((resolve, reject) => {
+        if (!roomId) {
+            reject(new Error('缺少 roomId，請重新掃描電腦端 QR Code'));
+            return;
+        }
+
+        if (typeof io === 'undefined') {
+            reject(new Error('找不到 Socket.IO，請確認 /socket.io/socket.io.js 是否正常載入'));
+            return;
+        }
+
+        let settled = false;
+
+        function fail(message) {
+            if (settled) return;
+            settled = true;
+
+            if (socket) {
+                socket.disconnect();
+                socket = null;
             }
 
-            if (typeof io === 'undefined') {
-                reject(new Error('找不到 Socket.IO'));
-                return;
-            }
+            reject(new Error(message));
+        }
 
-            socket = io();
+        socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            timeout: 8000
+        });
 
-            socket.on('connect', () => {
-                socket.emit('demo_flip_join_room', { roomId }, (res) => {
-                    if (!res || !res.success) {
-                        reject(new Error(res?.error || '加入體驗房間失敗'));
-                        return;
-                    }
+        socket.on('connect', () => {
+            setMessage('已連上伺服器，正在加入體驗房間...');
 
-                    hasJoinedRoom = true;
-                    resolve(res);
-                });
-            });
+            socket.emit('demo_flip_join_room', { roomId }, (res) => {
+                if (!res || !res.success) {
+                    fail(res?.error || '加入體驗房間失敗，請回電腦端重新產生 QR Code');
+                    return;
+                }
 
-            socket.on('connect_error', () => {
-                reject(new Error('Socket 連線失敗'));
-            });
-
-            socket.on('demo_flip_room_reset', () => {
-                hasEverFaceDown = false;
-                lastSentState = '';
-                sendState('ready', true);
-                setPhoneUI('waiting', '等待翻轉', '請把手機螢幕朝下蓋在桌上');
+                settled = true;
+                hasJoinedRoom = true;
+                resolve(res);
             });
         });
-    }
+
+        socket.on('connect_error', (err) => {
+            fail(`Socket 連線失敗：${err?.message || '未知錯誤'}`);
+        });
+
+        socket.on('demo_flip_room_reset', () => {
+            hasEverFaceDown = false;
+            lastSentState = '';
+            sendState('ready', true);
+            setPhoneUI('waiting', '等待翻轉', '請把手機螢幕朝下蓋在桌上');
+        });
+
+        setTimeout(() => {
+            if (!settled) {
+                fail('等待伺服器回應逾時，請回電腦端重新產生 QR Code');
+            }
+        }, 10000);
+    });
+}
 
     function sendState(state, force = false) {
         if (!socket || !hasJoinedRoom) return;
