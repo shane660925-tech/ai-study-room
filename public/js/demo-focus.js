@@ -52,9 +52,19 @@ const warningLight = document.getElementById('warningLight');
     const CALIBRATION_MS = 3000;
     const AWAY_REQUIRED_MS = 1800;
     const DIFF_THRESHOLD = 34;
-    const SLEEP_DIFF_THRESHOLD = 22;
+
+const SLEEP_DIFF_THRESHOLD = 22;
 const SLEEP_REQUIRED_MS = 1600;
+
+const PHONE_REQUIRED_MS = 900;
+const PHONE_SCORE_THRESHOLD = 0.45;
+
 let sleepStartAt = 0;
+
+let phoneDetectStartAt = 0;
+let phoneDetectTimer = null;
+let phoneDetector = null;
+let isLoadingPhoneDetector = false;
 
     let demoFlipSocket = null;
     let demoRoomId = '';
@@ -135,7 +145,13 @@ if (!currentDetectionMode) {
             resultPanel.hidden = true;
             successOverlay.classList.remove('active');
 
-            if (currentDetectionMode === 'sleep') {
+            if (currentDetectionMode === 'phone') {
+    setTask(
+        'Step 3',
+        '正在準備手機入鏡偵測。',
+        '請稍等模型載入完成。接著請把手機拿到鏡頭畫面中，系統會偵測畫面是否出現手機。'
+    );
+} else if (currentDetectionMode === 'sleep') {
     setTask(
         'Step 2',
         '請先坐直，讓系統校準你的正常讀書姿勢。',
@@ -177,7 +193,9 @@ nextSleepBtn.hidden = true;
 nextPhoneDetectBtn.hidden = true;
 nextFlipBtn.hidden = true;
 
-            loop();
+            if (currentDetectionMode !== 'phone') {
+    loop();
+}
         } catch (err) {
             console.warn('無法開啟鏡頭：', err);
             setTask(
@@ -412,12 +430,208 @@ setProgress(0);
     loop();
 }
 
+function clearPhoneDetectTimer() {
+    if (phoneDetectTimer) {
+        clearTimeout(phoneDetectTimer);
+        phoneDetectTimer = null;
+    }
+
+    phoneDetectStartAt = 0;
+}
+
+async function loadPhoneDetector() {
+    if (phoneDetector) return phoneDetector;
+
+    if (isLoadingPhoneDetector) {
+        while (isLoadingPhoneDetector) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        return phoneDetector;
+    }
+
+    if (typeof cocoSsd === 'undefined') {
+        throw new Error('手機偵測模型尚未載入，請確認 HTML 已加入 coco-ssd script。');
+    }
+
+    isLoadingPhoneDetector = true;
+
+    try {
+        phoneDetector = await cocoSsd.load();
+        return phoneDetector;
+    } finally {
+        isLoadingPhoneDetector = false;
+    }
+}
+
+async function startPhoneDetection() {
+    currentDetectionMode = 'phone';
+
+    if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+    }
+
+    clearPhoneDetectTimer();
+
+    baselineFrame = null;
+    phase = 'detectingPhone';
+    phaseStartAt = performance.now();
+    awayStartAt = 0;
+    sleepStartAt = 0;
+    phoneDetectStartAt = 0;
+    hasCompleted = false;
+
+    successOverlay.classList.remove('active');
+    resultPanel.hidden = true;
+    setProgress(0);
+
+    nextSleepBtn.hidden = true;
+    nextPhoneDetectBtn.hidden = true;
+    nextFlipBtn.hidden = true;
+
+    openCameraBtn.hidden = true;
+    retryBtn.hidden = false;
+
+    setTask(
+        'Step 3',
+        '正在載入手機入鏡偵測模型。',
+        '請稍等幾秒。載入完成後，請把手機拿到鏡頭畫面中。'
+    );
+
+    if (!stream) {
+        await openCamera();
+
+        if (!stream) {
+            setTask(
+                'Camera blocked',
+                '無法開啟鏡頭。',
+                '請確認瀏覽器已允許鏡頭權限後，再重新整理頁面測試。'
+            );
+            return;
+        }
+    }
+
+    try {
+        await loadPhoneDetector();
+
+        setTask(
+            'Step 3',
+            '請把手機拿到鏡頭畫面中。',
+            '系統會偵測畫面中是否出現手機。請讓手機停留在畫面中約 1 秒。'
+        );
+
+        phoneDetectionLoop();
+    } catch (err) {
+        console.warn('手機入鏡偵測模型載入失敗：', err);
+
+        setTask(
+            'Model Error',
+            '手機入鏡偵測模型載入失敗。',
+            '請確認網路連線正常，或重新整理頁面再試一次。'
+        );
+    }
+}
+
+async function phoneDetectionLoop() {
+    if (currentDetectionMode !== 'phone' || hasCompleted) return;
+
+    if (!phoneDetector || !video || !video.videoWidth) {
+        phoneDetectTimer = setTimeout(phoneDetectionLoop, 350);
+        return;
+    }
+
+    try {
+        const predictions = await phoneDetector.detect(video);
+
+        const phonePrediction = predictions.find(item => {
+            return item.class === 'cell phone' && item.score >= PHONE_SCORE_THRESHOLD;
+        });
+
+        if (phonePrediction) {
+            if (!phoneDetectStartAt) {
+                phoneDetectStartAt = performance.now();
+            }
+
+            const elapsed = performance.now() - phoneDetectStartAt;
+            setProgress((elapsed / PHONE_REQUIRED_MS) * 100);
+
+            if (elapsed >= PHONE_REQUIRED_MS) {
+                completePhoneDetection(phonePrediction);
+                return;
+            }
+        } else {
+            phoneDetectStartAt = 0;
+            setProgress(0);
+        }
+    } catch (err) {
+        console.warn('手機入鏡偵測失敗：', err);
+    }
+
+    phoneDetectTimer = setTimeout(phoneDetectionLoop, 350);
+}
+
+function completePhoneDetection(phonePrediction) {
+    if (hasCompleted) return;
+
+    hasCompleted = true;
+    phase = 'completed';
+    clearPhoneDetectTimer();
+
+    successOverlay.classList.add('active');
+    setProgress(100);
+
+    const successStrong = successOverlay.querySelector('strong');
+    const successSpan = successOverlay.querySelector('span');
+    const successIcon = successOverlay.querySelector('i');
+
+    if (successIcon) successIcon.className = 'fas fa-mobile-screen-button';
+    if (successStrong) successStrong.textContent = '偵測到手機！';
+    if (successSpan) successSpan.textContent = '成功完成手機入鏡偵測';
+
+    const confidence = Math.round((phonePrediction?.score || 0) * 100);
+
+    addLog(
+        '手機入鏡提醒',
+        `偵測到畫面中出現手機，模型信心約 ${confidence}%。正式自習中，這類事件會整理進學習總結。`
+    );
+
+    setTask(
+        'Detection Success',
+        '偵測到畫面中有手機！',
+        '你已完成手機入鏡偵測體驗。正式使用時，這可以協助學生知道自己是否在自習中被手機分心。'
+    );
+
+    const resultTitle = resultPanel.querySelector('h3');
+    const resultParagraphs = resultPanel.querySelectorAll('p');
+
+    if (resultTitle) {
+        resultTitle.textContent = '手機入鏡提醒代表什麼？';
+    }
+
+    if (resultParagraphs[0]) {
+        resultParagraphs[0].textContent = '如果手機出現在畫面中，不一定代表學生故意違規，但很可能表示手機已經進入讀書視線範圍，容易造成分心。';
+    }
+
+    if (resultParagraphs[1]) {
+        resultParagraphs[1].textContent = 'STUDY VERSE 的目的不是責備學生，而是把容易打斷專注的狀態整理出來，讓學生在自習結束後可以回顧。';
+    }
+
+    nextSleepBtn.hidden = true;
+    nextPhoneDetectBtn.hidden = true;
+    nextFlipBtn.hidden = false;
+
+    resultPanel.hidden = false;
+}
+
     function resetDemo() {
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = null;
         }
 
+        clearPhoneDetectTimer();
+        
         baselineFrame = null;
         phase = 'intro';
         phaseStartAt = 0;
@@ -443,6 +657,7 @@ sleepStartAt = 0;
     }
 
     function stopCamera() {
+        clearPhoneDetectTimer();
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = null;
@@ -757,7 +972,7 @@ function setFlipKickoutUI() {
 });
 
 nextPhoneDetectBtn.addEventListener('click', () => {
-    alert('下一步會加入「畫面中偵測到手機」體驗。');
+    startPhoneDetection();
 });
 
 nextFlipBtn.addEventListener('click', () => {
