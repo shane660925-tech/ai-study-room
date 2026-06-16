@@ -1,6 +1,7 @@
 (() => {
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = String(urlParams.get('roomId') || '').trim();
+    const wasKicked = urlParams.get('kicked') === '1';
 
     const connectPanel = document.getElementById('connectPanel');
     const trackingPanel = document.getElementById('trackingPanel');
@@ -27,6 +28,10 @@
     let wakeLock = null;
 
     roomIdText.textContent = roomId || '缺少房間';
+    if (wasKicked) {
+    setMessage('剛剛因為手機翻開超過 5 秒，已離開本次體驗。若要重新測試，請回電腦端重新產生 QR Code。');
+    startPhoneBtn.disabled = true;
+}
 
     function showPanel(name) {
         connectPanel.classList.toggle('active', name === 'connect');
@@ -128,14 +133,14 @@ function showMobileKickoutAndReturnHome() {
             <i class="fas fa-door-open"></i>
             <h1>已被踢出教室</h1>
             <p>手機翻開超過限制時間，本次自習已中斷。</p>
-            <span>即將返回手機首頁...</span>
+            <span>即將返回手機體驗首頁...</span>
         </div>
     `;
 
     document.body.appendChild(overlay);
 
     mobileKickoutTimer = setTimeout(() => {
-        window.location.href = '/mobile.html';
+        window.location.href = `/demo-mobile.html?roomId=${encodeURIComponent(roomId)}&kicked=1`;
     }, 2200);
 }
 
@@ -331,9 +336,12 @@ function showMobileKickoutAndReturnHome() {
 }
 
     if (!roomId) {
-        showError('缺少體驗房間代碼，請重新掃描 QR Code。');
-        return;
-    }
+    roomIdText.textContent = '尚未連線';
+    startPhoneBtn.disabled = true;
+    setMessage('請回到電腦端重新產生 QR Code，或重新掃描 QR Code 開始新的體驗。');
+    showPanel('connect');
+    return;
+}
 
     startPhoneBtn.addEventListener('click', startTracking);
 
