@@ -211,33 +211,39 @@
     }
 
     async function startTracking() {
-        try {
-            setMessage('正在連線到電腦端...');
+    try {
+        startPhoneBtn.disabled = true;
+        setMessage('正在請求手機動作感測權限...');
 
-            if (!socket || !hasJoinedRoom) {
-                await connectSocket();
-            }
+        // 重要：這一段必須直接接在使用者點擊按鈕後執行
+        // 不能放在 await connectSocket() 後面，否則 iPhone 會判定不是 user gesture
+        await requestOrientationPermission();
 
-            setMessage('正在請求手機動作感測權限...');
-            await requestOrientationPermission();
-            await requestWakeLock();
+        await requestWakeLock();
 
-            sendState('ready', true);
+        setMessage('正在連線到電腦端...');
 
-            isTracking = true;
-            hasEverFaceDown = false;
-            lastSentState = 'ready';
-
-            window.addEventListener('deviceorientation', handleOrientation, true);
-
-            setPhoneUI('waiting', '等待翻轉', '請把手機螢幕朝下蓋在桌上');
-            showPanel('tracking');
-
-        } catch (err) {
-            console.warn(err);
-            showError(err.message || '手機翻轉體驗啟動失敗');
+        if (!socket || !hasJoinedRoom) {
+            await connectSocket();
         }
+
+        sendState('ready', true);
+
+        isTracking = true;
+        hasEverFaceDown = false;
+        lastSentState = 'ready';
+
+        window.addEventListener('deviceorientation', handleOrientation, true);
+
+        setPhoneUI('waiting', '等待翻轉', '請把手機螢幕朝下蓋在桌上');
+        showPanel('tracking');
+
+    } catch (err) {
+        console.warn(err);
+        startPhoneBtn.disabled = false;
+        showError(err.message || '手機翻轉體驗啟動失敗');
     }
+}
 
     if (!roomId) {
         showError('缺少體驗房間代碼，請重新掃描 QR Code。');
