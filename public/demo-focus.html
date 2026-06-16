@@ -49,7 +49,7 @@
                                 <span class="demo-kicker">Camera Permission</span>
                                 <h2>請允許鏡頭權限，開始體驗。</h2>
                             </div>
-                            <a href="/landing.html" class="back-link">回介紹頁</a>
+                            <a href="/landing.html" id="summaryBackTopLink" class="back-link">回介紹頁</a>
                         </div>
 
                         <p class="camera-note">
@@ -265,8 +265,6 @@
     這份總結示範的是學生自習結束後會看到的學習紀錄。正式使用時，
     STUDY VERSE 會在每次自習結束後自動產生總結，整理專注狀態、提醒事件與 AI 回饋；
     若有綁定 LINE，總結產生的同時也會立即同步摘要到 LINE。
-    離座、趴睡與畫面中出現手機等提醒事件，會顯示必要截圖協助教師判斷，
-    但不代表教師會持續監看學生畫面。
 </p>
 
     <div class="summary-report-card">
@@ -319,18 +317,18 @@
                 重新體驗一次
             </button>
 
-            <a href="/landing.html" class="demo-btn primary">
-                <i class="fas fa-arrow-right"></i>
-                回到平台介紹
-            </a>
+            <a href="/landing.html" id="summaryBackLandingLink" class="demo-btn primary">
+    <i class="fas fa-arrow-right"></i>
+    回到平台介紹
+</a>
         </div>
     </div>
 </div>
                 </div>
 
                 <aside class="demo-side-card">
-                    <span class="demo-kicker">Teacher View</span>
-<h2>教師端提醒示意</h2>
+                    <span class="demo-kicker">Teacher Notice</span>
+<h2>老師會看到什麼？</h2>
 
                     <div id="emptyLog" class="empty-log">
                         <i class="fas fa-list-check"></i>
@@ -340,10 +338,11 @@
                     <div id="eventLog" class="event-log"></div>
 
                     <div class="summary-mini">
-    <strong>教師端看到什麼？</strong>
+    <strong>提醒出現時，老師會收到什麼？</strong>
     <span>
-        正式教室中，教師端會看到提醒文字、事件時間與必要截圖，
-        用來判斷離座、趴睡或手機入鏡是否為誤判；不會一直看到學生的即時畫面。
+        當系統偵測到離座、趴睡或畫面中出現手機時，
+        老師端會看到提醒文字、事件時間，並顯示必要截圖協助判斷是否誤判；
+        這不代表老師會持續監看學生畫面。
     </span>
 </div>
                 </aside>

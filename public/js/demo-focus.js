@@ -36,6 +36,8 @@ const nextFlipBtn = document.getElementById('nextFlipBtn');
 
     const summaryFromFlipBtn = document.getElementById('summaryFromFlipBtn');
 const restartFullDemoBtn = document.getElementById('restartFullDemoBtn');
+const summaryBackTopLink = document.getElementById('summaryBackTopLink');
+const summaryBackLandingLink = document.getElementById('summaryBackLandingLink');
 
 const summaryScore = document.getElementById('summaryScore');
 const summaryScoreText = document.getElementById('summaryScoreText');
@@ -78,8 +80,12 @@ const warningLight = document.getElementById('warningLight');
 
 const SLEEP_REQUIRED_MS = 1600;
 
-const PERSON_SCORE_THRESHOLD = 0.45;
-const PERSON_DETECT_INTERVAL_MS = 330;
+const PERSON_SCORE_THRESHOLD = 0.28;
+const PERSON_DETECT_INTERVAL_MS = 250;
+
+const PERSON_MATCH_IOU_THRESHOLD = 0.10;
+const PERSON_MATCH_AREA_RATIO = 0.35;
+const PERSON_CENTER_SHIFT_RATIO = 0.9;
 
 const SLEEP_TOP_DROP_RATIO = 0.14;
 const SLEEP_HEIGHT_SHRINK_RATIO = 0.82;
@@ -125,6 +131,20 @@ let isLoadingPhoneDetector = false;
         const safeValue = Math.max(0, Math.min(100, value));
         progressBar.style.width = `${safeValue}%`;
     }
+
+function goBackToLanding(e) {
+    if (e) e.preventDefault();
+
+    const referrer = document.referrer || '';
+    const cameFromLanding = referrer.includes('/landing.html');
+
+    if (cameFromLanding && window.history.length > 1) {
+        window.history.back();
+        return;
+    }
+
+    window.location.href = '/landing.html';
+}
 
 function resetDemoSummary() {
     demoSummary = {
@@ -216,6 +236,14 @@ if (!currentDetectionMode) {
 }
             setProgress(0);
 
+            if (!phoneDetector && currentDetectionMode !== 'phone') {
+    setTask(
+        'AI Loading',
+        'AI 偵測模型準備中。',
+        '第一次載入可能需要幾秒鐘。模型完成後，會開始校準你在鏡頭中的位置。'
+    );
+}
+
             const successStrong = successOverlay.querySelector('strong');
 const successSpan = successOverlay.querySelector('span');
 const successIcon = successOverlay.querySelector('i');
@@ -305,6 +333,67 @@ function getBoxMetrics(prediction) {
         centerY: y + h / 2,
         area: w * h
     };
+}
+
+function getBoxIoU(a, b) {
+    if (!a || !b) return 0;
+
+    const left = Math.max(a.x, b.x);
+    const top = Math.max(a.y, b.y);
+    const right = Math.min(a.x + a.w, b.x + b.w);
+    const bottom = Math.min(a.y + a.h, b.y + b.h);
+
+    const intersectionW = Math.max(0, right - left);
+    const intersectionH = Math.max(0, bottom - top);
+    const intersection = intersectionW * intersectionH;
+
+    const union = Math.max(1, a.area + b.area - intersection);
+
+    return intersection / union;
+}
+
+function isSameSeatPerson(baselineBox, currentBox) {
+    if (!baselineBox || !currentBox) return false;
+
+    const iou = getBoxIoU(baselineBox, currentBox);
+    const areaRatio = currentBox.area / Math.max(1, baselineBox.area);
+    const centerShift = Math.abs(currentBox.x + currentBox.w / 2 - (baselineBox.x + baselineBox.w / 2));
+
+    const hasEnoughOverlap = iou >= PERSON_MATCH_IOU_THRESHOLD;
+    const hasReasonableArea = areaRatio >= PERSON_MATCH_AREA_RATIO;
+    const isNearOriginalSeat = centerShift <= baselineBox.w * PERSON_CENTER_SHIFT_RATIO;
+
+    return hasEnoughOverlap || (hasReasonableArea && isNearOriginalSeat);
+}
+
+function getBestPersonForSeat(predictions, baselineBox) {
+    const people = (predictions || [])
+        .filter(item => item.class === 'person' && item.score >= PERSON_SCORE_THRESHOLD)
+        .map(item => ({
+            prediction: item,
+            box: getBoxMetrics(item)
+        }));
+
+    if (!people.length) return null;
+
+    if (!baselineBox) {
+        return people.sort((a, b) => b.prediction.score - a.prediction.score)[0].prediction;
+    }
+
+    const matched = people
+        .map(item => ({
+            ...item,
+            iou: getBoxIoU(baselineBox, item.box),
+            areaRatio: item.box.area / Math.max(1, baselineBox.area)
+        }))
+        .filter(item => isSameSeatPerson(baselineBox, item.box))
+        .sort((a, b) => {
+            const scoreA = a.iou * 2 + a.areaRatio + a.prediction.score;
+            const scoreB = b.iou * 2 + b.areaRatio + b.prediction.score;
+            return scoreB - scoreA;
+        })[0];
+
+    return matched?.prediction || null;
 }
 
 function isSleepPosture(baselineBox, currentBox) {
@@ -431,13 +520,13 @@ nextFlipBtn.hidden = true;
         await loadPhoneDetector();
 
         const predictions = await phoneDetector.detect(video);
-        const personPrediction = getBestPrediction(
-            predictions,
-            'person',
-            PERSON_SCORE_THRESHOLD
-        );
 
-        const personBox = personPrediction ? getBoxMetrics(personPrediction) : null;
+const personPrediction = phase === 'calibrating'
+    ? getBestPrediction(predictions, 'person', PERSON_SCORE_THRESHOLD)
+    : getBestPersonForSeat(predictions, personBaselineBox);
+
+const personBox = personPrediction ? getBoxMetrics(personPrediction) : null;
+const isSameSeat = isSameSeatPerson(personBaselineBox, personBox);
 
         if (phase === 'calibrating') {
             if (!personBox) {
@@ -483,8 +572,8 @@ nextFlipBtn.hidden = true;
                 } else {
                     setTask(
                         'Step 2',
-                        '請離開鏡頭畫面。',
-                        '這次會改成「連續偵測不到整個人」才算離座。身體只是偏左或偏右，不會直接判定離座。'
+                        '請暫時離開座位。',
+    '請模擬自習中途離開書桌的情境。系統會在狀態持續一小段時間後，產生離座提醒。'
                     );
                 }
 
@@ -527,20 +616,20 @@ nextFlipBtn.hidden = true;
                 return;
             }
 
-            if (!personBox) {
-                if (!awayStartAt) awayStartAt = now;
+            if (!isSameSeat) {
+    if (!awayStartAt) awayStartAt = now;
 
-                const awayElapsed = now - awayStartAt;
-                setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
+    const awayElapsed = now - awayStartAt;
+    setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
 
-                if (awayElapsed >= AWAY_REQUIRED_MS) {
-                    completeAwayDetection();
-                    return;
-                }
-            } else {
-                awayStartAt = 0;
-                setProgress(0);
-            }
+    if (awayElapsed >= AWAY_REQUIRED_MS) {
+        completeAwayDetection();
+        return;
+    }
+} else {
+    awayStartAt = 0;
+    setProgress(0);
+}
         }
     } catch (err) {
         console.warn('person 偵測失敗：', err);
@@ -1279,6 +1368,14 @@ if (restartFullDemoBtn) {
         resetDemo();
         switchPanel('camera');
     });
+}
+
+if (summaryBackTopLink) {
+    summaryBackTopLink.addEventListener('click', goBackToLanding);
+}
+
+if (summaryBackLandingLink) {
+    summaryBackLandingLink.addEventListener('click', goBackToLanding);
 }
 
 window.addEventListener('beforeunload', () => {
