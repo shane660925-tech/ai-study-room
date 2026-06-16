@@ -7,7 +7,9 @@
     const openCameraBtn = document.getElementById('openCameraBtn');
     const retryBtn = document.getElementById('retryBtn');
     const againBtn = document.getElementById('againBtn');
-    const nextFlipBtn = document.getElementById('nextFlipBtn');
+    const nextSleepBtn = document.getElementById('nextSleepBtn');
+const nextPhoneDetectBtn = document.getElementById('nextPhoneDetectBtn');
+const nextFlipBtn = document.getElementById('nextFlipBtn');
 
     const video = document.getElementById('demoVideo');
     const canvas = document.getElementById('demoCanvas');
@@ -45,10 +47,14 @@ const warningLight = document.getElementById('warningLight');
     let phaseStartAt = 0;
     let awayStartAt = 0;
     let hasCompleted = false;
+    let currentDetectionMode = 'away';
 
     const CALIBRATION_MS = 3000;
     const AWAY_REQUIRED_MS = 1800;
     const DIFF_THRESHOLD = 34;
+    const SLEEP_DIFF_THRESHOLD = 22;
+const SLEEP_REQUIRED_MS = 1600;
+let sleepStartAt = 0;
 
     let demoFlipSocket = null;
     let demoRoomId = '';
@@ -114,22 +120,62 @@ const warningLight = document.getElementById('warningLight');
             await video.play();
 
             phase = 'calibrating';
-            phaseStartAt = performance.now();
-            baselineFrame = null;
-            hasCompleted = false;
-            awayStartAt = 0;
+phaseStartAt = performance.now();
+baselineFrame = null;
+hasCompleted = false;
+awayStartAt = 0;
+sleepStartAt = 0;
+
+if (!currentDetectionMode) {
+    currentDetectionMode = 'away';
+}
 
             openCameraBtn.hidden = true;
             retryBtn.hidden = false;
             resultPanel.hidden = true;
             successOverlay.classList.remove('active');
 
-            setTask(
-                'Step 1',
-                '請先坐在鏡頭前，讓系統校準。',
-                '請停留在畫面中央約 3 秒。校準完成後，系統會請你離開鏡頭幾秒鐘。'
-            );
+            if (currentDetectionMode === 'sleep') {
+    setTask(
+        'Step 2',
+        '請先坐直，讓系統校準你的正常讀書姿勢。',
+        '請保持在鏡頭前約 3 秒。校準完成後，系統會請你做出趴睡或明顯低頭的姿勢。'
+    );
+} else {
+    setTask(
+        'Step 1',
+        '請先坐在鏡頭前，讓系統校準。',
+        '請停留在畫面中央約 3 秒。校準完成後，系統會請你離開鏡頭幾秒鐘。'
+    );
+}
             setProgress(0);
+
+            const successStrong = successOverlay.querySelector('strong');
+const successSpan = successOverlay.querySelector('span');
+const successIcon = successOverlay.querySelector('i');
+
+if (successIcon) successIcon.className = 'fas fa-person-walking-arrow-right';
+if (successStrong) successStrong.textContent = '偵測到離座！';
+if (successSpan) successSpan.textContent = '成功完成本次體驗任務';
+
+const resultTitle = resultPanel.querySelector('h3');
+const resultParagraphs = resultPanel.querySelectorAll('p');
+
+if (resultTitle) {
+    resultTitle.textContent = '離座提醒代表什麼？';
+}
+
+if (resultParagraphs[0]) {
+    resultParagraphs[0].textContent = '坐在書桌前很久，不代表整段時間都真的在讀。如果自習中途離開座位，系統會記錄這個提醒事件，讓學生在自習結束後回顧自己的狀態。';
+}
+
+if (resultParagraphs[1]) {
+    resultParagraphs[1].textContent = '這不是為了責備孩子，而是讓孩子知道：這段自習有沒有真的連續進入狀態，以及下次可以怎麼調整。';
+}
+
+nextSleepBtn.hidden = true;
+nextPhoneDetectBtn.hidden = true;
+nextFlipBtn.hidden = true;
 
             loop();
         } catch (err) {
@@ -192,6 +238,10 @@ const warningLight = document.getElementById('warningLight');
             '你已完成離座偵測體驗。正式使用時，這會被整理成自習過程中的狀態提醒。'
         );
 
+        nextSleepBtn.hidden = false;
+nextPhoneDetectBtn.hidden = true;
+nextFlipBtn.hidden = true;
+
         resultPanel.hidden = false;
 
         if (rafId) {
@@ -199,6 +249,61 @@ const warningLight = document.getElementById('warningLight');
             rafId = null;
         }
     }
+
+    function completeSleepDetection() {
+    if (hasCompleted) return;
+
+    hasCompleted = true;
+    phase = 'completed';
+
+    successOverlay.classList.add('active');
+    setProgress(100);
+
+    const successStrong = successOverlay.querySelector('strong');
+    const successSpan = successOverlay.querySelector('span');
+    const successIcon = successOverlay.querySelector('i');
+
+    if (successIcon) successIcon.className = 'fas fa-bed';
+    if (successStrong) successStrong.textContent = '偵測到趴睡！';
+    if (successSpan) successSpan.textContent = '成功完成趴睡偵測任務';
+
+    addLog(
+        '趴睡提醒',
+        '偵測到你做出趴睡或明顯低頭姿勢。正式自習中，這類事件會成為學習總結裡的提醒紀錄。'
+    );
+
+    setTask(
+        'Detection Success',
+        '偵測到趴睡！',
+        '你已完成趴睡偵測體驗。正式使用時，系統會把這類狀態整理成自習結束後的回顧提醒。'
+    );
+
+    const resultTitle = resultPanel.querySelector('h3');
+    const resultParagraphs = resultPanel.querySelectorAll('p');
+
+    if (resultTitle) {
+        resultTitle.textContent = '趴睡提醒代表什麼？';
+    }
+
+    if (resultParagraphs[0]) {
+        resultParagraphs[0].textContent = '自習中短暫低頭不一定是問題，但如果長時間趴著或離開讀書狀態，學生其實很難自己察覺。';
+    }
+
+    if (resultParagraphs[1]) {
+        resultParagraphs[1].textContent = 'STUDY VERSE 不是要責備孩子，而是把容易中斷專注的狀態整理出來，讓學生在結束後可以回顧。';
+    }
+
+    nextSleepBtn.hidden = true;
+    nextPhoneDetectBtn.hidden = false;
+    nextFlipBtn.hidden = true;
+
+    resultPanel.hidden = false;
+
+    if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+    }
+}
 
     function loop() {
         const now = performance.now();
@@ -214,34 +319,98 @@ const warningLight = document.getElementById('warningLight');
                 phaseStartAt = now;
                 awayStartAt = 0;
 
-                setTask(
-                    'Step 2',
-                    '請離開鏡頭幾秒鐘。',
-                    '就像孩子讀書讀到一半暫時離開書桌。系統會等待畫面狀態改變並維持一小段時間。'
-                );
-                setProgress(0);
+                if (currentDetectionMode === 'sleep') {
+    setTask(
+        'Step 2',
+        '請做出趴睡或明顯低頭的姿勢。',
+        '請讓姿勢維持約 2 秒。這是模擬學生讀書中途趴下休息或睡著的情境。'
+    );
+} else {
+    setTask(
+        'Step 2',
+        '請離開鏡頭幾秒鐘。',
+        '就像孩子讀書讀到一半暫時離開書桌。系統會等待畫面狀態改變並維持一小段時間。'
+    );
+}
+setProgress(0);
             }
         } else if (phase === 'detectingAway' && frame && baselineFrame) {
-            const diff = diffFrames(baselineFrame, frame);
-            const isAwayLike = diff > DIFF_THRESHOLD;
+    const diff = diffFrames(baselineFrame, frame);
 
-            if (isAwayLike) {
-                if (!awayStartAt) awayStartAt = now;
-                const awayElapsed = now - awayStartAt;
-                setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
+    if (currentDetectionMode === 'sleep') {
+        const isSleepLike = diff > SLEEP_DIFF_THRESHOLD;
 
-                if (awayElapsed >= AWAY_REQUIRED_MS) {
-                    completeAwayDetection();
-                    return;
-                }
-            } else {
-                awayStartAt = 0;
-                setProgress(0);
+        if (isSleepLike) {
+            if (!sleepStartAt) sleepStartAt = now;
+            const sleepElapsed = now - sleepStartAt;
+            setProgress((sleepElapsed / SLEEP_REQUIRED_MS) * 100);
+
+            if (sleepElapsed >= SLEEP_REQUIRED_MS) {
+                completeSleepDetection();
+                return;
             }
+        } else {
+            sleepStartAt = 0;
+            setProgress(0);
         }
 
         rafId = requestAnimationFrame(loop);
+        return;
     }
+
+    const isAwayLike = diff > DIFF_THRESHOLD;
+
+    if (isAwayLike) {
+        if (!awayStartAt) awayStartAt = now;
+        const awayElapsed = now - awayStartAt;
+        setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
+
+        if (awayElapsed >= AWAY_REQUIRED_MS) {
+            completeAwayDetection();
+            return;
+        }
+    } else {
+        awayStartAt = 0;
+        setProgress(0);
+    }
+}
+        rafId = requestAnimationFrame(loop);
+    }
+
+    function startSleepDetection() {
+    currentDetectionMode = 'sleep';
+
+    baselineFrame = null;
+    phase = 'calibrating';
+    phaseStartAt = performance.now();
+    awayStartAt = 0;
+    sleepStartAt = 0;
+    hasCompleted = false;
+
+    successOverlay.classList.remove('active');
+    resultPanel.hidden = true;
+    setProgress(0);
+
+    openCameraBtn.hidden = true;
+    retryBtn.hidden = false;
+
+    nextSleepBtn.hidden = true;
+    nextPhoneDetectBtn.hidden = true;
+    nextFlipBtn.hidden = true;
+
+    setTask(
+        'Step 2',
+        '請先坐直，讓系統校準你的正常讀書姿勢。',
+        '請保持在鏡頭前約 3 秒。校準完成後，系統會請你做出趴睡或明顯低頭的姿勢。'
+    );
+
+    if (!stream) {
+        openCamera();
+        return;
+    }
+
+    loop();
+}
 
     function resetDemo() {
         if (rafId) {
@@ -254,10 +423,14 @@ const warningLight = document.getElementById('warningLight');
         phaseStartAt = 0;
         awayStartAt = 0;
         hasCompleted = false;
+        currentDetectionMode = 'away';
+sleepStartAt = 0;
 
         successOverlay.classList.remove('active');
         resultPanel.hidden = true;
         setProgress(0);
+
+        successOverlay.classList.remove('active');
 
         setTask(
             'Step 1',
@@ -579,33 +752,41 @@ function setFlipKickoutUI() {
         openCamera();
     });
 
-    nextFlipBtn.addEventListener('click', () => {
-        stopCamera();
-        switchPanel('flip');
-        createDemoFlipRoom();
-    });
+    nextSleepBtn.addEventListener('click', () => {
+    startSleepDetection();
+});
 
-    recreateFlipRoomBtn.addEventListener('click', () => {
-        createDemoFlipRoom();
-    });
+nextPhoneDetectBtn.addEventListener('click', () => {
+    alert('下一步會加入「畫面中偵測到手機」體驗。');
+});
 
-    resetFlipBtn.addEventListener('click', () => {
-        resetFlipRoom();
-    });
+nextFlipBtn.addEventListener('click', () => {
+    stopCamera();
+    switchPanel('flip');
+    createDemoFlipRoom();
+});
 
-    window.addEventListener('beforeunload', () => {
-        if (rafId) cancelAnimationFrame(rafId);
+recreateFlipRoomBtn.addEventListener('click', () => {
+    createDemoFlipRoom();
+});
 
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+resetFlipBtn.addEventListener('click', () => {
+    resetFlipRoom();
+});
 
-        if (flipWarningTimer) {
-            clearInterval(flipWarningTimer);
-        }
+window.addEventListener('beforeunload', () => {
+    if (rafId) cancelAnimationFrame(rafId);
 
-        if (demoFlipSocket) {
-            demoFlipSocket.disconnect();
-        }
-    });
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+    }
+
+    if (flipWarningTimer) {
+        clearInterval(flipWarningTimer);
+    }
+
+    if (demoFlipSocket) {
+        demoFlipSocket.disconnect();
+    }
+});
 })();
