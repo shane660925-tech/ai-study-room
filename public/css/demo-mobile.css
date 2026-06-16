@@ -260,3 +260,82 @@ p {
     font-size: 3rem;
     margin-bottom: .8rem;
 }
+
+#mobileWarningOverlay,
+#mobileKickoutOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: grid;
+    place-items: center;
+    padding: 1.2rem;
+    text-align: center;
+    color: white;
+}
+
+#mobileWarningOverlay {
+    background: rgba(127, 29, 29, .96);
+    animation: mobileRedPulse .55s infinite;
+}
+
+#mobileKickoutOverlay {
+    background: rgba(2, 6, 23, .96);
+}
+
+@keyframes mobileRedPulse {
+    0%, 100% {
+        background: rgba(127, 29, 29, .96);
+    }
+    50% {
+        background: rgba(185, 28, 28, .98);
+    }
+}
+
+.mobile-warning-inner,
+.mobile-kickout-inner {
+    width: min(100%, 360px);
+    display: grid;
+    justify-items: center;
+    gap: .85rem;
+}
+
+.mobile-warning-inner i,
+.mobile-kickout-inner i {
+    font-size: 4rem;
+}
+
+.mobile-warning-inner i {
+    color: #fde68a;
+}
+
+.mobile-kickout-inner i {
+    color: #93c5fd;
+}
+
+.mobile-warning-inner h1,
+.mobile-kickout-inner h1 {
+    margin: 0;
+    font-size: 2.1rem;
+    letter-spacing: -.04em;
+}
+
+.mobile-warning-inner p,
+.mobile-kickout-inner p,
+.mobile-kickout-inner span {
+    margin: 0;
+    color: #e5e7eb;
+    line-height: 1.7;
+}
+
+.mobile-warning-inner strong {
+    width: 6rem;
+    height: 6rem;
+    display: grid;
+    place-items: center;
+    border-radius: 1.5rem;
+    border: 2px solid rgba(253, 230, 138, .7);
+    background: rgba(0, 0, 0, .26);
+    color: #fde68a;
+    font-size: 3.4rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

@@ -61,6 +61,84 @@
         phoneStatusText.textContent = text;
     }
 
+    let mobileWarningTimer = null;
+let mobileWarningCount = 5;
+let mobileKickoutTimer = null;
+
+function clearMobileWarning() {
+    if (mobileWarningTimer) {
+        clearInterval(mobileWarningTimer);
+        mobileWarningTimer = null;
+    }
+
+    mobileWarningCount = 5;
+
+    const oldOverlay = document.getElementById('mobileWarningOverlay');
+    if (oldOverlay) oldOverlay.remove();
+}
+
+function showMobileWarning() {
+    if (document.getElementById('mobileWarningOverlay')) return;
+
+    mobileWarningCount = 5;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'mobileWarningOverlay';
+    overlay.innerHTML = `
+        <div class="mobile-warning-inner">
+            <i class="fas fa-triangle-exclamation"></i>
+            <h1>手機已翻開！</h1>
+            <p>請在倒數結束前把手機螢幕朝下蓋回桌面</p>
+            <strong id="mobileWarningNumber">5</strong>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    mobileWarningTimer = setInterval(() => {
+        mobileWarningCount -= 1;
+
+        const numberEl = document.getElementById('mobileWarningNumber');
+        if (numberEl) numberEl.textContent = String(mobileWarningCount);
+
+        if (mobileWarningCount <= 0) {
+            clearMobileWarning();
+        }
+    }, 1000);
+}
+
+function showMobileKickoutAndReturnHome() {
+    clearMobileWarning();
+
+    isTracking = false;
+    window.removeEventListener('deviceorientation', handleOrientation, true);
+
+    if (mobileKickoutTimer) {
+        clearTimeout(mobileKickoutTimer);
+        mobileKickoutTimer = null;
+    }
+
+    const oldOverlay = document.getElementById('mobileKickoutOverlay');
+    if (oldOverlay) oldOverlay.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'mobileKickoutOverlay';
+    overlay.innerHTML = `
+        <div class="mobile-kickout-inner">
+            <i class="fas fa-door-open"></i>
+            <h1>已被踢出教室</h1>
+            <p>手機翻開超過限制時間，本次自習已中斷。</p>
+            <span>即將返回手機首頁...</span>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    mobileKickoutTimer = setTimeout(() => {
+        window.location.href = '/mobile.html';
+    }, 2200);
+}
+
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
@@ -142,6 +220,10 @@
             setPhoneUI('waiting', '等待翻轉', '請把手機螢幕朝下蓋在桌上');
         });
 
+                    socket.on('demo_flip_kickout', () => {
+                showMobileKickoutAndReturnHome();
+            });
+
         setTimeout(() => {
             if (!settled) {
                 fail('等待伺服器回應逾時，請回電腦端重新產生 QR Code');
@@ -191,10 +273,12 @@
         if (faceDown) {
             hasEverFaceDown = true;
 
-            if (lastSentState === 'face_up') {
+                        if (lastSentState === 'face_up') {
+                clearMobileWarning();
                 sendState('cover_back', true);
                 setPhoneUI('covered', '已蓋回手機', '電腦端警示會解除');
             } else {
+                clearMobileWarning();
                 sendState('face_down');
                 setPhoneUI('covered', '手機已蓋好', '目前是專注狀態');
             }
@@ -202,9 +286,10 @@
             return;
         }
 
-        if (hasEverFaceDown) {
+                if (hasEverFaceDown) {
             sendState('face_up');
-            setPhoneUI('open', '手機已翻開', '電腦端會出現 5 秒警示倒數');
+            setPhoneUI('open', '手機已翻開', '請在 5 秒內蓋回手機');
+            showMobileWarning();
         } else {
             setPhoneUI('waiting', '等待翻轉', '請先把手機螢幕朝下蓋在桌上');
         }

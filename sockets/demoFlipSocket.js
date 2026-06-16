@@ -171,6 +171,34 @@ module.exports = function registerDemoFlipSocket(io) {
             });
         });
 
+                /**
+         * 電腦端判定手機翻開超過 5 秒，通知手機端顯示踢出畫面
+         */
+        socket.on('demo_flip_kickout', (payload, ack) => {
+            const roomId = String(payload?.roomId || '').trim();
+            const room = demoRooms.get(roomId);
+
+            if (!room) {
+                return safeAck(ack, {
+                    success: false,
+                    error: '找不到此體驗房間'
+                });
+            }
+
+            room.phoneState = 'kicked';
+            room.updatedAt = Date.now();
+
+            io.to(room.socketRoom).emit('demo_flip_kickout', {
+                roomId,
+                room: getPublicRoom(room)
+            });
+
+            safeAck(ack, {
+                success: true,
+                room: getPublicRoom(room)
+            });
+        });
+        
         /**
          * 電腦端重置 demo 手機狀態
          */

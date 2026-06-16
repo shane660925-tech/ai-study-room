@@ -528,19 +528,27 @@ function setFlipKickoutUI() {
     }
 
     function showKickoutScreen() {
-        clearFlipWarningTimer();
+    clearFlipWarningTimer();
 
-        isKickoutShown = true;
-        kickoutBox.hidden = false;
-        resetFlipBtn.hidden = false;
+    isKickoutShown = true;
+    kickoutBox.hidden = false;
+    resetFlipBtn.hidden = false;
 
-        setFlipKickoutUI();
+    setFlipKickoutUI();
 
-        addLog(
-            '手機翻轉中斷',
-            '手機翻開超過限制時間，示範畫面顯示已離開教室。'
-        );
+    addLog(
+        '手機翻轉中斷',
+        '手機翻開超過限制時間，示範畫面顯示已離開教室。'
+    );
+
+    if (demoFlipSocket && demoRoomId) {
+        demoFlipSocket.emit('demo_flip_kickout', { roomId: demoRoomId }, (res) => {
+            if (!res || !res.success) {
+                console.warn('通知手機踢出失敗：', res);
+            }
+        });
     }
+}
 
     function resetFlipRoom() {
         clearFlipWarningTimer();
