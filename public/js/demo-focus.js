@@ -87,6 +87,9 @@ const PERSON_MATCH_IOU_THRESHOLD = 0.10;
 const PERSON_MATCH_AREA_RATIO = 0.35;
 const PERSON_CENTER_SHIFT_RATIO = 0.9;
 
+const AWAY_PERSON_SCORE_THRESHOLD = 0.48;
+const PERSON_MATCH_MAX_AREA_RATIO = 2.2;
+
 const SLEEP_TOP_DROP_RATIO = 0.14;
 const SLEEP_HEIGHT_SHRINK_RATIO = 0.82;
 const SLEEP_CENTER_DROP_RATIO = 0.12;
@@ -144,6 +147,16 @@ function goBackToLanding(e) {
     }
 
     window.location.href = '/landing.html';
+}
+
+function resetDemoLog() {
+    if (eventLog) {
+        eventLog.innerHTML = '';
+    }
+
+    if (emptyLog) {
+        emptyLog.classList.remove('hidden');
+    }
 }
 
 function resetDemoSummary() {
@@ -217,13 +230,13 @@ if (!currentDetectionMode) {
 
             if (currentDetectionMode === 'phone') {
     setTask(
-        'Step 3',
+        'Step 1',
         '正在準備手機入鏡偵測。',
         '請稍等模型載入完成。接著請把手機拿到鏡頭畫面中，系統會偵測畫面是否出現手機。'
     );
 } else if (currentDetectionMode === 'sleep') {
     setTask(
-        'Step 2',
+        'Step 1',
         '請先坐直，讓系統校準你的正常讀書姿勢。',
         '請保持在鏡頭前約 3 秒。校準完成後，系統會請你做出趴睡或明顯低頭的姿勢。'
     );
@@ -331,7 +344,8 @@ function getBoxMetrics(prediction) {
         top: y,
         bottom: y + h,
         centerY: y + h / 2,
-        area: w * h
+        area: w * h,
+        score: prediction?.score || 0
     };
 }
 
@@ -357,13 +371,19 @@ function isSameSeatPerson(baselineBox, currentBox) {
 
     const iou = getBoxIoU(baselineBox, currentBox);
     const areaRatio = currentBox.area / Math.max(1, baselineBox.area);
-    const centerShift = Math.abs(currentBox.x + currentBox.w / 2 - (baselineBox.x + baselineBox.w / 2));
+    const centerShift = Math.abs(
+        currentBox.x + currentBox.w / 2 - (baselineBox.x + baselineBox.w / 2)
+    );
 
+    const isReliablePerson = currentBox.score >= AWAY_PERSON_SCORE_THRESHOLD;
     const hasEnoughOverlap = iou >= PERSON_MATCH_IOU_THRESHOLD;
-    const hasReasonableArea = areaRatio >= PERSON_MATCH_AREA_RATIO;
-    const isNearOriginalSeat = centerShift <= baselineBox.w * PERSON_CENTER_SHIFT_RATIO;
+    const hasReasonableArea =
+        areaRatio >= PERSON_MATCH_AREA_RATIO &&
+        areaRatio <= PERSON_MATCH_MAX_AREA_RATIO;
+    const isNearOriginalSeat =
+        centerShift <= baselineBox.w * PERSON_CENTER_SHIFT_RATIO;
 
-    return hasEnoughOverlap || (hasReasonableArea && isNearOriginalSeat);
+    return isReliablePerson && hasReasonableArea && (hasEnoughOverlap || isNearOriginalSeat);
 }
 
 function getBestPersonForSeat(predictions, baselineBox) {
@@ -536,7 +556,7 @@ const isSameSeat = isSameSeatPerson(personBaselineBox, personBox);
 
                 if (currentDetectionMode === 'sleep') {
                     setTask(
-                        'Step 2',
+                        'Step 1',
                         '請先坐直並回到鏡頭畫面中。',
                         '系統需要先看見你的正常讀書姿勢，才可以校準趴睡偵測。'
                     );
@@ -544,7 +564,7 @@ const isSameSeat = isSameSeatPerson(personBaselineBox, personBox);
                     setTask(
                         'Step 1',
                         '請先坐在鏡頭前，讓系統校準。',
-                        '系統需要先偵測到你在畫面中，之後才會判斷是否真的離座。'
+                        '請讓上半身保持在鏡頭畫面中，系統會先建立本次體驗的自習狀態基準。'
                     );
                 }
 
@@ -552,10 +572,19 @@ const isSameSeat = isSameSeatPerson(personBaselineBox, personBox);
                 return;
             }
 
-            personBaselineBox = personBox;
+            if (!personBaselineBox) {
+    personBaselineBox = personBox;
+    phaseStartAt = now;
+    setProgress(0);
 
-            const elapsed = now - phaseStartAt;
-            setProgress((elapsed / CALIBRATION_MS) * 100);
+    rafId = requestAnimationFrame(loop);
+    return;
+}
+
+personBaselineBox = personBox;
+
+const elapsed = now - phaseStartAt;
+setProgress((elapsed / CALIBRATION_MS) * 100);
 
             if (elapsed >= CALIBRATION_MS) {
                 phase = 'detectingAway';
@@ -668,7 +697,7 @@ hasCompleted = false;
     nextFlipBtn.hidden = true;
 
     setTask(
-        'Step 2',
+        'Step 1',
         '請先坐直，讓系統校準你的正常讀書姿勢。',
         '請保持在鏡頭前約 3 秒。校準完成後，系統會請你做出趴睡或明顯低頭的姿勢。'
     );
@@ -746,7 +775,7 @@ phase = 'detectingPhone';
     retryBtn.hidden = false;
 
     setTask(
-        'Step 3',
+        'Step 1',
         '正在載入手機入鏡偵測模型。',
         '請稍等幾秒。載入完成後，請把手機拿到鏡頭畫面中。'
     );
@@ -1319,6 +1348,7 @@ function showKickoutScreen() {
 
     startDemoBtn.addEventListener('click', () => {
     resetDemoSummary();
+    resetDemoLog();
     switchPanel('camera');
 });
 
@@ -1365,6 +1395,7 @@ if (summaryFromFlipBtn) {
 if (restartFullDemoBtn) {
     restartFullDemoBtn.addEventListener('click', () => {
         resetDemoSummary();
+        resetDemoLog();
         resetDemo();
         switchPanel('camera');
     });
