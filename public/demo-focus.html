@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STUDY VERSE｜免註冊 AI 自習體驗</title>
+    <meta name="description" content="免註冊體驗 STUDY VERSE 如何偵測離座並產生學習狀態提醒。" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/demo-focus.css" />
+</head>
+<body>
+    <div class="demo-glow demo-glow-a"></div>
+    <div class="demo-glow demo-glow-b"></div>
+
+    <main class="demo-page">
+        <section class="demo-hero">
+            <a class="demo-brand" href="/landing.html">
+                <span><i class="fas fa-rocket"></i></span>
+                <strong>STUDY VERSE</strong>
+            </a>
+
+            <div class="demo-layout">
+                <div class="demo-main-card">
+                    <div id="introPanel" class="demo-panel active">
+                        <span class="demo-kicker">1-Minute Demo</span>
+                        <h1>先體驗一次：AI 如何偵測孩子自習中途離座。</h1>
+                        <p>
+                            這是一個免註冊體驗頁。接下來你會先允許鏡頭，
+                            然後照著提示離開畫面幾秒鐘，看看 STUDY VERSE 如何產生狀態提醒。
+                        </p>
+
+                        <div class="privacy-box">
+                            <i class="fas fa-shield-halved"></i>
+                            <p>
+                                這次體驗不會登入、不會建立帳號、不會寫入資料庫，
+                                也不會連到正式教室。鏡頭畫面只會在你的瀏覽器中用來做體驗判斷。
+                            </p>
+                        </div>
+
+                        <button id="startDemoBtn" class="demo-btn primary">
+                            <i class="fas fa-play"></i>
+                            開始體驗
+                        </button>
+                    </div>
+
+                    <div id="cameraPanel" class="demo-panel">
+                        <div class="camera-header">
+                            <div>
+                                <span class="demo-kicker">Camera Permission</span>
+                                <h2>請允許鏡頭權限，開始體驗。</h2>
+                            </div>
+                            <a href="/landing.html" class="back-link">回介紹頁</a>
+                        </div>
+
+                        <p class="camera-note">
+                            正式使用時，鏡頭是用來讓 AI 判斷自習狀態，不是讓同學互相觀看畫面。
+                            這個體驗頁不會上傳影像，也不會儲存影像。
+                        </p>
+
+                        <div class="camera-frame">
+                            <video id="demoVideo" autoplay playsinline muted></video>
+                            <canvas id="demoCanvas" width="96" height="72" hidden></canvas>
+
+                            <div id="cameraPlaceholder" class="camera-placeholder">
+                                <i class="fas fa-video"></i>
+                                <span>尚未開啟鏡頭</span>
+                            </div>
+
+                            <div id="successOverlay" class="success-overlay">
+                                <div>
+                                    <i class="fas fa-person-walking-arrow-right"></i>
+                                    <strong>偵測到離座！</strong>
+                                    <span>成功完成本次體驗任務</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="taskBox" class="task-box">
+                            <span id="taskStep">Step 1</span>
+                            <h3 id="taskTitle">請先坐在鏡頭前，讓系統校準。</h3>
+                            <p id="taskText">
+                                開啟鏡頭後，請先停留在畫面中央 3 秒。校準完成後，
+                                系統會請你離開鏡頭幾秒鐘。
+                            </p>
+
+                            <div class="progress-line">
+                                <div id="progressBar"></div>
+                            </div>
+                        </div>
+
+                        <div class="camera-actions">
+                            <button id="openCameraBtn" class="demo-btn primary">
+                                <i class="fas fa-video"></i>
+                                開啟鏡頭
+                            </button>
+
+                            <button id="retryBtn" class="demo-btn ghost" hidden>
+                                <i class="fas fa-rotate-right"></i>
+                                重新體驗
+                            </button>
+                        </div>
+
+                        <div id="resultPanel" class="result-panel" hidden>
+                            <h3>離座提醒代表什麼？</h3>
+                            <p>
+                                坐在書桌前很久，不代表整段時間都真的在讀。
+                                如果自習中途離開座位，系統會記錄這個提醒事件，
+                                讓學生在自習結束後回顧自己的狀態。
+                            </p>
+                            <p>
+                                這不是為了責備孩子，而是讓孩子知道：
+                                這段自習有沒有真的連續進入狀態，以及下次可以怎麼調整。
+                            </p>
+
+                            <div class="result-actions">
+    <button id="nextFlipBtn" class="demo-btn primary">
+        <i class="fas fa-mobile-screen-button"></i>
+        下一關：手機翻轉示範
+    </button>
+
+    <button id="againBtn" class="demo-btn secondary">
+        <i class="fas fa-rotate-right"></i>
+        重新體驗離座偵測
+    </button>
+</div>
+                        </div>
+                                        </div>
+
+                    <div id="flipPanel" class="demo-panel">
+    <div class="camera-header">
+        <div>
+            <span class="demo-kicker">Phone Flip Demo</span>
+            <h2>手機翻轉示範：掃 QR Code，真的用手機測一次。</h2>
+        </div>
+        <a href="/landing.html" class="back-link">回介紹頁</a>
+    </div>
+
+    <p class="camera-note">
+        這裡是免註冊體驗示範，不會登入、不會寫入資料庫，也不會進入正式教室。
+        請用手機掃描 QR Code，讓手機與這個電腦 demo 頁連線。
+    </p>
+
+    <div class="qr-flip-layout">
+        <div class="qr-connect-card">
+            <span class="demo-kicker">Connect Phone</span>
+            <h3>請用手機掃描 QR Code</h3>
+
+            <div id="demoQrBox" class="demo-qr-box">
+                <span>QR Code 建立中...</span>
+            </div>
+
+            <div class="demo-room-info">
+                <span>體驗房間代碼</span>
+                <strong id="demoRoomCode">建立中...</strong>
+            </div>
+
+            <a id="demoMobileLink" class="mobile-link" href="#" target="_blank" rel="noopener">
+                手機無法掃描時，點此開啟連線頁
+            </a>
+
+            <button id="recreateFlipRoomBtn" class="demo-btn ghost">
+                <i class="fas fa-rotate-right"></i>
+                重新產生 QR Code
+            </button>
+        </div>
+
+        <div class="flip-live-stage">
+            <div id="desktopPhoneStatus" class="desktop-phone-status waiting">
+                <i id="desktopPhoneIcon" class="fas fa-qrcode"></i>
+                <strong id="desktopPhoneTitle">等待手機連線</strong>
+                <span id="desktopPhoneText">請先用手機掃描左側 QR Code</span>
+            </div>
+
+            <div id="flipWarningBox" class="flip-warning-box" hidden>
+                <i class="fas fa-triangle-exclamation"></i>
+                <strong>手機已翻開！</strong>
+                <span>請在倒數結束前把手機蓋回桌面</span>
+                <b id="flipCountdown">5</b>
+            </div>
+
+            <div id="kickoutBox" class="kickout-box" hidden>
+                <i class="fas fa-door-open"></i>
+                <strong>已離開教室</strong>
+                <span>手機翻開超過限制時間，本次自習示範結束。</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-box">
+        <span>Step 2</span>
+        <h3>請用手機完成翻轉測試。</h3>
+        <p>
+            手機連線後，先把手機螢幕朝下放在桌上。
+            接著把手機翻開，電腦端會出現警示倒數。
+            如果 5 秒內蓋回，會回到專注狀態；如果沒有蓋回，會顯示已離開教室。
+        </p>
+    </div>
+
+    <div class="camera-actions">
+        <button id="resetFlipBtn" class="demo-btn secondary" hidden>
+            <i class="fas fa-rotate-right"></i>
+            重新測手機翻轉
+        </button>
+    </div>
+
+    <div class="result-panel">
+        <div class="result-explain">
+            <h3>手機翻轉是什麼？</h3>
+            <p>
+                手機翻轉不是要沒收手機，而是幫助學生在自習開始前建立一個清楚的儀式：
+                手機螢幕朝下，讀書時間正式開始。
+            </p>
+            <p>
+                正式使用時，如果學生中途翻開手機，系統會先跳出提醒。
+                超過限制時間仍沒有蓋回，就會結束本次自習，避免孩子一邊讀書一邊被手機拉走。
+            </p>
+        </div>
+    </div>
+</div>
+                </div>
+
+                <aside class="demo-side-card">
+                    <span class="demo-kicker">Demo Log</span>
+                    <h2>本次體驗紀錄</h2>
+
+                    <div id="emptyLog" class="empty-log">
+                        <i class="fas fa-list-check"></i>
+                        <p>還沒有偵測紀錄。請依照左側任務完成體驗。</p>
+                    </div>
+
+                    <div id="eventLog" class="event-log"></div>
+
+                    <div class="summary-mini">
+                        <strong>體驗目標</strong>
+                        <span>理解 AI 如何把「自習中途離座」轉成學習狀態提醒。</span>
+                    </div>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="/js/demo-focus.js"></script>
+</body>
+</html>

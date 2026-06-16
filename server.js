@@ -68,7 +68,8 @@ const io = new Server(server, {
 const registerRoomHandler = require('./sockets/roomHandler');
 registerRoomHandler(io); 
 // ------------------------------------
-
+const registerDemoFlipSocket = require('./sockets/demoFlipSocket');
+registerDemoFlipSocket(io);
 // 儲存各個特約教室的專屬課表
 const tutorSchedules = {};
 

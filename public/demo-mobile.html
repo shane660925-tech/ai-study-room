@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>STUDY VERSE｜手機翻轉體驗</title>
+    <meta name="description" content="STUDY VERSE 免註冊體驗手機翻轉連線頁。" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/demo-mobile.css" />
+</head>
+<body>
+    <main class="mobile-demo-page">
+        <section class="mobile-card">
+            <div class="mobile-brand">
+                <span><i class="fas fa-mobile-screen-button"></i></span>
+                <strong>STUDY VERSE</strong>
+            </div>
+
+            <div id="connectPanel" class="mobile-panel active">
+                <span class="mobile-kicker">Phone Flip Demo</span>
+                <h1>手機翻轉體驗</h1>
+                <p>
+                    這是免註冊體驗用的手機連線頁。
+                    請先按下開始，允許手機動作感測，接著把手機螢幕朝下蓋在桌上。
+                </p>
+
+                <div class="safe-note">
+                    <i class="fas fa-shield-halved"></i>
+                    <span>這個頁面只會把「蓋下 / 翻開」狀態傳回你的電腦 demo 頁，不會登入、不會寫入資料庫。</span>
+                </div>
+
+                <div class="room-chip">
+                    <span>體驗房間</span>
+                    <strong id="roomIdText">讀取中...</strong>
+                </div>
+
+                <button id="startPhoneBtn" class="mobile-btn primary">
+                    <i class="fas fa-play"></i>
+                    開始手機翻轉體驗
+                </button>
+
+                <p id="connectMessage" class="mobile-message"></p>
+            </div>
+
+            <div id="trackingPanel" class="mobile-panel">
+                <div id="phoneStatusBox" class="phone-status-box waiting">
+                    <i id="phoneStatusIcon" class="fas fa-mobile-screen-button"></i>
+                    <strong id="phoneStatusTitle">等待翻轉</strong>
+                    <span id="phoneStatusText">請把手機螢幕朝下蓋在桌上</span>
+                </div>
+
+                <div class="orientation-readout">
+                    <div>
+                        <span>Beta</span>
+                        <strong id="betaValue">--</strong>
+                    </div>
+                    <div>
+                        <span>Gamma</span>
+                        <strong id="gammaValue">--</strong>
+                    </div>
+                </div>
+
+                <div class="instruction-box">
+                    <h2>怎麼測？</h2>
+                    <p>
+                        先把手機螢幕朝下放在桌上，電腦端會顯示「手機已蓋好」。
+                        接著把手機翻起來，電腦端會出現 5 秒警示倒數。
+                    </p>
+                </div>
+            </div>
+
+            <div id="errorPanel" class="mobile-panel">
+                <i class="fas fa-triangle-exclamation error-icon"></i>
+                <h1>無法連線</h1>
+                <p id="errorText">請重新掃描電腦畫面上的 QR Code。</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/demo-mobile.js"></script>
+</body>
+</html>
