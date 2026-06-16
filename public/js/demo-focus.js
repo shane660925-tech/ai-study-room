@@ -1088,10 +1088,6 @@ function setFlipKickoutUI() {
         }, 1000);
     }
 
-    function showKickoutScreen() {
-    clearFlipWarningTimer();
-
-    isKickoutShown = true;
     function calculateDemoScore() {
     let score = 100;
 
@@ -1193,7 +1189,13 @@ function showLearningSummary() {
     renderLearningSummary();
     switchPanel('summary');
 }
+
+function showKickoutScreen() {
+    clearFlipWarningTimer();
+
+    isKickoutShown = true;
     demoSummary.wasKicked = true;
+
     kickoutBox.hidden = false;
     resetFlipBtn.hidden = false;
 
@@ -1259,6 +1261,10 @@ nextFlipBtn.addEventListener('click', () => {
 
 recreateFlipRoomBtn.addEventListener('click', () => {
     createDemoFlipRoom();
+});
+
+resetFlipBtn.addEventListener('click', () => {
+    resetFlipRoom();
 });
 
 if (summaryFromFlipBtn) {
