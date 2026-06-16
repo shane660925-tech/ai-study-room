@@ -165,11 +165,31 @@
         </div>
 
         <div class="flip-live-stage">
-            <div id="desktopPhoneStatus" class="desktop-phone-status waiting">
-                <i id="desktopPhoneIcon" class="fas fa-qrcode"></i>
-                <strong id="desktopPhoneTitle">等待手機連線</strong>
-                <span id="desktopPhoneText">請先用手機掃描左側 QR Code</span>
+    <div class="flip-light-board">
+        <div id="linkLight" class="flip-light-item waiting">
+            <span></span>
+            <div>
+                <strong>手機連線</strong>
+                <small>請先掃描 QR Code</small>
             </div>
+        </div>
+
+        <div id="coverLight" class="flip-light-item">
+            <span></span>
+            <div>
+                <strong>手機翻轉</strong>
+                <small>等待手機螢幕朝下</small>
+            </div>
+        </div>
+
+        <div id="warningLight" class="flip-light-item">
+            <span></span>
+            <div>
+                <strong>警示狀態</strong>
+                <small>翻開手機時才會啟動</small>
+            </div>
+        </div>
+    </div>
 
             <div id="flipWarningBox" class="flip-warning-box" hidden>
                 <i class="fas fa-triangle-exclamation"></i>

@@ -11,6 +11,9 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] {
+    display: none !important;
+}
 
 body {
     margin: 0;
@@ -731,3 +734,68 @@ p {
     }
 }
 
+.flip-light-board {
+    display: grid;
+    gap: .85rem;
+}
+
+.flip-light-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .85rem;
+    align-items: center;
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, .045);
+    padding: .9rem;
+}
+
+.flip-light-item > span {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, .45);
+}
+
+.flip-light-item strong {
+    display: block;
+    color: #f8fafc;
+    font-size: 1rem;
+}
+
+.flip-light-item small {
+    display: block;
+    margin-top: .25rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.flip-light-item.waiting {
+    border-color: rgba(245, 158, 11, .28);
+    background: rgba(245, 158, 11, .08);
+}
+
+.flip-light-item.waiting > span {
+    background: #f59e0b;
+    box-shadow: 0 0 22px rgba(245, 158, 11, .45);
+}
+
+.flip-light-item.good {
+    border-color: rgba(34, 197, 94, .28);
+    background: rgba(34, 197, 94, .08);
+}
+
+.flip-light-item.good > span {
+    background: #22c55e;
+    box-shadow: 0 0 22px rgba(34, 197, 94, .45);
+}
+
+.flip-light-item.danger {
+    border-color: rgba(239, 68, 68, .3);
+    background: rgba(239, 68, 68, .1);
+}
+
+.flip-light-item.danger > span {
+    background: #ef4444;
+    box-shadow: 0 0 22px rgba(239, 68, 68, .45);
+}

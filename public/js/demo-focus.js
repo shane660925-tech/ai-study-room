@@ -31,10 +31,9 @@
     const recreateFlipRoomBtn = document.getElementById('recreateFlipRoomBtn');
     const resetFlipBtn = document.getElementById('resetFlipBtn');
 
-    const desktopPhoneStatus = document.getElementById('desktopPhoneStatus');
-    const desktopPhoneIcon = document.getElementById('desktopPhoneIcon');
-    const desktopPhoneTitle = document.getElementById('desktopPhoneTitle');
-    const desktopPhoneText = document.getElementById('desktopPhoneText');
+    const linkLight = document.getElementById('linkLight');
+const coverLight = document.getElementById('coverLight');
+const warningLight = document.getElementById('warningLight');
     const flipWarningBox = document.getElementById('flipWarningBox');
     const kickoutBox = document.getElementById('kickoutBox');
     const flipCountdown = document.getElementById('flipCountdown');
@@ -286,14 +285,50 @@
         }
     }
 
-    function setDesktopPhoneUI(type, title, text, iconClass) {
-        desktopPhoneStatus.classList.remove('waiting', 'connected', 'covered', 'open', 'kicked');
-        desktopPhoneStatus.classList.add(type);
+    function setLight(el, state, text) {
+    if (!el) return;
 
-        desktopPhoneIcon.className = iconClass || 'fas fa-mobile-screen-button';
-        desktopPhoneTitle.textContent = title;
-        desktopPhoneText.textContent = text;
+    el.classList.remove('waiting', 'good', 'danger');
+
+    if (state) {
+        el.classList.add(state);
     }
+
+    const small = el.querySelector('small');
+    if (small && text) {
+        small.textContent = text;
+    }
+}
+
+function setFlipIdleUI() {
+    setLight(linkLight, 'waiting', '請先掃描 QR Code');
+    setLight(coverLight, '', '等待手機螢幕朝下');
+    setLight(warningLight, '', '翻開手機時才會啟動');
+}
+
+function setFlipConnectedUI() {
+    setLight(linkLight, 'waiting', '手機已連線，請在手機上按開始');
+    setLight(coverLight, '', '等待手機螢幕朝下');
+    setLight(warningLight, '', '尚未觸發警示');
+}
+
+function setFlipCoveredUI(text = '手機已蓋好，專注中') {
+    setLight(linkLight, 'good', '手機已連線');
+    setLight(coverLight, 'good', text);
+    setLight(warningLight, '', '尚未觸發警示');
+}
+
+function setFlipWarningUI() {
+    setLight(linkLight, 'good', '手機已連線');
+    setLight(coverLight, 'danger', '手機已翻開');
+    setLight(warningLight, 'danger', '警示倒數中');
+}
+
+function setFlipKickoutUI() {
+    setLight(linkLight, 'good', '手機已連線');
+    setLight(coverLight, 'danger', '手機翻開超時');
+    setLight(warningLight, 'danger', '已離開教室');
+}
 
     function clearFlipWarningTimer() {
         if (flipWarningTimer) {
@@ -308,19 +343,14 @@
     }
 
     function resetFlipUI() {
-        clearFlipWarningTimer();
+    clearFlipWarningTimer();
 
-        isKickoutShown = false;
-        kickoutBox.hidden = true;
-        resetFlipBtn.hidden = true;
+    isKickoutShown = false;
+    kickoutBox.hidden = true;
+    resetFlipBtn.hidden = true;
 
-        setDesktopPhoneUI(
-            'waiting',
-            demoRoomId ? '等待手機連線' : '正在建立 QR Code',
-            demoRoomId ? '請用手機掃描左側 QR Code' : '請稍候...',
-            demoRoomId ? 'fas fa-qrcode' : 'fas fa-spinner fa-spin'
-        );
-    }
+    setFlipIdleUI();
+}
 
     function buildMobileUrl(roomId) {
         return `${window.location.origin}/demo-mobile.html?roomId=${encodeURIComponent(roomId)}`;
@@ -355,7 +385,7 @@
 
         if (typeof io === 'undefined') {
             demoQrBox.innerHTML = '<span>找不到 Socket.IO，請確認 server 已啟動。</span>';
-            setDesktopPhoneUI('waiting', '無法建立連線', '找不到 Socket.IO', 'fas fa-triangle-exclamation');
+            setFlipIdleUI();
             return;
         }
 
@@ -369,7 +399,7 @@
             demoFlipSocket.emit('demo_flip_create_room', {}, (res) => {
                 if (!res || !res.success || !res.room) {
                     demoQrBox.innerHTML = '<span>建立體驗房間失敗，請重新整理。</span>';
-                    setDesktopPhoneUI('waiting', '建立失敗', '請重新整理頁面再試一次', 'fas fa-triangle-exclamation');
+                    setFlipIdleUI();
                     return;
                 }
 
@@ -381,12 +411,7 @@
 
                 renderQrCode(mobileUrl);
 
-                setDesktopPhoneUI(
-                    'waiting',
-                    '等待手機連線',
-                    '請用手機掃描左側 QR Code',
-                    'fas fa-qrcode'
-                );
+                setFlipIdleUI();
             });
         };
 
@@ -406,12 +431,7 @@
             kickoutBox.hidden = true;
             resetFlipBtn.hidden = true;
 
-            setDesktopPhoneUI(
-                'connected',
-                '手機已連線',
-                '請在手機上按開始，並將手機螢幕朝下蓋在桌上',
-                'fas fa-mobile-screen-button'
-            );
+            setFlipConnectedUI();
 
             addLog(
                 '手機已連線',
@@ -422,12 +442,7 @@
         demoFlipSocket.on('demo_flip_phone_disconnected', () => {
             clearFlipWarningTimer();
 
-            setDesktopPhoneUI(
-                'waiting',
-                '手機已斷線',
-                '請重新掃描 QR Code 或重新整理手機頁面',
-                'fas fa-wifi'
-            );
+            setFlipIdleUI();
 
             addLog(
                 '手機斷線',
@@ -440,24 +455,14 @@
             kickoutBox.hidden = true;
             resetFlipBtn.hidden = true;
 
-            setDesktopPhoneUI(
-                'connected',
-                '已重置手機翻轉體驗',
-                '請重新把手機螢幕朝下蓋在桌上',
-                'fas fa-mobile-screen-button'
-            );
+            setFlipConnectedUI();
         });
 
         demoFlipSocket.on('demo_flip_phone_state', (data) => {
             const state = data?.state;
 
             if (state === 'ready') {
-                setDesktopPhoneUI(
-                    'connected',
-                    '手機感測已就緒',
-                    '請把手機螢幕朝下蓋在桌上',
-                    'fas fa-mobile-screen-button'
-                );
+                setFlipConnectedUI();
                 return;
             }
 
@@ -466,12 +471,7 @@
                 kickoutBox.hidden = true;
                 resetFlipBtn.hidden = true;
 
-                setDesktopPhoneUI(
-                    'covered',
-                    '手機已蓋好',
-                    '目前是專注狀態',
-                    'fas fa-mobile-screen-button'
-                );
+                setFlipCoveredUI('手機已蓋好，專注中');
 
                 addLog(
                     '手機已蓋好',
@@ -490,12 +490,7 @@
                 kickoutBox.hidden = true;
                 resetFlipBtn.hidden = true;
 
-                setDesktopPhoneUI(
-                    'covered',
-                    '手機已蓋回',
-                    '已在倒數內回到專注狀態',
-                    'fas fa-mobile-screen-button'
-                );
+                setFlipCoveredUI('已在倒數內蓋回，回到專注狀態');
 
                 addLog(
                     '手機已蓋回',
@@ -515,12 +510,7 @@
         kickoutBox.hidden = true;
         resetFlipBtn.hidden = true;
 
-        setDesktopPhoneUI(
-            'open',
-            '手機已翻開',
-            '請在 5 秒內把手機蓋回桌面',
-            'fas fa-triangle-exclamation'
-        );
+        setFlipWarningUI();
 
         addLog(
             '手機翻開提醒',
@@ -544,12 +534,7 @@
         kickoutBox.hidden = false;
         resetFlipBtn.hidden = false;
 
-        setDesktopPhoneUI(
-            'kicked',
-            '自習已中斷',
-            '手機翻開超過限制時間',
-            'fas fa-door-open'
-        );
+        setFlipKickoutUI();
 
         addLog(
             '手機翻轉中斷',
@@ -567,12 +552,7 @@
             demoFlipSocket.emit('demo_flip_reset_room', { roomId: demoRoomId });
         }
 
-        setDesktopPhoneUI(
-            'connected',
-            '已重置手機翻轉體驗',
-            '請重新把手機螢幕朝下蓋在桌上',
-            'fas fa-mobile-screen-button'
-        );
+        setFlipConnectedUI();
     }
 
     startDemoBtn.addEventListener('click', () => {
