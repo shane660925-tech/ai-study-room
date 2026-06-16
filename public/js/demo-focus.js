@@ -53,13 +53,21 @@ const warningLight = document.getElementById('warningLight');
     const AWAY_REQUIRED_MS = 1800;
     const DIFF_THRESHOLD = 34;
 
-const SLEEP_DIFF_THRESHOLD = 22;
 const SLEEP_REQUIRED_MS = 1600;
+
+const PERSON_SCORE_THRESHOLD = 0.45;
+const PERSON_DETECT_INTERVAL_MS = 330;
+
+const SLEEP_TOP_DROP_RATIO = 0.14;
+const SLEEP_HEIGHT_SHRINK_RATIO = 0.82;
+const SLEEP_CENTER_DROP_RATIO = 0.12;
 
 const PHONE_REQUIRED_MS = 900;
 const PHONE_SCORE_THRESHOLD = 0.45;
 
 let sleepStartAt = 0;
+let personBaselineBox = null;
+let lastPersonDetectAt = 0;
 
 let phoneDetectStartAt = 0;
 let phoneDetectTimer = null;
@@ -132,6 +140,8 @@ let isLoadingPhoneDetector = false;
             phase = 'calibrating';
 phaseStartAt = performance.now();
 baselineFrame = null;
+personBaselineBox = null;
+lastPersonDetectAt = 0;
 hasCompleted = false;
 awayStartAt = 0;
 sleepStartAt = 0;
@@ -236,6 +246,41 @@ nextFlipBtn.hidden = true;
         return total / (dataA.length / 16);
     }
 
+function getBestPrediction(predictions, className, minScore) {
+    return (predictions || [])
+        .filter(item => item.class === className && item.score >= minScore)
+        .sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function getBoxMetrics(prediction) {
+    const [x, y, w, h] = prediction?.bbox || [0, 0, 0, 0];
+
+    return {
+        x,
+        y,
+        w,
+        h,
+        top: y,
+        bottom: y + h,
+        centerY: y + h / 2,
+        area: w * h
+    };
+}
+
+function isSleepPosture(baselineBox, currentBox) {
+    if (!baselineBox || !currentBox) return false;
+
+    const topDrop = currentBox.top - baselineBox.top;
+    const centerDrop = currentBox.centerY - baselineBox.centerY;
+    const heightRatio = currentBox.h / Math.max(1, baselineBox.h);
+
+    const isTopClearlyLower = topDrop > baselineBox.h * SLEEP_TOP_DROP_RATIO;
+    const isBodyClearlyShorter = heightRatio < SLEEP_HEIGHT_SHRINK_RATIO;
+    const isCenterClearlyLower = centerDrop > baselineBox.h * SLEEP_CENTER_DROP_RATIO;
+
+    return isTopClearlyLower && (isBodyClearlyShorter || isCenterClearlyLower);
+}
+
     function completeAwayDetection() {
         if (hasCompleted) return;
 
@@ -323,87 +368,162 @@ nextFlipBtn.hidden = true;
     }
 }
 
-    function loop() {
-        const now = performance.now();
-        const frame = captureFrame();
+    async function loop() {
+    if (hasCompleted || currentDetectionMode === 'phone') return;
 
-        if (phase === 'calibrating') {
-            const elapsed = now - phaseStartAt;
-            setProgress((elapsed / CALIBRATION_MS) * 100);
+    const now = performance.now();
 
-            if (elapsed >= CALIBRATION_MS && frame) {
-                baselineFrame = frame;
-                phase = 'detectingAway';
-                phaseStartAt = now;
-                awayStartAt = 0;
-
-                if (currentDetectionMode === 'sleep') {
-    setTask(
-        'Step 2',
-        '請做出趴睡或明顯低頭的姿勢。',
-        '請讓姿勢維持約 2 秒。這是模擬學生讀書中途趴下休息或睡著的情境。'
-    );
-} else {
-    setTask(
-        'Step 2',
-        '請離開鏡頭幾秒鐘。',
-        '就像孩子讀書讀到一半暫時離開書桌。系統會等待畫面狀態改變並維持一小段時間。'
-    );
-}
-setProgress(0);
-            }
-        } else if (phase === 'detectingAway' && frame && baselineFrame) {
-    const diff = diffFrames(baselineFrame, frame);
-
-    if (currentDetectionMode === 'sleep') {
-        const isSleepLike = diff > SLEEP_DIFF_THRESHOLD;
-
-        if (isSleepLike) {
-            if (!sleepStartAt) sleepStartAt = now;
-            const sleepElapsed = now - sleepStartAt;
-            setProgress((sleepElapsed / SLEEP_REQUIRED_MS) * 100);
-
-            if (sleepElapsed >= SLEEP_REQUIRED_MS) {
-                completeSleepDetection();
-                return;
-            }
-        } else {
-            sleepStartAt = 0;
-            setProgress(0);
-        }
-
+    if (now - lastPersonDetectAt < PERSON_DETECT_INTERVAL_MS) {
         rafId = requestAnimationFrame(loop);
         return;
     }
 
-    const isAwayLike = diff > DIFF_THRESHOLD;
+    lastPersonDetectAt = now;
 
-    if (isAwayLike) {
-        if (!awayStartAt) awayStartAt = now;
-        const awayElapsed = now - awayStartAt;
-        setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
-
-        if (awayElapsed >= AWAY_REQUIRED_MS) {
-            completeAwayDetection();
-            return;
-        }
-    } else {
-        awayStartAt = 0;
-        setProgress(0);
-    }
-}
+    if (!video.videoWidth || !video.videoHeight) {
         rafId = requestAnimationFrame(loop);
+        return;
     }
+
+    try {
+        await loadPhoneDetector();
+
+        const predictions = await phoneDetector.detect(video);
+        const personPrediction = getBestPrediction(
+            predictions,
+            'person',
+            PERSON_SCORE_THRESHOLD
+        );
+
+        const personBox = personPrediction ? getBoxMetrics(personPrediction) : null;
+
+        if (phase === 'calibrating') {
+            if (!personBox) {
+                phaseStartAt = now;
+                personBaselineBox = null;
+                setProgress(0);
+
+                if (currentDetectionMode === 'sleep') {
+                    setTask(
+                        'Step 2',
+                        '請先坐直並回到鏡頭畫面中。',
+                        '系統需要先看見你的正常讀書姿勢，才可以校準趴睡偵測。'
+                    );
+                } else {
+                    setTask(
+                        'Step 1',
+                        '請先坐在鏡頭前，讓系統校準。',
+                        '系統需要先偵測到你在畫面中，之後才會判斷是否真的離座。'
+                    );
+                }
+
+                rafId = requestAnimationFrame(loop);
+                return;
+            }
+
+            personBaselineBox = personBox;
+
+            const elapsed = now - phaseStartAt;
+            setProgress((elapsed / CALIBRATION_MS) * 100);
+
+            if (elapsed >= CALIBRATION_MS) {
+                phase = 'detectingAway';
+                phaseStartAt = now;
+                awayStartAt = 0;
+                sleepStartAt = 0;
+
+                if (currentDetectionMode === 'sleep') {
+                    setTask(
+                        'Step 2',
+                        '請做出趴睡或明顯低頭的姿勢。',
+                        '請讓身體仍留在鏡頭畫面中，並讓上半身明顯往下，維持約 2 秒。'
+                    );
+                } else {
+                    setTask(
+                        'Step 2',
+                        '請離開鏡頭畫面。',
+                        '這次會改成「連續偵測不到整個人」才算離座。身體只是偏左或偏右，不會直接判定離座。'
+                    );
+                }
+
+                setProgress(0);
+            }
+        } else if (phase === 'detectingAway') {
+            if (currentDetectionMode === 'sleep') {
+                if (!personBox) {
+                    sleepStartAt = 0;
+                    setProgress(0);
+
+                    setTask(
+                        'Step 2',
+                        '請留在鏡頭畫面中再做趴睡姿勢。',
+                        '趴睡偵測需要先看見人還在畫面裡，再判斷上半身是否明顯往下。'
+                    );
+
+                    rafId = requestAnimationFrame(loop);
+                    return;
+                }
+
+                const isSleepLike = isSleepPosture(personBaselineBox, personBox);
+
+                if (isSleepLike) {
+                    if (!sleepStartAt) sleepStartAt = now;
+
+                    const sleepElapsed = now - sleepStartAt;
+                    setProgress((sleepElapsed / SLEEP_REQUIRED_MS) * 100);
+
+                    if (sleepElapsed >= SLEEP_REQUIRED_MS) {
+                        completeSleepDetection();
+                        return;
+                    }
+                } else {
+                    sleepStartAt = 0;
+                    setProgress(0);
+                }
+
+                rafId = requestAnimationFrame(loop);
+                return;
+            }
+
+            if (!personBox) {
+                if (!awayStartAt) awayStartAt = now;
+
+                const awayElapsed = now - awayStartAt;
+                setProgress((awayElapsed / AWAY_REQUIRED_MS) * 100);
+
+                if (awayElapsed >= AWAY_REQUIRED_MS) {
+                    completeAwayDetection();
+                    return;
+                }
+            } else {
+                awayStartAt = 0;
+                setProgress(0);
+            }
+        }
+    } catch (err) {
+        console.warn('person 偵測失敗：', err);
+
+        setTask(
+            'AI Loading',
+            'AI 偵測模型載入中或暫時失敗。',
+            '請稍等幾秒，若一直沒有反應，可以重新整理頁面再試一次。'
+        );
+    }
+
+    rafId = requestAnimationFrame(loop);
+}
 
     function startSleepDetection() {
     currentDetectionMode = 'sleep';
 
     baselineFrame = null;
-    phase = 'calibrating';
-    phaseStartAt = performance.now();
-    awayStartAt = 0;
-    sleepStartAt = 0;
-    hasCompleted = false;
+personBaselineBox = null;
+lastPersonDetectAt = 0;
+phase = 'calibrating';
+phaseStartAt = performance.now();
+awayStartAt = 0;
+sleepStartAt = 0;
+hasCompleted = false;
 
     successOverlay.classList.remove('active');
     resultPanel.hidden = true;
@@ -475,7 +595,8 @@ async function startPhoneDetection() {
     clearPhoneDetectTimer();
 
     baselineFrame = null;
-    phase = 'detectingPhone';
+personBaselineBox = null;
+phase = 'detectingPhone';
     phaseStartAt = performance.now();
     awayStartAt = 0;
     sleepStartAt = 0;
@@ -633,7 +754,9 @@ function completePhoneDetection(phonePrediction) {
         clearPhoneDetectTimer();
         
         baselineFrame = null;
-        phase = 'intro';
+personBaselineBox = null;
+lastPersonDetectAt = 0;
+phase = 'intro';
         phaseStartAt = 0;
         awayStartAt = 0;
         hasCompleted = false;
