@@ -500,14 +500,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             roomCode = accessResult.roomCode;
 
             socket.emit('join_tutor_room', {
-                username: tutorName,
-                name: tutorName,
-                roomId: roomCode,
-                room: roomCode,
-                roomCode: roomCode,
-                deviceType: 'pc',
-                role: 'student'
-            });
+    username: tutorName,
+    name: tutorName,
+    roomId: roomCode,
+    room: roomCode,
+    roomCode: roomCode,
+    deviceType: 'pc',
+    role: 'student',
+    sessionId: localStorage.getItem('studyVerseSessionId') || ''
+});
+
+if (
+    window.StudyVerseSessionGuard &&
+    typeof window.StudyVerseSessionGuard.attachSocketSessionGuard === 'function'
+) {
+    window.StudyVerseSessionGuard.attachSocketSessionGuard();
+}
 
             console.log(`🚪 特約學生已加入房間: ${roomCode} / ${tutorName}`);
 

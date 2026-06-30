@@ -7277,6 +7277,73 @@ if (role === 'student') {
 
             return;
         }
+
+        // 報名制特約教室必須驗證目前登入 session
+        // legacy / standalone 不在這裡硬擋，避免破壞舊流程或線上課程入口
+        if (accessResult.schedule && accessResult.schedule.requires_whitelist === true) {
+            const joinSessionId = String(
+                data.sessionId ||
+                socket.sessionId ||
+                ''
+            ).replace(/[\r\n\t\s]+/g, '').trim();
+
+            const safeUsername = normalizeUsername(username);
+
+            if (!safeUsername || !joinSessionId) {
+                socket.emit('tutor_join_denied', {
+                    success: false,
+                    roomId,
+                    room: roomId,
+                    roomCode: roomId,
+                    message: '登入狀態已失效，請重新登入'
+                });
+
+                socket.emit('force_logout', {
+                    reason: '登入狀態已失效，請重新登入'
+                });
+
+                socket.disconnect(true);
+                return;
+            }
+
+            const { data: sessionUser, error: sessionError } = await supabase
+                .from('users')
+                .select('username, current_session_id, is_blocked')
+                .eq('username', safeUsername)
+                .maybeSingle();
+
+            if (sessionError) throw sessionError;
+
+            if (
+                !sessionUser ||
+                sessionUser.is_blocked ||
+                sessionUser.current_session_id !== joinSessionId
+            ) {
+                console.log("⛔ 特約教室 socket join session 不一致:", {
+                    roomId,
+                    username: safeUsername
+                });
+
+                socket.emit('tutor_join_denied', {
+                    success: false,
+                    roomId,
+                    room: roomId,
+                    roomCode: roomId,
+                    message: '此帳號已在其他裝置登入，請重新登入'
+                });
+
+                socket.emit('force_logout', {
+                    reason: '此帳號已在其他裝置登入，請重新登入'
+                });
+
+                socket.disconnect(true);
+                return;
+            }
+
+            socket.username = safeUsername;
+            socket.sessionId = joinSessionId;
+        }
+
     } catch (guardErr) {
         console.error("❌ 特約教室 socket join 守門失敗:", guardErr);
 
