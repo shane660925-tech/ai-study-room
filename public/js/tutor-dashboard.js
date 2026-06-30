@@ -486,48 +486,58 @@ window.latestAttendanceData = [];
 socket.on('update_attendance', (users) => {
     const currentRoomCode = window.currentTutorRoomCode;
 
+    // 點名資料：保留全部學生紀錄，包含已離開
     window.latestAttendanceData = (users || []).filter(u => {
+        const userRoom =
+            u.roomId ||
+            u.room ||
+            u.roomCode;
 
-    const userRoom =
-        u.roomId ||
-        u.room ||
-        u.roomCode;
+        return (
+            userRoom === currentRoomCode &&
+            u.role === 'student'
+        );
+    });
 
-    return (
-        userRoom === currentRoomCode &&
-        u.role === 'student' &&
-        u.status !== 'OFFLINE' &&
-        !u.leaveTime
+    window.latestAttendanceData.forEach(s =>
+        knownTutorNames.add(getTutorSystemName(s))
     );
-});
 
-    activeStudents = window.latestAttendanceData;
-    activeStudents.forEach(s => knownTutorNames.add(getTutorSystemName(s)));
+    // 注意：這裡不要再改 activeStudents
+    // activeStudents 只由 update_rank / tutor_students_update 控制
+    // 否則點名資料會反過來污染中間學生圖卡
 
-    if (typeof renderStudents === 'function') {
-        renderStudents();
-    } 
-    
     // 如果彈窗目前是開啟狀態，就即時更新裡面的表格
-    if (document.getElementById('attendanceModal') && !document.getElementById('attendanceModal').classList.contains('hidden')) {
+    const attendanceModal = document.getElementById('attendanceModal');
+    if (
+        attendanceModal &&
+        !attendanceModal.classList.contains('hidden')
+    ) {
         renderAttendanceData();
     }
 
     // 保留原本可能有的隱藏表格渲染
     const tableBody = document.getElementById('attendanceTableBody');
     if (!tableBody) return;
-    
-    tableBody.innerHTML = users.map(u => {
-    const displayName = getTutorDisplayName(u);
 
-    return `
-        <tr class="border-b border-amber-500/20">
-            <td class="p-2 text-white">${escapeTutorHtml(displayName)}</td>
-            <td class="p-2 text-green-400">${escapeTutorHtml(u.joinTime || '-')}</td>
-            <td class="p-2 text-red-400">${escapeTutorHtml(u.leaveTime || '上課中')}</td>
-        </tr>
-    `;
-}).join('');
+    tableBody.innerHTML = window.latestAttendanceData.map(u => {
+        const displayName = getTutorDisplayName(u);
+        const isOnline =
+            u.status !== 'OFFLINE' &&
+            !u.leaveTime;
+
+        const leaveText = isOnline
+            ? '上課中'
+            : (u.leaveTime || '已離開');
+
+        return `
+            <tr class="border-b border-amber-500/20">
+                <td class="p-2 text-white">${escapeTutorHtml(displayName)}</td>
+                <td class="p-2 text-green-400">${escapeTutorHtml(u.joinTime || '-')}</td>
+                <td class="p-2 text-red-400">${escapeTutorHtml(leaveText)}</td>
+            </tr>
+        `;
+    }).join('');
 });
 
 // ==========================================
@@ -684,11 +694,17 @@ function renderAttendanceData() {
     }
 
     tbody.innerHTML = data.map(u => {
-        // 判斷學生是否還在線上 (沒有離開時間就視為上課中)
-        const isOnline = !u.leaveTime || u.leaveTime === '上課中' || u.leaveTime === '';
-        
-        const statusClass = isOnline ? 'text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded' : 'text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded';
-        const statusText = isOnline ? '🟢 持續專注中' : `🔴 離線 (${u.leaveTime})`;
+        const isOnline =
+    u.status !== 'OFFLINE' &&
+    (!u.leaveTime || u.leaveTime === '上課中' || u.leaveTime === '');
+
+const statusClass = isOnline
+    ? 'text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded'
+    : 'text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded';
+
+const statusText = isOnline
+    ? '🟢 在線'
+    : `🔴 已離開 (${u.leaveTime || '未知時間'})`;
         
         const displayName = getTutorDisplayName(u);
 const avatarSeed = encodeURIComponent(displayName);

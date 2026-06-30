@@ -6603,19 +6603,66 @@ function getTutorAttendance(roomId) {
     return Array.from(tutorAttendanceByRoom.get(roomId).values());
 }
 
-function broadcastTutorAttendance(roomId) {
-    const list = getTutorAttendance(roomId);
-
-    const activeList = list.filter(u =>
-        !u.leaveTime &&
-        u.status !== 'OFFLINE'
+function getActiveTutorStudents(roomId) {
+    return getTutorAttendance(roomId).filter(u =>
+        u.role === 'student' &&
+        u.status !== 'OFFLINE' &&
+        !u.leaveTime
     );
+}
+
+function broadcastTutorAttendance(roomId) {
+    if (!roomId) return;
+
+    const list = getTutorAttendance(roomId);
+    const activeList = getActiveTutorStudents(roomId);
 
     // 點名：保留全部，包含已離開
     io.to(roomId).emit('update_attendance', list);
 
     // 中間學生圖卡：只顯示在線學生
     io.to(roomId).emit('update_rank', activeList);
+
+    // 教師端也有監聽 tutor_students_update，所以這裡要同步送同一份在線名單
+    io.to(roomId).emit('tutor_students_update', activeList);
+}
+
+function markTutorStudentOffline(roomId, username, reason = 'LEFT') {
+    const safeRoomId = String(roomId || '').trim();
+    const safeUsername = normalizeUsername(username);
+
+    if (!safeRoomId || !safeUsername) {
+        return false;
+    }
+
+    if (!tutorAttendanceByRoom.has(safeRoomId)) {
+        return false;
+    }
+
+    const roomMap = tutorAttendanceByRoom.get(safeRoomId);
+    const student = roomMap.get(safeUsername);
+
+    if (!student) {
+        return false;
+    }
+
+    if (!student.leaveTime) {
+        student.leaveTime = getTaiwanTimeString();
+    }
+
+    student.status = 'OFFLINE';
+    student.leaveReason = reason;
+    student.roomId = safeRoomId;
+    student.room = safeRoomId;
+    student.roomCode = safeRoomId;
+
+    roomMap.set(safeUsername, student);
+
+    broadcastTutorAttendance(safeRoomId);
+
+    console.log(`[特約教室] ${safeUsername} 已離開 ${safeRoomId}，原因：${reason}`);
+
+    return true;
 }
 // 儲存特約教室的課表設定
 const tutorRoomSettings = new Map(); 
@@ -8349,18 +8396,7 @@ socket.on('admin_action', (data) => {
         roomCode: targetRoom
     };
 
-    if (tutorAttendanceByRoom.has(targetRoom) && studentName) {
-        const roomMap = tutorAttendanceByRoom.get(targetRoom);
-        const student = roomMap.get(studentName);
-
-        if (student) {
-            student.status = 'OFFLINE';
-            student.leaveTime = getTaiwanTimeString();
-            roomMap.set(studentName, student);
-        }
-
-        broadcastTutorAttendance(targetRoom);
-    }
+    markTutorStudentOffline(targetRoom, studentName, 'FLIP_FAILED');
 
     io.to(targetRoom).emit('flip_failed', normalizedData);
 
@@ -8393,6 +8429,25 @@ socket.on('admin_action', (data) => {
         if (socket.id === userDevices.mobile) userDevices.mobile = null;
         updateTutorStatus(socket.username, socket.roomId);
     }
+
+    // 特約教室學生端斷線：更新特約教室自己的出席資料
+const tutorDisconnectRoom =
+    socket.currentTutorRoom ||
+    socket.roomId ||
+    socket.currentRoom;
+
+if (
+    socket.role === 'student' &&
+    socket.deviceType !== 'mobile' &&
+    socket.username &&
+    tutorDisconnectRoom
+) {
+    markTutorStudentOffline(
+        tutorDisconnectRoom,
+        socket.username,
+        'DISCONNECT'
+    );
+}
 
     if (user) {
         const username = user.name;
