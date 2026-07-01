@@ -371,19 +371,56 @@ async function verifyTutorRoomAccessBeforeJoin(roomCode, studentName, isStandalo
     }
 
     try {
-        const res = await fetch(
-            `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`
-        );
+        const sessionId =
+    localStorage.getItem('studyVerseSessionId') ||
+    '';
+
+const res = await fetch(
+    `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`,
+    {
+        headers: {
+            'X-StudyVerse-Session-Id': sessionId
+        }
+    }
+);
 
         const data = await res.json();
 
         if (!res.ok || !data.success || !data.schedule) {
-            alert(data.error || '你目前無法進入此特約教室。');
-            window.location.href = '/index.html';
-            return {
-                ok: false
-            };
+    if (data.forceLogout === true) {
+        if (
+            window.StudyVerseSessionGuard &&
+            typeof window.StudyVerseSessionGuard.forceLogoutToHome === 'function'
+        ) {
+            window.StudyVerseSessionGuard.forceLogoutToHome(
+                data.error || '此帳號已在其他裝置登入，請重新登入'
+            );
+        } else {
+            alert(data.error || '此帳號已在其他裝置登入，請重新登入');
+
+            localStorage.removeItem('studyVerseUser');
+            localStorage.removeItem('studyVerseSessionId');
+            localStorage.removeItem('studyVerseRole');
+            localStorage.removeItem('username');
+            localStorage.removeItem('studyverse_username');
+            localStorage.removeItem('currentUser');
+
+            sessionStorage.clear();
+            window.location.href = '/';
         }
+
+        return {
+            ok: false
+        };
+    }
+
+    alert(data.error || '你目前無法進入此特約教室。');
+    window.location.href = '/index.html';
+
+    return {
+        ok: false
+    };
+}
 
         const schedule = data.schedule;
         const actualRoomCode = schedule.room_code;

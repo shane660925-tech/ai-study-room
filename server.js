@@ -41,7 +41,7 @@ const server = http.createServer(app);
 app.use((req, res, next) => {
     // 允許跨網域請求
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-StudyVerse-Session-Id');
     
     // 👇 [關鍵修改] 允許被 Chrome Extension 嵌入
     // 移除預設的拒絕嵌入標頭
@@ -1647,6 +1647,66 @@ async function findNextAvailableTutorScheduleForProgram(programId) {
     return nextSchedule;
 }
 
+function normalizeSessionId(value) {
+    return String(value || '')
+        .replace(/[\r\n\t\s]+/g, '')
+        .trim();
+}
+
+async function verifyCurrentSessionForTutorCodeLookup(username, sessionId) {
+    const safeUsername = normalizeUsername(username);
+    const safeSessionId = normalizeSessionId(sessionId);
+
+    if (!safeUsername || !safeSessionId) {
+        return {
+            ok: false,
+            status: 401,
+            error: '登入狀態已失效，請重新登入',
+            forceLogout: true
+        };
+    }
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('username, current_session_id, is_blocked')
+        .eq('username', safeUsername)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!user) {
+        return {
+            ok: false,
+            status: 404,
+            error: '找不到使用者',
+            forceLogout: true
+        };
+    }
+
+    if (user.is_blocked) {
+        return {
+            ok: false,
+            status: 403,
+            error: '此帳號已被停用，無法進入特約教室',
+            forceLogout: true
+        };
+    }
+
+    if (normalizeSessionId(user.current_session_id) !== safeSessionId) {
+        return {
+            ok: false,
+            status: 409,
+            error: '此帳號已在其他裝置登入，請重新登入',
+            forceLogout: true
+        };
+    }
+
+    return {
+        ok: true,
+        user
+    };
+}
+
 async function verifyTutorScheduleWhitelistAccess(schedule, username) {
     if (!schedule || schedule.requires_whitelist !== true) {
         return {
@@ -1655,12 +1715,27 @@ async function verifyTutorScheduleWhitelistAccess(schedule, username) {
     }
 
     if (!username) {
-        return {
-            ok: false,
-            status: 401,
-            error: '此特約教室需要登入後才能進入'
-        };
-    }
+    return res.status(401).json({
+        success: false,
+        error: '此特約教室需要登入後才能進入',
+        forceLogout: true
+    });
+}
+
+const sessionCheck = await verifyCurrentSessionForTutorCodeLookup(
+    username,
+    sessionId
+);
+
+if (!sessionCheck.ok) {
+    return res.status(sessionCheck.status || 401).json({
+        success: false,
+        error: sessionCheck.error,
+        forceLogout: sessionCheck.forceLogout === true
+    });
+}
+
+const { user, access } = await getTutorEntryUserAccess(username);
 
     const { user, access } = await getTutorEntryUserAccess(username);
 
@@ -1731,11 +1806,19 @@ async function verifyTutorScheduleWhitelistAccess(schedule, username) {
 app.get('/api/tutor-schedules/by-code/:roomCode', async (req, res) => {
     try {
         const roomCode = String(req.params.roomCode || '').trim().toUpperCase();
-        const username = String(req.query.username || '').trim();
+const username = normalizeUsername(req.query.username);
+const sessionId = normalizeSessionId(
+    req.headers['x-studyverse-session-id'] ||
+    req.query.sessionId ||
+    ''
+);
 
-        if (!roomCode) {
-            return res.status(400).json({ error: '缺少 roomCode' });
-        }
+if (!roomCode) {
+    return res.status(400).json({
+        success: false,
+        error: '缺少 roomCode'
+    });
+}
 
         // A. 先找舊流程 / 實際房間代碼
         const { data: directSchedule, error: directScheduleError } = await supabase
@@ -1778,24 +1861,39 @@ app.get('/api/tutor-schedules/by-code/:roomCode', async (req, res) => {
                 };
             }
 
-            const accessCheck = await verifyTutorScheduleWhitelistAccess(
-                computedSchedule,
-                username
-            );
+            if (computedSchedule.requires_whitelist === true) {
+    const sessionCheck = await verifyCurrentSessionForTutorCodeLookup(
+        username,
+        sessionId
+    );
 
-            if (!accessCheck.ok) {
-                return res.status(accessCheck.status || 403).json({
-                    success: false,
-                    error: accessCheck.error,
-                    accessLevel: accessCheck.accessLevel
-                });
-            }
+    if (!sessionCheck.ok) {
+        return res.status(sessionCheck.status || 401).json({
+            success: false,
+            error: sessionCheck.error,
+            forceLogout: sessionCheck.forceLogout === true
+        });
+    }
+}
 
-            return res.json({
-                success: true,
-                resolved_from: 'schedule_code',
-                schedule: computedSchedule
-            });
+const accessCheck = await verifyTutorScheduleWhitelistAccess(
+    computedSchedule,
+    username
+);
+
+if (!accessCheck.ok) {
+    return res.status(accessCheck.status || 403).json({
+        success: false,
+        error: accessCheck.error,
+        accessLevel: accessCheck.accessLevel
+    });
+}
+
+return res.json({
+    success: true,
+    resolved_from: 'schedule_code',
+    schedule: computedSchedule
+});
         }
 
         // B. 找新流程：週期特約教室課程代碼
