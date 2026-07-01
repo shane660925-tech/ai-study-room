@@ -1715,27 +1715,12 @@ async function verifyTutorScheduleWhitelistAccess(schedule, username) {
     }
 
     if (!username) {
-    return res.status(401).json({
-        success: false,
-        error: '此特約教室需要登入後才能進入',
-        forceLogout: true
-    });
-}
-
-const sessionCheck = await verifyCurrentSessionForTutorCodeLookup(
-    username,
-    sessionId
-);
-
-if (!sessionCheck.ok) {
-    return res.status(sessionCheck.status || 401).json({
-        success: false,
-        error: sessionCheck.error,
-        forceLogout: sessionCheck.forceLogout === true
-    });
-}
-
-const { user, access } = await getTutorEntryUserAccess(username);
+        return {
+            ok: false,
+            status: 401,
+            error: '此特約教室需要登入後才能進入'
+        };
+    }
 
     const { user, access } = await getTutorEntryUserAccess(username);
 
@@ -1915,13 +1900,27 @@ return res.json({
         }
 
         if (!username) {
-            return res.status(401).json({
-                success: false,
-                error: '此特約教室需要登入後才能進入'
-            });
-        }
+    return res.status(401).json({
+        success: false,
+        error: '此特約教室需要登入後才能進入',
+        forceLogout: true
+    });
+}
 
-        const { user, access } = await getTutorEntryUserAccess(username);
+const sessionCheck = await verifyCurrentSessionForTutorCodeLookup(
+    username,
+    sessionId
+);
+
+if (!sessionCheck.ok) {
+    return res.status(sessionCheck.status || 401).json({
+        success: false,
+        error: sessionCheck.error,
+        forceLogout: sessionCheck.forceLogout === true
+    });
+}
+
+const { user, access } = await getTutorEntryUserAccess(username);
 
         if (!user) {
             return res.status(404).json({
