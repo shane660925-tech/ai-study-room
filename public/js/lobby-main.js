@@ -2057,20 +2057,58 @@ const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
     }
 
     try {
-        const username =
+       const username =
     localStorage.getItem('studyVerseUser') ||
     localStorage.getItem('username') ||
     '';
 
-const res = await fetch(
-    `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`
-);
-        const data = await res.json();
+const sessionId =
+    localStorage.getItem('studyVerseSessionId') ||
+    '';
 
-        if (!res.ok || !data.success || !data.schedule) {
-            alert(data.error || '找不到此特約教室，請確認代碼是否正確。');
-            return;
+if (!username || !sessionId) {
+    alert('登入狀態已失效，請重新登入');
+    localStorage.removeItem('studyVerseUser');
+    localStorage.removeItem('studyVerseSessionId');
+    localStorage.removeItem('studyVerseRole');
+    localStorage.removeItem('username');
+    localStorage.removeItem('studyverse_username');
+    localStorage.removeItem('currentUser');
+    sessionStorage.clear();
+    window.location.href = '/';
+    return;
+}
+
+const res = await fetch(
+    `/api/tutor-schedules/by-code/${encodeURIComponent(roomCode)}?username=${encodeURIComponent(username)}`,
+    {
+        headers: {
+            'X-StudyVerse-Session-Id': sessionId
         }
+    }
+);
+
+const data = await res.json();
+
+if (!res.ok || !data.success || !data.schedule) {
+    if (data.forceLogout === true) {
+        alert(data.error || '此帳號已在其他裝置登入，請重新登入');
+
+        localStorage.removeItem('studyVerseUser');
+        localStorage.removeItem('studyVerseSessionId');
+        localStorage.removeItem('studyVerseRole');
+        localStorage.removeItem('username');
+        localStorage.removeItem('studyverse_username');
+        localStorage.removeItem('currentUser');
+
+        sessionStorage.clear();
+        window.location.href = '/';
+        return;
+    }
+
+    alert(data.error || '找不到此特約教室，請確認代碼是否正確。');
+    return;
+}
 
         const schedule = data.schedule;
         const actualRoomCode = schedule.room_code;
