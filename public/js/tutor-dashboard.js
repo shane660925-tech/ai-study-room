@@ -1283,30 +1283,36 @@ function updateTimerUI(time, label, status, progress) {
     const progressBar = document.getElementById('timerProgressBar');
     const timerContainer = document.getElementById('tutorTimerContainer');
 
-    if (timerDisplay) timerDisplay.innerText = time;
+    if (timerDisplay) {
+    timerDisplay.innerText = time;
+
+    timerDisplay.className = String(time || '').includes('天')
+        ? 'text-[2rem] font-mono font-black text-white leading-none tracking-wider whitespace-nowrap'
+        : 'text-3xl font-mono font-black text-white leading-none tracking-wider whitespace-nowrap';
+}
     if (periodLabel) periodLabel.innerText = label;
 
     let colorClass = {
-        badge: "text-[10px] bg-amber-900/30 text-amber-400 px-2 py-1 rounded-md border border-amber-500/30",
+        badge: "shrink-0 whitespace-nowrap leading-none text-[10px] bg-amber-900/30 text-amber-400 px-2.5 py-1 rounded-md border border-amber-500/30",
         bar: "bg-amber-500 h-full transition-all duration-1000",
         box: "bg-slate-900/80 border border-amber-500/30 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
     };
 
     if (status === "尚未開始" || status === "未開始") {
         colorClass = {
-            badge: "text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded-md border border-red-500/30",
+            badge: "shrink-0 whitespace-nowrap leading-none text-[10px] bg-red-900/30 text-red-400 px-2.5 py-1 rounded-md border border-red-500/30",
             bar: "bg-red-500 h-full transition-all duration-1000",
             box: "bg-slate-900/80 border border-red-500/40 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
         };
     } else if (status === "休息中") {
         colorClass = {
-            badge: "text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-md border border-green-500/30",
+            badge: "shrink-0 whitespace-nowrap leading-none text-[10px] bg-green-900/30 text-green-400 px-2.5 py-1 rounded-md border border-green-500/30",
             bar: "bg-green-500 h-full transition-all duration-1000",
             box: "bg-slate-900/80 border border-green-500/40 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
         };
     } else if (status === "已完成") {
         colorClass = {
-            badge: "text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-600",
+            badge: "shrink-0 whitespace-nowrap leading-none text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md border border-slate-600",
             bar: "bg-slate-500 h-full transition-all duration-1000",
             box: "bg-slate-900/80 border border-slate-600 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm"
         };
