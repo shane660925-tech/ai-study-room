@@ -43,36 +43,35 @@
 
         <div class="p-6 space-y-6 flex-1 overflow-y-auto scroll-hide">
             
-            <div class="flex flex-col gap-3">
-    <div class="flex items-start gap-3 min-w-0">
-        <div class="bg-amber-500/20 p-2 rounded-lg shrink-0">
-            <i class="fas fa-hourglass-half text-amber-500 animate-pulse"></i>
-        </div>
-
-        <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between gap-2 mb-2">
-                <p id="currentPeriodLabel" class="text-[10px] text-amber-500/70 uppercase font-bold tracking-widest truncate">
-                    等待排程中
-                </p>
-
-                <span id="timerStatusBadge" class="shrink-0 whitespace-nowrap text-[10px] bg-slate-800 text-slate-400 px-2.5 py-1 rounded-md border border-slate-700 leading-none">
-                    尚未開始
-                </span>
+            <div id="tutorTimerContainer" class="bg-slate-900/80 border border-amber-500/30 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-sm">
+    <div class="flex flex-col gap-3">
+        <div class="flex items-start gap-3 min-w-0">
+            <div class="bg-amber-500/20 p-2 rounded-lg shrink-0">
+                <i class="fas fa-hourglass-half text-amber-500 animate-pulse"></i>
             </div>
 
-            <h2 id="timerDisplay" class="text-3xl font-mono font-black text-white leading-none tracking-wider whitespace-nowrap">
-                00:00
-            </h2>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <p id="currentPeriodLabel" class="text-[10px] text-amber-500/70 uppercase font-bold tracking-widest truncate">
+                        等待排程中
+                    </p>
+
+                    <span id="timerStatusBadge" class="shrink-0 whitespace-nowrap text-[10px] bg-slate-800 text-slate-400 px-2.5 py-1 rounded-md border border-slate-700 leading-none">
+                        尚未開始
+                    </span>
+                </div>
+
+                <h2 id="timerDisplay" class="text-3xl font-mono font-black text-white leading-none tracking-wider whitespace-nowrap">
+                    00:00
+                </h2>
+            </div>
         </div>
     </div>
-</div>
-                
-                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div id="timerProgressBar" class="bg-amber-500 h-full transition-all duration-1000" style="width: 0%"></div>
-                </div>
-            </div>
 
-            <div>
+    <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+        <div id="timerProgressBar" class="bg-amber-500 h-full transition-all duration-1000" style="width: 0%"></div>
+    </div>
+</div>
                 <label class="block text-xs font-bold text-amber-500/70 mb-2 uppercase tracking-widest">黑板公告更新</label>
                 <textarea id="announcementInput" class="w-full bg-black/50 border border-amber-500/30 rounded-lg p-3 text-sm focus:outline-none focus:border-amber-500 text-amber-50" rows="3" placeholder="輸入今日作業或小考內容..."></textarea>
                 <button onclick="updateBlackboard()" class="w-full mt-2 bg-amber-600 hover:bg-amber-500 py-2.5 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] active:scale-95 uppercase text-white">同步至學生端</button>
@@ -194,6 +193,6 @@
         };
     </script>
 
-    <script src="/js/tutor-dashboard.js?v=tutor-violation-20260612-3"></script>
+    <script src="/js/tutor-dashboard.js?v=tutor-violation-20260612-3"></script><script src="/js/tutor-dashboard.js?v=tutor-layout-fix-20260703-1"></script>
 </body>
 </html>
