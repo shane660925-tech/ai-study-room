@@ -278,6 +278,25 @@ window.copyDashboardRoomCode = function() {
     }
 };
 
+function formatTutorTimerDisplay(seconds) {
+    const safeSeconds = Math.max(0, Number(seconds || 0));
+
+    const days = Math.floor(safeSeconds / 86400);
+    const hours = Math.floor((safeSeconds % 86400) / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const secs = safeSeconds % 60;
+
+    if (days > 0) {
+        return `${days}天 ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 // ==========================================
 // 1. 系統時鐘與日誌功能
 // ==========================================
@@ -365,8 +384,7 @@ socket.on('tutor_timer_sync', (state) => {
 
     const remaining = Number(state.remainingSeconds || 0);
     const total = Number(state.totalSeconds || 1);
-    const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
-    const secs = (remaining % 60).toString().padStart(2, '0');
+    const timerText = formatTutorTimerDisplay(remaining);
 
     let label = '準備上課';
     let status = '未開始';
@@ -389,7 +407,7 @@ socket.on('tutor_timer_sync', (state) => {
         ? 0
         : Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
 
-    updateTimerUI(`${mins}:${secs}`, label, status, progress);
+    updateTimerUI(timerText, label, status, progress);
 });
 
 socket.on('disconnect', () => {
@@ -1140,14 +1158,22 @@ function updateDashboardUI(data) {
             (periods * periodTime) +
             ((periods > 1) ? (periods - 1) * restTime : 0);
 
-        const [hours, minutes] = displayStartTime.split(':').map(Number);
-        const date = new Date();
-        date.setHours(hours, minutes, 0, 0);
-        date.setMinutes(date.getMinutes() + totalMinutes);
+        const scheduleDateText =
+    data.scheduled_date ||
+    data.scheduledDate ||
+    new Date().toLocaleDateString('en-CA', {
+        timeZone: 'Asia/Taipei'
+    });
 
-        const endHours = String(date.getHours()).padStart(2, '0');
-        const endMins = String(date.getMinutes()).padStart(2, '0');
-        const endTime = `${endHours}:${endMins}`;
+const date = new Date(`${scheduleDateText}T${displayStartTime}:00+08:00`);
+date.setMinutes(date.getMinutes() + totalMinutes);
+
+const endTime = date.toLocaleTimeString('zh-TW', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Taipei'
+});
 
         window.currentScheduleText =
     `本次課表為 ${displayStartTime}~${endTime}，分 ${periods} 節課，每節課 ${periodTime} 分鐘，每次休息 ${restTime} 分鐘`;
@@ -1158,8 +1184,13 @@ window.currentScheduleData = {
     periodTime,
     restTime,
     classMinutes: periodTime,
+    class_minutes: periodTime,
     restMinutes: restTime,
+    rest_minutes: restTime,
     startTime: displayStartTime,
+    start_time: displayStartTime,
+    scheduledDate: scheduleDateText,
+    scheduled_date: scheduleDateText,
     endTime: endTime,
     scheduleText: window.currentScheduleText,
     message: window.currentScheduleText

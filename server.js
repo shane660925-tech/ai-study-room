@@ -6769,29 +6769,65 @@ function getTutorRoomTimeState(roomId) {
     const schedule = tutorRoomSettings.get(roomId);
     if (!schedule) return null;
 
-    const now = new Date();
+    const normalizedSchedule = {
+        ...schedule,
+        start_time:
+            schedule.start_time ||
+            schedule.startTime ||
+            '08:00',
+        scheduled_date:
+            schedule.scheduled_date ||
+            schedule.scheduledDate ||
+            null
+    };
 
-// Render 使用 UTC，這裡強制用台灣時間 UTC+8 來計算特約教室課表
-const taiwanNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const startAt = buildTutorScheduleStartAt(normalizedSchedule);
 
-const start = new Date(taiwanNow);
-const [h, m] = String(schedule.startTime || '08:00').split(':');
-start.setHours(parseInt(h), parseInt(m), 0, 0);
+    if (!startAt) {
+        console.warn('[TutorTimer] 無法計算開始時間:', {
+            roomId,
+            schedule: normalizedSchedule
+        });
+        return null;
+    }
 
-    const elapsedSeconds = Math.floor((taiwanNow.getTime() - start.getTime()) / 1000);
-    const classSecs = Number(schedule.classMinutes || 50) * 60;
-    const restSecs = Number(schedule.restMinutes || 10) * 60;
+    const classSecs = Number(
+        schedule.classMinutes ||
+        schedule.class_minutes ||
+        schedule.periodTime ||
+        50
+    ) * 60;
+
+    const restSecs = Number(
+        schedule.restMinutes ||
+        schedule.rest_minutes ||
+        schedule.restTime ||
+        10
+    ) * 60;
+
     const periods = Number(schedule.periods || 1);
 
-    // 總時間 = 所有上課時間 + 中間休息時間，不包含最後一次休息
-    const totalSecs = (periods * classSecs) + ((periods - 1) * restSecs);
+    const totalSecs =
+        (periods * classSecs) +
+        ((periods > 1) ? (periods - 1) * restSecs : 0);
+
+    const now = new Date();
+    const elapsedSeconds = Math.floor(
+        (now.getTime() - startAt.getTime()) / 1000
+    );
+
+    const endAt = new Date(startAt.getTime() + totalSecs * 1000);
 
     if (elapsedSeconds < 0) {
         return {
             phase: 'WAITING',
             remainingSeconds: Math.abs(elapsedSeconds),
-            totalSeconds: classSecs,
-            period: 1
+            totalSeconds: Math.abs(elapsedSeconds),
+            period: 1,
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+            scheduledDate: normalizedSchedule.scheduled_date,
+            startTime: normalizedSchedule.start_time
         };
     }
 
@@ -6800,7 +6836,11 @@ start.setHours(parseInt(h), parseInt(m), 0, 0);
             phase: 'ENDED',
             remainingSeconds: 0,
             totalSeconds: classSecs,
-            period: periods
+            period: periods,
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+            scheduledDate: normalizedSchedule.scheduled_date,
+            startTime: normalizedSchedule.start_time
         };
     }
 
@@ -6815,13 +6855,16 @@ start.setHours(parseInt(h), parseInt(m), 0, 0);
                 phase: 'CLASS',
                 remainingSeconds: classEnd - elapsedSeconds,
                 totalSeconds: classSecs,
-                period
+                period,
+                startAt: startAt.toISOString(),
+                endAt: endAt.toISOString(),
+                scheduledDate: normalizedSchedule.scheduled_date,
+                startTime: normalizedSchedule.start_time
             };
         }
 
         cursor = classEnd;
 
-        // 最後一堂課後不再進入休息
         if (period < periods) {
             const restStart = cursor;
             const restEnd = restStart + restSecs;
@@ -6831,7 +6874,11 @@ start.setHours(parseInt(h), parseInt(m), 0, 0);
                     phase: 'REST',
                     remainingSeconds: restEnd - elapsedSeconds,
                     totalSeconds: restSecs,
-                    period
+                    period,
+                    startAt: startAt.toISOString(),
+                    endAt: endAt.toISOString(),
+                    scheduledDate: normalizedSchedule.scheduled_date,
+                    startTime: normalizedSchedule.start_time
                 };
             }
 
@@ -6843,7 +6890,11 @@ start.setHours(parseInt(h), parseInt(m), 0, 0);
         phase: 'ENDED',
         remainingSeconds: 0,
         totalSeconds: classSecs,
-        period: periods
+        period: periods,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        scheduledDate: normalizedSchedule.scheduled_date,
+        startTime: normalizedSchedule.start_time
     };
 }
 // ==========================================
@@ -7212,16 +7263,40 @@ io.to(targetRoom).emit('receive_tutor_schedule', normalizedScheduleData);
     tutorSchedules[roomId] = normalizedScheduleData;
 
     const startTime = data.startTime || data.start_time;
-    const classMinutes = Number(data.classMinutes || data.class_minutes || data.periodTime || 50);
-    const restMinutes = Number(data.restMinutes || data.rest_minutes || data.restTime || 10);
-    const periods = Number(data.periods || 1);
+const scheduledDate =
+    data.scheduledDate ||
+    data.scheduled_date ||
+    data.date ||
+    null;
 
-    tutorRoomSettings.set(roomId, {
-        startTime,
-        classMinutes,
-        restMinutes,
-        periods
-    });
+const classMinutes = Number(
+    data.classMinutes ||
+    data.class_minutes ||
+    data.periodTime ||
+    50
+);
+
+const restMinutes = Number(
+    data.restMinutes ||
+    data.rest_minutes ||
+    data.restTime ||
+    10
+);
+
+const periods = Number(data.periods || 1);
+
+tutorRoomSettings.set(roomId, {
+    ...normalizedScheduleData,
+    startTime,
+    start_time: startTime,
+    scheduledDate,
+    scheduled_date: scheduledDate,
+    classMinutes,
+    class_minutes: classMinutes,
+    restMinutes,
+    rest_minutes: restMinutes,
+    periods
+});
 
     io.to(roomId).emit('receive_tutor_schedule', normalizedScheduleData);
     io.to(roomId).emit('sync_schedule_to_students', normalizedScheduleData);
