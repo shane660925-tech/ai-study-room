@@ -786,6 +786,59 @@ function getTutorScheduleTotalMinutes(schedule) {
     );
 }
 
+const TUTOR_ENTRY_OPEN_MINUTES = 5;
+
+function getTutorScheduleEntryWindow(schedule, now = new Date()) {
+    const startAt = buildTutorScheduleStartAt(schedule);
+
+    if (!startAt) {
+        return {
+            status: 'invalid',
+            error: '此特約教室缺少上課時間設定'
+        };
+    }
+
+    const totalMinutes = getTutorScheduleTotalMinutes(schedule);
+    const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+    const openAt = new Date(startAt.getTime() - TUTOR_ENTRY_OPEN_MINUTES * 60 * 1000);
+
+    if (now > endAt) {
+        return {
+            status: 'ended',
+            startAt,
+            endAt,
+            openAt,
+            startAtIso: startAt.toISOString(),
+            endAtIso: endAt.toISOString(),
+            openAtIso: openAt.toISOString(),
+            error: '此特約教室已結束'
+        };
+    }
+
+    if (now < openAt) {
+        return {
+            status: 'too_early',
+            startAt,
+            endAt,
+            openAt,
+            startAtIso: startAt.toISOString(),
+            endAtIso: endAt.toISOString(),
+            openAtIso: openAt.toISOString(),
+            error: '這堂特約教室尚未開放，請於上課前 5 分鐘再進入。'
+        };
+    }
+
+    return {
+        status: 'open',
+        startAt,
+        endAt,
+        openAt,
+        startAtIso: startAt.toISOString(),
+        endAtIso: endAt.toISOString(),
+        openAtIso: openAt.toISOString()
+    };
+}
+
 function getTutorProgramAccessFromUser(user) {
     if (!user) {
         return {
@@ -1816,35 +1869,43 @@ if (!roomCode) {
         if (directScheduleError) throw directScheduleError;
 
         if (directSchedule) {
-            const startAt = buildTutorScheduleStartAt(directSchedule);
-            const totalMinutes = getTutorScheduleTotalMinutes(directSchedule);
-
             let computedSchedule = directSchedule;
 
-            if (startAt) {
-                const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+const entryWindow = getTutorScheduleEntryWindow(directSchedule);
 
-                if (new Date() > endAt) {
-                    await supabase
-                        .from('tutor_schedules')
-                        .update({
-                            status: 'ended',
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', directSchedule.id);
+if (entryWindow.status === 'ended') {
+    await supabase
+        .from('tutor_schedules')
+        .update({
+            status: 'ended',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', directSchedule.id);
 
-                    return res.status(410).json({
-                        success: false,
-                        error: '此特約教室已結束'
-                    });
-                }
+    return res.status(410).json({
+        success: false,
+        error: entryWindow.error || '此特約教室已結束'
+    });
+}
 
-                computedSchedule = {
-                    ...directSchedule,
-                    computed_start_at: startAt.toISOString(),
-                    computed_end_at: endAt.toISOString()
-                };
-            }
+if (entryWindow.status === 'too_early') {
+    return res.status(403).json({
+        success: false,
+        error: entryWindow.error,
+        entry_open_at: entryWindow.openAtIso,
+        computed_start_at: entryWindow.startAtIso,
+        computed_end_at: entryWindow.endAtIso
+    });
+}
+
+if (entryWindow.status === 'open') {
+    computedSchedule = {
+        ...directSchedule,
+        computed_start_at: entryWindow.startAtIso,
+        computed_end_at: entryWindow.endAtIso,
+        entry_open_at: entryWindow.openAtIso
+    };
+}
 
             if (computedSchedule.requires_whitelist === true) {
     const sessionCheck = await verifyCurrentSessionForTutorCodeLookup(
@@ -1960,19 +2021,58 @@ const { user, access } = await getTutorEntryUserAccess(username);
 
         const nextSchedule = await findNextAvailableTutorScheduleForProgram(program.id);
 
-        if (!nextSchedule) {
-            return res.status(404).json({
-                success: false,
-                error: '此特約教室目前沒有可進入的上課房間'
-            });
-        }
+if (!nextSchedule) {
+    return res.status(404).json({
+        success: false,
+        error: '此特約教室目前沒有可進入的上課房間'
+    });
+}
 
-        return res.json({
-            success: true,
-            resolved_from: 'program_code',
-            program,
-            schedule: nextSchedule
-        });
+const nextEntryWindow = getTutorScheduleEntryWindow(nextSchedule);
+
+if (nextEntryWindow.status === 'ended') {
+    if (nextSchedule.id) {
+        await supabase
+            .from('tutor_schedules')
+            .update({
+                status: 'ended',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', nextSchedule.id);
+    }
+
+    return res.status(410).json({
+        success: false,
+        error: '此特約教室已結束'
+    });
+}
+
+if (nextEntryWindow.status === 'too_early') {
+    return res.status(403).json({
+        success: false,
+        error: nextEntryWindow.error,
+        entry_open_at: nextEntryWindow.openAtIso,
+        computed_start_at: nextEntryWindow.startAtIso,
+        computed_end_at: nextEntryWindow.endAtIso
+    });
+}
+
+const finalNextSchedule =
+    nextEntryWindow.status === 'open'
+        ? {
+            ...nextSchedule,
+            computed_start_at: nextEntryWindow.startAtIso,
+            computed_end_at: nextEntryWindow.endAtIso,
+            entry_open_at: nextEntryWindow.openAtIso
+        }
+        : nextSchedule;
+
+return res.json({
+    success: true,
+    resolved_from: 'program_code',
+    program,
+    schedule: finalNextSchedule
+});
 
     } catch (err) {
         console.error('查詢特約教室代碼失敗:', err);
@@ -7371,27 +7471,36 @@ async function verifyTutorSocketJoinAccess(roomId, username) {
         };
     }
 
-    const startAt = buildTutorScheduleStartAt(schedule);
+    const entryWindow = getTutorScheduleEntryWindow(schedule);
 
-    if (startAt) {
-        const totalMinutes = getTutorScheduleTotalMinutes(schedule);
-        const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+if (entryWindow.status === 'ended') {
+    await supabase
+        .from('tutor_schedules')
+        .update({
+            status: 'ended',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', schedule.id);
 
-        if (new Date() > endAt) {
-            await supabase
-                .from('tutor_schedules')
-                .update({
-                    status: 'ended',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', schedule.id);
+    return {
+        ok: false,
+        error: entryWindow.error || '此特約教室已結束'
+    };
+}
 
-            return {
-                ok: false,
-                error: '此特約教室已結束'
-            };
-        }
-    }
+if (entryWindow.status === 'too_early') {
+    return {
+        ok: false,
+        error: entryWindow.error || '這堂特約教室尚未開放，請於上課前 5 分鐘再進入。'
+    };
+}
+
+if (entryWindow.status === 'invalid') {
+    return {
+        ok: false,
+        error: entryWindow.error || '此特約教室時間設定異常，請聯絡教師'
+    };
+}
 
     const accessCheck = await verifyTutorScheduleWhitelistAccess(
         schedule,
