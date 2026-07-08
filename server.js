@@ -1593,6 +1593,240 @@ app.get('/api/tutor-schedules', async (req, res) => {
     }
 });
 
+// 取得某一堂特約教室的完整點名白名單
+app.get('/api/tutor-schedules/:roomCode/roster', async (req, res) => {
+    try {
+        const roomCode = String(req.params.roomCode || '').trim().toUpperCase();
+
+        if (!roomCode) {
+            return res.status(400).json({
+                success: false,
+                error: '缺少 roomCode'
+            });
+        }
+
+        const { data: schedule, error: scheduleError } = await supabase
+            .from('tutor_schedules')
+            .select('*')
+            .eq('room_code', roomCode)
+            .maybeSingle();
+
+        if (scheduleError) throw scheduleError;
+
+        if (!schedule) {
+            return res.status(404).json({
+                success: false,
+                error: '找不到此特約教室'
+            });
+        }
+
+        const startAt = buildTutorScheduleStartAt(schedule);
+        const entryWindow = getTutorScheduleEntryWindow(schedule);
+        const now = new Date();
+
+        const attendanceRecords = getTutorAttendance(roomCode)
+            .filter(record => record && record.role === 'student');
+
+        const attendanceByUsername = new Map();
+
+        attendanceRecords.forEach(record => {
+            const key = normalizeUsername(
+                record.username ||
+                record.name ||
+                record.studentName ||
+                record.displayName
+            );
+
+            if (key) {
+                attendanceByUsername.set(key, record);
+            }
+        });
+
+        let enrolledUsernames = [];
+
+        if (schedule.program_id) {
+            const { data: enrollments, error: enrollmentError } = await supabase
+                .from('tutor_program_enrollments')
+                .select('username, enrolled_at, status')
+                .eq('program_id', schedule.program_id)
+                .eq('status', 'active')
+                .order('enrolled_at', { ascending: true });
+
+            if (enrollmentError) throw enrollmentError;
+
+            enrolledUsernames = (enrollments || [])
+                .map(row => normalizeUsername(row.username))
+                .filter(Boolean);
+        }
+
+        // 舊資料或非白名單教室沒有 program_id 時，退回目前實際進入過的人
+        // 這樣不會破壞舊流程，但報名制教室仍以白名單為主
+        if (enrolledUsernames.length === 0 && schedule.requires_whitelist !== true) {
+            enrolledUsernames = attendanceRecords
+                .map(record => normalizeUsername(record.username || record.name))
+                .filter(Boolean);
+        }
+
+        const uniqueUsernames = [...new Set(enrolledUsernames)];
+
+        let usersByUsername = new Map();
+
+        if (uniqueUsernames.length > 0) {
+            const { data: users, error: usersError } = await supabase
+                .from('users')
+                .select('username, nickname, real_name, provider_display_name, is_blocked')
+                .in('username', uniqueUsernames);
+
+            if (usersError) throw usersError;
+
+            usersByUsername = new Map(
+                (users || []).map(user => [normalizeUsername(user.username), user])
+            );
+        }
+
+        function buildJoinDateTime(joinTimeText) {
+            if (!startAt || !joinTimeText) return null;
+
+            const dateText =
+                schedule.scheduled_date ||
+                getTaipeiTodayDateString();
+
+            const timeText = String(joinTimeText || '').slice(0, 8);
+
+            if (!dateText || !timeText || !timeText.includes(':')) {
+                return null;
+            }
+
+            const joinAt = new Date(`${dateText}T${timeText}+08:00`);
+
+            if (Number.isNaN(joinAt.getTime())) {
+                return null;
+            }
+
+            return joinAt;
+        }
+
+        const hasClassStarted =
+            startAt instanceof Date &&
+            !Number.isNaN(startAt.getTime()) &&
+            now >= startAt;
+
+        const roster = uniqueUsernames.map(username => {
+            const user = usersByUsername.get(username);
+            const attendance = attendanceByUsername.get(username);
+
+            const joinTime = attendance?.joinTime || null;
+            const leaveTime = attendance?.leaveTime || null;
+            const isOnline =
+                !!attendance &&
+                attendance.status !== 'OFFLINE' &&
+                !leaveTime;
+
+            const joinAt = buildJoinDateTime(joinTime);
+
+            const isLate =
+                !!joinAt &&
+                !!startAt &&
+                joinAt.getTime() > startAt.getTime();
+
+            const lateMinutes = isLate
+                ? Math.max(1, Math.ceil((joinAt.getTime() - startAt.getTime()) / 60000))
+                : 0;
+
+            let attendanceStatus = 'not_started';
+            let statusText = '尚未開始';
+
+            if (attendance) {
+                if (isOnline) {
+                    attendanceStatus = isLate ? 'late' : 'online';
+                    statusText = isLate ? `遲到 ${lateMinutes} 分鐘｜在線` : '在線';
+                } else {
+                    attendanceStatus = isLate ? 'late_left' : 'left';
+                    statusText = isLate ? `遲到 ${lateMinutes} 分鐘｜已離開` : '已離開';
+                }
+            } else if (hasClassStarted) {
+                attendanceStatus = 'not_arrived';
+                statusText = '未到';
+            }
+
+            return {
+                username,
+                displayName: getTutorStudentDisplayName(user, username),
+                real_name: normalizeProfileText(user?.real_name),
+                nickname: normalizeProfileText(user?.nickname),
+                provider_display_name: normalizeProfileText(user?.provider_display_name),
+
+                roomId: roomCode,
+                room: roomCode,
+                roomCode,
+
+                joinTime,
+                leaveTime,
+                status: attendance?.status || 'NOT_ARRIVED',
+                attendanceStatus,
+                statusText,
+
+                isOnline,
+                isLate,
+                lateMinutes,
+                hasArrived: !!attendance,
+                hasClassStarted,
+
+                scheduledDate: schedule.scheduled_date || null,
+                startTime: schedule.start_time || null,
+                classStartAt: startAt ? startAt.toISOString() : null,
+                entryOpenAt: entryWindow.openAtIso || null,
+                classEndAt: entryWindow.endAtIso || null
+            };
+        });
+
+        const counts = {
+            total: roster.length,
+            online: roster.filter(item => item.isOnline).length,
+            arrived: roster.filter(item => item.hasArrived).length,
+            late: roster.filter(item =>
+                item.attendanceStatus === 'late' ||
+                item.attendanceStatus === 'late_left'
+            ).length,
+            notArrived: roster.filter(item =>
+                item.attendanceStatus === 'not_arrived'
+            ).length
+        };
+
+        res.json({
+            success: true,
+            roomCode,
+            schedule: {
+                id: schedule.id,
+                room_code: schedule.room_code,
+                room_title: schedule.room_title,
+                teacher_username: schedule.teacher_username,
+                program_id: schedule.program_id,
+                scheduled_date: schedule.scheduled_date,
+                start_time: schedule.start_time,
+                periods: schedule.periods,
+                class_minutes: schedule.class_minutes,
+                rest_minutes: schedule.rest_minutes,
+                requires_whitelist: schedule.requires_whitelist,
+                computed_start_at: startAt ? startAt.toISOString() : null,
+                computed_end_at: entryWindow.endAtIso || null,
+                entry_open_at: entryWindow.openAtIso || null
+            },
+            counts,
+            roster
+        });
+
+    } catch (err) {
+        console.error('取得特約教室點名白名單失敗:', err);
+
+        res.status(500).json({
+            success: false,
+            error: '取得特約教室點名白名單失敗',
+            detail: err.message || String(err)
+        });
+    }
+});
+
 async function getTutorEntryUserAccess(username) {
     if (!username) {
         return {
