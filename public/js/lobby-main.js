@@ -3355,6 +3355,105 @@ function renderTutorProgramTimelineHtml(program) {
     }).join('');
 }
 
+function getTutorScheduleChoiceTimeRangeText(schedule) {
+    return getTutorProgramTimeRangeText({
+        start_time: schedule.start_time,
+        periods: schedule.periods,
+        class_minutes: schedule.class_minutes,
+        rest_minutes: schedule.rest_minutes
+    });
+}
+
+function renderTutorScheduleChoiceHtml(program) {
+    if (program.allowStudentScheduleChoice !== true) {
+        return '';
+    }
+
+    const schedules = Array.isArray(program.schedules)
+        ? program.schedules
+        : [];
+
+    if (schedules.length === 0) {
+        return `
+            <div class="bg-red-500/10 border border-red-400/20 rounded-2xl p-4 mb-5 text-xs text-red-200 font-bold">
+                <i class="fas fa-circle-exclamation mr-1"></i>
+                目前沒有可選擇的上課時段，請稍後再查看。
+            </div>
+        `;
+    }
+
+    return `
+        <div class="bg-black/30 border border-yellow-400/20 rounded-2xl p-4 mb-5">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                    <div class="text-yellow-300 text-xs font-black tracking-widest uppercase">
+                        選擇上課時段
+                    </div>
+                    <p class="text-gray-500 text-[11px] mt-1">
+                        可勾選一個或多個時段；已選時段會保留。
+                    </p>
+                </div>
+
+                <span class="text-[10px] bg-yellow-500/10 text-yellow-200 border border-yellow-400/20 px-2 py-1 rounded-full font-black">
+                    已選 ${Number(program.selected_schedule_count || 0)} 堂
+                </span>
+            </div>
+
+            <div class="space-y-2">
+                ${schedules.map(schedule => {
+                    const scheduleId = escapeCourseStoreHtml(schedule.id);
+                    const dateText = escapeCourseStoreHtml(schedule.scheduled_date || '未設定日期');
+                    const timeText = escapeCourseStoreHtml(getTutorScheduleChoiceTimeRangeText(schedule));
+                    const remainingSlots = schedule.remaining_slots;
+                    const isFull = schedule.is_full === true;
+                    const isEnrolled = schedule.is_enrolled === true;
+
+                    const capacityText = Number(schedule.max_students || 0) > 0
+                        ? `剩餘 ${remainingSlots} 名｜${Number(schedule.enrolled_count || 0)} / ${Number(schedule.max_students || 0)}`
+                        : '不限名額';
+
+                    const disabled = isFull && !isEnrolled;
+
+                    const badge = isEnrolled
+                        ? `<span class="text-[10px] bg-green-500/20 text-green-300 border border-green-400/30 px-2 py-1 rounded-full font-black">已選</span>`
+                        : disabled
+                            ? `<span class="text-[10px] bg-red-500/20 text-red-300 border border-red-400/30 px-2 py-1 rounded-full font-black">額滿</span>`
+                            : `<span class="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-1 rounded-full font-black">可選</span>`;
+
+                    return `
+                        <label class="${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-yellow-500/10'} flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 transition-all">
+                            <input
+                                type="checkbox"
+                                class="tutor-schedule-choice w-4 h-4 accent-yellow-400"
+                                value="${scheduleId}"
+                                ${isEnrolled ? 'checked' : ''}
+                                ${disabled ? 'disabled' : ''}>
+
+                            <div class="flex-1 min-w-0">
+                                <div class="text-white font-black text-sm">
+                                    ${dateText}
+                                    <span class="text-yellow-300 font-mono ml-2">${timeText}</span>
+                                </div>
+                                <div class="text-[11px] text-gray-500 mt-1">
+                                    ${escapeCourseStoreHtml(capacityText)}
+                                </div>
+                            </div>
+
+                            ${badge}
+                        </label>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function getSelectedTutorScheduleIdsFromDetail() {
+    return Array.from(document.querySelectorAll('.tutor-schedule-choice:checked'))
+        .map(input => String(input.value || '').trim())
+        .filter(Boolean);
+}
+
 async function loadCourseStoreModalList() {
     const list = document.getElementById('courseStoreModalList');
     if (!list) return;
@@ -3652,6 +3751,7 @@ window.showTutorProgramDetail = function(programId) {
     const capacity = escapeCourseStoreHtml(program.capacity_text || '0 / 不限');
     const timeRange = escapeCourseStoreHtml(getTutorProgramTimeRangeText(program));
 const timelineHtml = renderTutorProgramTimelineHtml(program);
+const scheduleChoiceHtml = renderTutorScheduleChoiceHtml(program);
 
 const periods = Number(program.periods || 1);
 const classMinutes = Number(program.class_minutes || 50);
@@ -3659,7 +3759,7 @@ const restMinutes = Number(program.rest_minutes || 10);
 
     let actionButton = '';
 
-    if (program.is_enrolled) {
+        if (program.is_enrolled && program.allowStudentScheduleChoice !== true) {
         actionButton = `
             <button disabled
                     class="flex-1 bg-green-500/20 text-green-300 border border-green-400/30 font-black py-3 rounded-xl cursor-not-allowed">
@@ -3756,6 +3856,8 @@ const restMinutes = Number(program.rest_minutes || 10);
                     <p class="text-gray-200 text-sm leading-relaxed">${note}</p>
                 </div>
 
+                ${scheduleChoiceHtml}
+
                 <div class="bg-yellow-500/10 border border-yellow-400/30 rounded-2xl p-4 text-xs text-yellow-100 leading-relaxed mb-5">
                     報名成功後，系統會將你加入白名單，並透過大廳通知告知課程代碼。正式進入限制會在下一步接上。
                 </div>
@@ -3788,17 +3890,19 @@ window.enrollTutorProgram = async function(programId) {
         return;
     }
 
-    if (program.is_enrolled) {
-    const roomCode = program.room_code || program.program_room_code || '未取得';
+    const allowScheduleChoice = program.allowStudentScheduleChoice === true;
 
-    alert(
-        `你已經報名過此特約教室。\n\n` +
-        `課程代碼：${roomCode}\n\n` +
-        `請在大廳輸入此代碼進入特約教室。`
-    );
+    if (program.is_enrolled && !allowScheduleChoice) {
+        const roomCode = program.room_code || program.program_room_code || '未取得';
 
-    return;
-}
+        alert(
+            `你已經報名過此特約教室。\n\n` +
+            `課程代碼：${roomCode}\n\n` +
+            `請在大廳輸入此代碼進入特約教室。`
+        );
+
+        return;
+    }
 
     if (program.is_full) {
         alert('此特約教室已額滿。');
@@ -3817,13 +3921,33 @@ window.enrollTutorProgram = async function(programId) {
         return;
     }
 
-    const confirmEnroll = confirm(
-        `確定要報名「${program.title || '特約教室'}」嗎？\n\n` +
-        `教師：${program.teacher_name || program.teacher_username || '教師'}\n` +
-        `日期：${program.start_date} ~ ${program.end_date}\n` +
-        `星期：${program.weekdays_text || '未設定'}\n` +
-        `時間：${getTutorProgramTimeRangeText(program)}`
-    );
+    let selectedScheduleIds = [];
+
+    if (allowScheduleChoice) {
+        selectedScheduleIds = getSelectedTutorScheduleIdsFromDetail();
+
+        if (selectedScheduleIds.length === 0) {
+            alert('請至少選擇一個上課時段。');
+            return;
+        }
+    }
+
+    const confirmText = allowScheduleChoice
+        ? (
+            `確定要報名「${program.title || '特約教室'}」嗎？\n\n` +
+            `教師：${program.teacher_name || program.teacher_username || '教師'}\n` +
+            `你將選擇 ${selectedScheduleIds.length} 個上課時段。\n\n` +
+            `報名成功後，請使用課程代碼進入特約教室。`
+        )
+        : (
+            `確定要報名「${program.title || '特約教室'}」嗎？\n\n` +
+            `教師：${program.teacher_name || program.teacher_username || '教師'}\n` +
+            `日期：${program.start_date} ~ ${program.end_date}\n` +
+            `星期：${program.weekdays_text || '未設定'}\n` +
+            `時間：${getTutorProgramTimeRangeText(program)}`
+        );
+
+    const confirmEnroll = confirm(confirmText);
 
     if (!confirmEnroll) return;
 
@@ -3835,7 +3959,8 @@ window.enrollTutorProgram = async function(programId) {
             },
             body: JSON.stringify({
                 username,
-                programId
+                programId,
+                selectedScheduleIds: allowScheduleChoice ? selectedScheduleIds : undefined
             })
         });
 
@@ -3846,37 +3971,25 @@ window.enrollTutorProgram = async function(programId) {
             return;
         }
 
-        const enrolledProgram = tutorProgramStoreCache.find(item => item.id === programId);
-
-        if (enrolledProgram) {
-            enrolledProgram.is_enrolled = true;
-            enrolledProgram.can_enroll = false;
-
-            const newCount = Number(data.program?.enrolled_count ?? enrolledProgram.enrolled_count ?? 0);
-            enrolledProgram.enrolled_count = newCount;
-
-            const maxStudents = Number(enrolledProgram.max_students || 0);
-            enrolledProgram.capacity_text = maxStudents > 0
-                ? `${newCount} / ${maxStudents}`
-                : `${newCount} / 不限`;
-        }
-
         const roomCode =
-    data.program?.room_code ||
-    program.room_code ||
-    '未取得';
+            data.program?.room_code ||
+            program.room_code ||
+            '未取得';
 
-alert(
-    `✅ 報名成功！\n\n` +
-    `你已加入此特約教室白名單。\n\n` +
-    `課程代碼：${roomCode}\n\n` +
-    `請在大廳輸入此代碼進入特約教室。\n` +
-    `系統也會嘗試將課程資訊發送到大廳通知。`
-);
+        alert(
+            `✅ 報名成功！\n\n` +
+            (
+                allowScheduleChoice
+                    ? `已選擇 ${data.selectedScheduleCount || selectedScheduleIds.length} 個上課時段。\n\n`
+                    : `你已加入此特約教室白名單。\n\n`
+            ) +
+            `課程代碼：${roomCode}\n\n` +
+            `請在大廳輸入此代碼進入特約教室。`
+        );
 
-if (typeof loadNotifications === 'function') {
-    await loadNotifications();
-}
+        if (typeof loadNotifications === 'function') {
+            await loadNotifications();
+        }
 
         await loadTutorProgramStoreModalList();
 
