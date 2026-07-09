@@ -192,7 +192,16 @@ window.switchTutorRoom = function(roomCode) {
         socket.emit('create_tutor_room_schedule', scheduleData);
     }
     activeStudents = [];
-    window.latestAttendanceData = [];
+window.latestAttendanceData = [];
+window.latestTutorRosterData = [];
+window.latestTutorRosterCounts = {
+    total: 0,
+    online: 0,
+    arrived: 0,
+    late: 0,
+    notArrived: 0
+};
+window.currentAttendanceRosterTab = 'all';
     if (typeof renderStudents === 'function') {
         renderStudents();
     }
@@ -528,11 +537,11 @@ socket.on('update_attendance', (users) => {
     // 如果彈窗目前是開啟狀態，就即時更新裡面的表格
     const attendanceModal = document.getElementById('attendanceModal');
     if (
-        attendanceModal &&
-        !attendanceModal.classList.contains('hidden')
-    ) {
-        renderAttendanceData();
-    }
+    attendanceModal &&
+    !attendanceModal.classList.contains('hidden')
+) {
+    fetchTutorRosterData({ silent: true });
+}
 
     // 保留原本可能有的隱藏表格渲染
     const tableBody = document.getElementById('attendanceTableBody');
@@ -618,55 +627,155 @@ window.updateBlackboard = function() {
 // 班級點名系統與彈窗邏輯
 // ==========================================
 
-window.rollCall = function() {
-    addLog("開啟班級點名表...", "text-blue-400");
-    
-    // 向伺服器請求最新出席名單 (確保資料是最新的)
-    if (typeof socket !== 'undefined') {
-        socket.emit('get_attendance', { room: window.currentTutorRoomCode });
-    }
-    
-    // 顯示點名彈窗
-    showAttendanceModal();
+window.latestTutorRosterData = [];
+window.latestTutorRosterCounts = {
+    total: 0,
+    online: 0,
+    arrived: 0,
+    late: 0,
+    notArrived: 0
 };
+window.currentAttendanceRosterTab = 'all';
+
+window.rollCall = async function() {
+    addLog("開啟班級點名表...", "text-blue-400");
+
+    if (typeof socket !== 'undefined') {
+        socket.emit('get_attendance', {
+            room: window.currentTutorRoomCode,
+            roomId: window.currentTutorRoomCode
+        });
+    }
+
+    showAttendanceModal();
+    await fetchTutorRosterData();
+};
+
+async function fetchTutorRosterData(options = {}) {
+    const silent = options.silent === true;
+    const roomCode = window.currentTutorRoomCode;
+    const tbody = document.getElementById('modalAttendanceTableBody');
+
+    if (!roomCode) {
+        if (!silent) {
+            alert('找不到目前特約教室代碼，請重新整理後再試。');
+        }
+        return [];
+    }
+
+    if (tbody && !silent) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="px-4 py-12 text-center text-slate-500">
+                    <i class="fas fa-spinner fa-spin text-4xl mb-3 opacity-50 block"></i>
+                    <p class="font-bold tracking-widest">正在讀取白名單點名資料...</p>
+                </td>
+            </tr>
+        `;
+    }
+
+    try {
+        const res = await fetch(
+            `/api/tutor-schedules/${encodeURIComponent(roomCode)}/roster`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || '讀取點名白名單失敗');
+        }
+
+        window.latestTutorRosterData = Array.isArray(data.roster)
+            ? data.roster
+            : [];
+
+        window.latestTutorRosterCounts = data.counts || {
+            total: window.latestTutorRosterData.length,
+            online: 0,
+            arrived: 0,
+            late: 0,
+            notArrived: 0
+        };
+
+        renderAttendanceData();
+        return window.latestTutorRosterData;
+
+    } catch (err) {
+        console.error('讀取特約教室白名單點名失敗:', err);
+
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="px-4 py-12 text-center text-red-400">
+                        <i class="fas fa-triangle-exclamation text-4xl mb-3 opacity-70 block"></i>
+                        <p class="font-bold tracking-widest">讀取白名單點名失敗</p>
+                        <p class="text-xs text-slate-500 mt-2">${escapeTutorHtml(err.message || '請稍後再試')}</p>
+                    </td>
+                </tr>
+            `;
+        }
+
+        if (!silent) {
+            alert(err.message || '讀取白名單點名失敗，請稍後再試。');
+        }
+
+        return [];
+    }
+}
 
 // 動態生成與顯示點名彈窗
 function showAttendanceModal() {
     let modal = document.getElementById('attendanceModal');
-    
-    // 如果彈窗還不存在，就動態建立一個
+
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'attendanceModal';
-        modal.className = 'fixed inset-0 z-[9999] hidden bg-black/80 flex-col items-center justify-center p-4 backdrop-blur-sm transition-opacity';
-        
+        modal.className =
+            'fixed inset-0 z-[9999] hidden bg-black/80 flex-col items-center justify-center p-4 backdrop-blur-sm transition-opacity';
+
         modal.innerHTML = `
-            <div class="relative max-w-2xl w-full bg-[#0a0e17] border border-amber-500/30 rounded-xl shadow-[0_0_30px_rgba(245,158,11,0.15)] p-6 flex flex-col max-h-[80vh] animate-fadeIn">
+            <div class="relative max-w-4xl w-full bg-[#0a0e17] border border-amber-500/30 rounded-xl shadow-[0_0_30px_rgba(245,158,11,0.15)] p-6 flex flex-col max-h-[82vh] animate-fadeIn">
                 <button onclick="closeAttendanceModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl transition-colors">
                     <i class="fas fa-times-circle"></i>
                 </button>
-                
-                <h2 class="text-2xl font-black text-amber-400 mb-6 flex items-center gap-3 border-b border-amber-500/20 pb-4 tracking-wide">
+
+                <h2 class="text-2xl font-black text-amber-400 mb-4 flex items-center gap-3 border-b border-amber-500/20 pb-4 tracking-wide">
                     <i class="fas fa-clipboard-check text-3xl"></i> 班級點名與出席紀錄
                 </h2>
-                
+
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button id="attendanceTabAll" onclick="switchAttendanceRosterTab('all')" class="px-3 py-2 rounded-lg border text-xs font-black tracking-widest transition-all">
+                        全部名單 <span id="attendanceCountAll" class="font-mono ml-1">0</span>
+                    </button>
+                    <button id="attendanceTabLate" onclick="switchAttendanceRosterTab('late')" class="px-3 py-2 rounded-lg border text-xs font-black tracking-widest transition-all">
+                        遲到 <span id="attendanceCountLate" class="font-mono ml-1">0</span>
+                    </button>
+                    <button id="attendanceTabNotArrived" onclick="switchAttendanceRosterTab('not_arrived')" class="px-3 py-2 rounded-lg border text-xs font-black tracking-widest transition-all">
+                        未到 <span id="attendanceCountNotArrived" class="font-mono ml-1">0</span>
+                    </button>
+                </div>
+
+                <div id="attendanceSummaryText" class="mb-4 text-xs text-slate-400 bg-black/30 border border-amber-500/10 rounded-lg px-4 py-3 font-bold">
+                    正在讀取點名資料...
+                </div>
+
                 <div class="overflow-y-auto flex-1 pr-2" style="scrollbar-width: thin; scrollbar-color: #f59e0b transparent;">
                     <table class="w-full text-left text-sm text-gray-300">
                         <thead class="text-xs text-amber-500 bg-amber-900/20 uppercase sticky top-0 backdrop-blur-md shadow-sm">
                             <tr>
                                 <th class="px-4 py-3 rounded-tl-lg">學員名稱</th>
                                 <th class="px-4 py-3">進入教室時間</th>
-                                <th class="px-4 py-3 rounded-tr-lg">離開時間 / 目前狀態</th>
+                                <th class="px-4 py-3">離開時間</th>
+                                <th class="px-4 py-3 rounded-tr-lg">目前狀態</th>
                             </tr>
                         </thead>
-                        <tbody id="modalAttendanceTableBody" class="divide-y divide-amber-500/10">
-                            </tbody>
+                        <tbody id="modalAttendanceTableBody" class="divide-y divide-amber-500/10"></tbody>
                     </table>
                 </div>
-                
+
                 <div class="mt-6 pt-4 border-t border-amber-500/20 flex justify-between items-center">
                     <div class="text-slate-400 text-sm">
-                        目前共記錄 <span id="attendanceTotalCount" class="text-amber-400 font-mono font-bold text-lg mx-1">0</span> 名學員
+                        目前顯示 <span id="attendanceTotalCount" class="text-amber-400 font-mono font-bold text-lg mx-1">0</span> 名學員
                     </div>
                     <button onclick="closeAttendanceModal()" class="px-8 py-2 bg-amber-600/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-lg font-bold transition-all">
                         關閉視窗
@@ -674,13 +783,13 @@ function showAttendanceModal() {
                 </div>
             </div>
         `;
+
         document.body.appendChild(modal);
     }
 
-    // 渲染資料到表格中
+    updateAttendanceRosterTabUI();
     renderAttendanceData();
-    
-    // 顯示彈窗
+
     modal.classList.replace('hidden', 'flex');
 }
 
@@ -688,23 +797,142 @@ function showAttendanceModal() {
 window.closeAttendanceModal = function() {
     const modal = document.getElementById('attendanceModal');
     if (modal) modal.classList.replace('flex', 'hidden');
+};
+
+window.switchAttendanceRosterTab = function(tabName) {
+    if (!['all', 'late', 'not_arrived'].includes(tabName)) {
+        tabName = 'all';
+    }
+
+    window.currentAttendanceRosterTab = tabName;
+    updateAttendanceRosterTabUI();
+    renderAttendanceData();
+};
+
+function updateAttendanceRosterTabUI() {
+    const currentTab = window.currentAttendanceRosterTab || 'all';
+    const counts = window.latestTutorRosterCounts || {};
+
+    const tabConfig = {
+        all: document.getElementById('attendanceTabAll'),
+        late: document.getElementById('attendanceTabLate'),
+        not_arrived: document.getElementById('attendanceTabNotArrived')
+    };
+
+    Object.entries(tabConfig).forEach(([key, button]) => {
+        if (!button) return;
+
+        if (key === currentTab) {
+            button.className =
+                'px-3 py-2 rounded-lg border text-xs font-black tracking-widest transition-all bg-amber-500/20 border-amber-500 text-amber-300';
+        } else {
+            button.className =
+                'px-3 py-2 rounded-lg border text-xs font-black tracking-widest transition-all bg-black/30 border-slate-700 text-slate-400 hover:border-amber-500/50 hover:text-amber-300';
+        }
+    });
+
+    const allCount = document.getElementById('attendanceCountAll');
+    const lateCount = document.getElementById('attendanceCountLate');
+    const notArrivedCount = document.getElementById('attendanceCountNotArrived');
+
+    if (allCount) allCount.innerText = counts.total || 0;
+    if (lateCount) lateCount.innerText = counts.late || 0;
+    if (notArrivedCount) notArrivedCount.innerText = counts.notArrived || 0;
+}
+
+function getFilteredAttendanceRosterData() {
+    const data = window.latestTutorRosterData || [];
+    const currentTab = window.currentAttendanceRosterTab || 'all';
+
+    if (currentTab === 'late') {
+        return data.filter(item =>
+            item.attendanceStatus === 'late' ||
+            item.attendanceStatus === 'late_left'
+        );
+    }
+
+    if (currentTab === 'not_arrived') {
+        return data.filter(item =>
+            item.attendanceStatus === 'not_arrived'
+        );
+    }
+
+    return data;
+}
+
+function getAttendanceStatusClass(item) {
+    const status = item?.attendanceStatus || '';
+
+    if (status === 'online') {
+        return 'text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded whitespace-nowrap';
+    }
+
+    if (status === 'late' || status === 'late_left') {
+        return 'text-yellow-300 font-bold bg-yellow-500/10 px-2 py-1 rounded whitespace-nowrap';
+    }
+
+    if (status === 'not_arrived') {
+        return 'text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded whitespace-nowrap';
+    }
+
+    if (status === 'left') {
+        return 'text-slate-300 font-bold bg-slate-500/10 px-2 py-1 rounded whitespace-nowrap';
+    }
+
+    return 'text-slate-400 font-bold bg-slate-500/10 px-2 py-1 rounded whitespace-nowrap';
 }
 
 // 負責將名單渲染進表格的邏輯
 function renderAttendanceData() {
     const tbody = document.getElementById('modalAttendanceTableBody');
     const countSpan = document.getElementById('attendanceTotalCount');
+    const summaryText = document.getElementById('attendanceSummaryText');
+
     if (!tbody || !countSpan) return;
 
-    const data = window.latestAttendanceData || [];
+    updateAttendanceRosterTabUI();
+
+    const allData = window.latestTutorRosterData || [];
+    const counts = window.latestTutorRosterCounts || {};
+    const data = getFilteredAttendanceRosterData();
+
     countSpan.innerText = data.length;
 
-    if (data.length === 0) {
+    if (summaryText) {
+        summaryText.innerText =
+            `應到 ${counts.total || allData.length} 人｜` +
+            `已到 ${counts.arrived || 0} 人｜` +
+            `在線 ${counts.online || 0} 人｜` +
+            `遲到 ${counts.late || 0} 人｜` +
+            `未到 ${counts.notArrived || 0} 人`;
+    }
+
+    if (allData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="3" class="px-4 py-12 text-center text-slate-500">
+                <td colspan="4" class="px-4 py-12 text-center text-slate-500">
                     <i class="fas fa-ghost text-4xl mb-3 opacity-30 block"></i>
-                    <p class="font-bold tracking-widest">目前尚無任何出席紀錄</p>
+                    <p class="font-bold tracking-widest">目前尚無白名單點名資料</p>
+                    <p class="text-xs mt-2 text-slate-600">請確認此堂課是否已有學生報名</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (data.length === 0) {
+        const emptyText =
+            window.currentAttendanceRosterTab === 'late'
+                ? '目前沒有遲到學生'
+                : window.currentAttendanceRosterTab === 'not_arrived'
+                    ? '目前沒有未到學生'
+                    : '目前沒有符合條件的學生';
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="px-4 py-12 text-center text-slate-500">
+                    <i class="fas fa-check-circle text-4xl mb-3 opacity-30 block"></i>
+                    <p class="font-bold tracking-widest">${emptyText}</p>
                 </td>
             </tr>
         `;
@@ -712,34 +940,33 @@ function renderAttendanceData() {
     }
 
     tbody.innerHTML = data.map(u => {
-        const isOnline =
-    u.status !== 'OFFLINE' &&
-    (!u.leaveTime || u.leaveTime === '上課中' || u.leaveTime === '');
-
-const statusClass = isOnline
-    ? 'text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded'
-    : 'text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded';
-
-const statusText = isOnline
-    ? '🟢 在線'
-    : `🔴 已離開 (${u.leaveTime || '未知時間'})`;
-        
         const displayName = getTutorDisplayName(u);
-const avatarSeed = encodeURIComponent(displayName);
+        const avatarSeed = encodeURIComponent(displayName);
+        const statusClass = getAttendanceStatusClass(u);
 
-return `
-    <tr class="hover:bg-amber-500/5 transition-colors group">
-        <td class="px-4 py-4 font-bold text-white text-base flex items-center gap-2">
-            <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" class="w-8 h-8 rounded-full bg-black/50 border border-amber-500/30">
-            <div class="flex flex-col">
-                <span>${escapeTutorHtml(displayName)}</span>
-                <span class="text-[10px] text-slate-500 font-mono">ID：${escapeTutorHtml(getTutorSystemName(u))}</span>
-            </div>
-        </td>
-        <td class="px-4 py-4 text-slate-300 font-mono">${escapeTutorHtml(u.joinTime || '未知')}</td>
-        <td class="px-4 py-4"><span class="${statusClass}">${escapeTutorHtml(statusText)}</span></td>
-    </tr>
-`;
+        const joinText = u.joinTime || '-';
+        const leaveText =
+            u.leaveTime ||
+            (u.isOnline ? '上課中' : '-');
+
+        const systemName = getTutorSystemName(u);
+
+        return `
+            <tr class="hover:bg-amber-500/5 transition-colors group">
+                <td class="px-4 py-4 font-bold text-white text-base">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <img src="https://api.dicebear.com/7.x/big-smile/svg?seed=${avatarSeed}" class="w-8 h-8 rounded-full bg-black/50 border border-amber-500/30 shrink-0">
+                        <div class="flex flex-col min-w-0">
+                            <span class="truncate">${escapeTutorHtml(displayName)}</span>
+                            <span class="text-[10px] text-slate-500 font-mono truncate">ID：${escapeTutorHtml(systemName)}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-4 text-slate-300 font-mono whitespace-nowrap">${escapeTutorHtml(joinText)}</td>
+                <td class="px-4 py-4 text-slate-300 font-mono whitespace-nowrap">${escapeTutorHtml(leaveText)}</td>
+                <td class="px-4 py-4"><span class="${statusClass}">${escapeTutorHtml(u.statusText || '未知')}</span></td>
+            </tr>
+        `;
     }).join('');
 }
 
