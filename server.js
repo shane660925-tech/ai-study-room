@@ -585,7 +585,9 @@ app.post('/api/tutor-programs', async (req, res) => {
             restMinutes,
             roomSize,
             maxStudents,
-            roomNote
+            roomNote,
+            allowStudentScheduleChoice,
+            allow_student_schedule_choice
         } = req.body;
 
         if (!teacherUsername) {
@@ -613,6 +615,11 @@ app.post('/api/tutor-programs', async (req, res) => {
         const finalClassMinutes = Number(classMinutes || 50);
         const finalRestMinutes = Number(restMinutes || 10);
         const finalMaxStudents = Number(maxStudents || roomSize || 0);
+
+        const finalAllowStudentScheduleChoice =
+    allowStudentScheduleChoice === true ||
+    allow_student_schedule_choice === true ||
+    String(allowStudentScheduleChoice || allow_student_schedule_choice || '').toLowerCase() === 'true';
 
         if (!Number.isInteger(finalPeriods) || finalPeriods <= 0) {
             return res.status(400).json({ error: '堂數格式錯誤' });
@@ -682,7 +689,8 @@ app.post('/api/tutor-programs', async (req, res) => {
                 enrolled_count: 0,
                 is_public: true,
                 requires_subscription: true,
-                status: 'open'
+allow_student_schedule_choice: finalAllowStudentScheduleChoice,
+status: 'open'
             }])
             .select()
             .single();
@@ -1643,20 +1651,34 @@ app.get('/api/tutor-schedules/:roomCode/roster', async (req, res) => {
         });
 
         let enrolledUsernames = [];
+        let rosterSource = 'attendance_only';
+        let program = null;
 
         if (schedule.program_id) {
-            const { data: enrollments, error: enrollmentError } = await supabase
-                .from('tutor_program_enrollments')
-                .select('username, enrolled_at, status')
-                .eq('program_id', schedule.program_id)
-                .eq('status', 'active')
-                .order('enrolled_at', { ascending: true });
+            program = await getTutorProgramById(schedule.program_id);
 
-            if (enrollmentError) throw enrollmentError;
+            if (isTutorProgramScheduleChoiceEnabled(program)) {
+                rosterSource = 'tutor_schedule_enrollments';
 
-            enrolledUsernames = (enrollments || [])
-                .map(row => normalizeUsername(row.username))
-                .filter(Boolean);
+                enrolledUsernames = await getTutorScheduleChoiceEnrollmentUsernames(
+                    schedule.id
+                );
+            } else {
+                rosterSource = 'tutor_program_enrollments';
+
+                const { data: enrollments, error: enrollmentError } = await supabase
+                    .from('tutor_program_enrollments')
+                    .select('username, enrolled_at, status')
+                    .eq('program_id', schedule.program_id)
+                    .eq('status', 'active')
+                    .order('enrolled_at', { ascending: true });
+
+                if (enrollmentError) throw enrollmentError;
+
+                enrolledUsernames = (enrollments || [])
+                    .map(row => normalizeUsername(row.username))
+                    .filter(Boolean);
+            }
         }
 
         // 舊資料或非白名單教室沒有 program_id 時，退回目前實際進入過的人
@@ -1808,12 +1830,16 @@ app.get('/api/tutor-schedules/:roomCode/roster', async (req, res) => {
                 class_minutes: schedule.class_minutes,
                 rest_minutes: schedule.rest_minutes,
                 requires_whitelist: schedule.requires_whitelist,
-                computed_start_at: startAt ? startAt.toISOString() : null,
-                computed_end_at: entryWindow.endAtIso || null,
-                entry_open_at: entryWindow.openAtIso || null
+allow_student_schedule_choice: program?.allow_student_schedule_choice === true,
+roster_source: rosterSource,
+computed_start_at: startAt ? startAt.toISOString() : null,
+computed_end_at: entryWindow.endAtIso || null,
+entry_open_at: entryWindow.openAtIso || null
             },
             counts,
-            roster
+rosterSource,
+allowStudentScheduleChoice: program?.allow_student_schedule_choice === true,
+roster
         });
 
     } catch (err) {
@@ -1881,7 +1907,58 @@ async function hasActiveTutorProgramEnrollment(programId, username) {
     return !!data;
 }
 
-async function findNextAvailableTutorScheduleForProgram(programId) {
+async function hasActiveTutorScheduleEnrollment(scheduleId, username) {
+    if (!scheduleId || !username) return false;
+
+    const { data, error } = await supabase
+        .from('tutor_schedule_enrollments')
+        .select('id')
+        .eq('schedule_id', scheduleId)
+        .eq('username', username)
+        .eq('status', 'active')
+        .maybeSingle();
+
+    if (error) throw error;
+
+    return !!data;
+}
+
+async function getTutorProgramById(programId) {
+    if (!programId) return null;
+
+    const { data, error } = await supabase
+        .from('tutor_programs')
+        .select('*')
+        .eq('id', programId)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    return data || null;
+}
+
+function isTutorProgramScheduleChoiceEnabled(program) {
+    return program && program.allow_student_schedule_choice === true;
+}
+
+async function getTutorScheduleChoiceEnrollmentUsernames(scheduleId) {
+    if (!scheduleId) return [];
+
+    const { data, error } = await supabase
+        .from('tutor_schedule_enrollments')
+        .select('username, enrolled_at, status')
+        .eq('schedule_id', scheduleId)
+        .eq('status', 'active')
+        .order('enrolled_at', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || [])
+        .map(row => normalizeUsername(row.username))
+        .filter(Boolean);
+}
+
+async function findNextAvailableTutorScheduleForProgram(programId, username = '') {
     const { data: schedules, error } = await supabase
         .from('tutor_schedules')
         .select('*')
@@ -1892,11 +1969,38 @@ async function findNextAvailableTutorScheduleForProgram(programId) {
 
     if (error) throw error;
 
+let filteredSchedules = schedules || [];
+
+    const program = await getTutorProgramById(programId);
+    const safeUsername = normalizeUsername(username);
+
+    if (
+        isTutorProgramScheduleChoiceEnabled(program) &&
+        safeUsername
+    ) {
+        const { data: selectedRows, error: selectedError } = await supabase
+            .from('tutor_schedule_enrollments')
+            .select('schedule_id')
+            .eq('program_id', programId)
+            .eq('username', safeUsername)
+            .eq('status', 'active');
+
+        if (selectedError) throw selectedError;
+
+        const selectedScheduleIdSet = new Set(
+            (selectedRows || []).map(row => row.schedule_id)
+        );
+
+        filteredSchedules = filteredSchedules.filter(schedule =>
+            selectedScheduleIdSet.has(schedule.id)
+        );
+    }
+
     const now = new Date();
     const expiredIds = [];
     let nextSchedule = null;
 
-    for (const schedule of (schedules || [])) {
+    for (const schedule of filteredSchedules) {
         const startAt = buildTutorScheduleStartAt(schedule);
 
         if (!startAt) {
@@ -2052,16 +2156,20 @@ async function verifyTutorScheduleWhitelistAccess(schedule, username) {
         };
     }
 
-    const isEnrolled = await hasActiveTutorProgramEnrollment(
-        schedule.program_id,
-        username
-    );
+    const program = await getTutorProgramById(schedule.program_id);
+    const useScheduleChoice = isTutorProgramScheduleChoiceEnabled(program);
+
+    const isEnrolled = useScheduleChoice
+        ? await hasActiveTutorScheduleEnrollment(schedule.id, username)
+        : await hasActiveTutorProgramEnrollment(schedule.program_id, username);
 
     if (!isEnrolled) {
         return {
             ok: false,
             status: 403,
-            error: '你尚未報名此特約教室，請先到課程商店報名'
+            error: useScheduleChoice
+                ? '你尚未報名這一堂特約教室時段，請先到課程商店選擇時段'
+                : '你尚未報名此特約教室，請先到課程商店報名'
         };
     }
 
@@ -2253,7 +2361,10 @@ const { user, access } = await getTutorEntryUserAccess(username);
             }
         }
 
-        const nextSchedule = await findNextAvailableTutorScheduleForProgram(program.id);
+        const nextSchedule = await findNextAvailableTutorScheduleForProgram(
+    program.id,
+    access.roleBypass ? '' : username
+);
 
 if (!nextSchedule) {
     return res.status(404).json({
