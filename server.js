@@ -1175,11 +1175,165 @@ app.get('/api/tutor-programs/store', async (req, res) => {
             );
         }
 
-        const mappedPrograms = (programs || []).map(program => {
+        let schedulesByProgramId = new Map();
+        let scheduleEnrollmentCountByScheduleId = new Map();
+        let enrolledScheduleIdSet = new Set();
+
+        if (programIds.length > 0) {
+            const { data: schedules, error: schedulesError } = await supabase
+                .from('tutor_schedules')
+                .select(`
+                    id,
+                    program_id,
+                    room_code,
+                    room_title,
+                    scheduled_date,
+                    start_time,
+                    periods,
+                    class_minutes,
+                    rest_minutes,
+                    status,
+                    max_students,
+                    enrolled_count
+                `)
+                .in('program_id', programIds)
+                .in('status', ['scheduled', 'live'])
+                .order('scheduled_date', { ascending: true })
+                .order('start_time', { ascending: true });
+
+            if (schedulesError) throw schedulesError;
+
+            const activeSchedules = [];
+            const expiredScheduleIds = [];
+            const now = new Date();
+
+            for (const schedule of (schedules || [])) {
+                const startAt = buildTutorScheduleStartAt(schedule);
+
+                if (!startAt) {
+                    activeSchedules.push(schedule);
+                    continue;
+                }
+
+                const totalMinutes = getTutorScheduleTotalMinutes(schedule);
+                const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+                if (now > endAt) {
+                    expiredScheduleIds.push(schedule.id);
+                    continue;
+                }
+
+                activeSchedules.push({
+                    ...schedule,
+                    computed_start_at: startAt.toISOString(),
+                    computed_end_at: endAt.toISOString()
+                });
+            }
+
+            if (expiredScheduleIds.length > 0) {
+                await supabase
+                    .from('tutor_schedules')
+                    .update({
+                        status: 'ended',
+                        updated_at: new Date().toISOString()
+                    })
+                    .in('id', expiredScheduleIds);
+            }
+
+            const activeScheduleIds = activeSchedules.map(schedule => schedule.id);
+
+            if (activeScheduleIds.length > 0) {
+                const { data: scheduleEnrollmentRows, error: scheduleEnrollmentError } = await supabase
+                    .from('tutor_schedule_enrollments')
+                    .select('schedule_id, username, status')
+                    .eq('status', 'active')
+                    .in('schedule_id', activeScheduleIds);
+
+                if (scheduleEnrollmentError) throw scheduleEnrollmentError;
+
+                (scheduleEnrollmentRows || []).forEach(row => {
+                    const scheduleId = row.schedule_id;
+                    const currentCount = scheduleEnrollmentCountByScheduleId.get(scheduleId) || 0;
+                    scheduleEnrollmentCountByScheduleId.set(scheduleId, currentCount + 1);
+
+                    if (
+                        username &&
+                        normalizeUsername(row.username) === normalizeUsername(username)
+                    ) {
+                        enrolledScheduleIdSet.add(scheduleId);
+                    }
+                });
+            }
+
+            activeSchedules.forEach(schedule => {
+                const key = schedule.program_id;
+
+                if (!schedulesByProgramId.has(key)) {
+                    schedulesByProgramId.set(key, []);
+                }
+
+                schedulesByProgramId.get(key).push(schedule);
+            });
+        }
+            const mappedPrograms = (programs || []).map(program => {
             const maxStudents = Number(program.max_students || 0);
             const enrolledCount = Number(program.enrolled_count || 0);
-            const isFull = maxStudents > 0 && enrolledCount >= maxStudents;
-            const isEnrolled = enrolledProgramIdSet.has(program.id);
+            const allowScheduleChoice = program.allow_student_schedule_choice === true;
+            const programSchedules = schedulesByProgramId.get(program.id) || [];
+
+            const mappedSchedules = programSchedules.map(schedule => {
+                const scheduleMaxStudents = Number(schedule.max_students || maxStudents || 0);
+                const scheduleEnrolledCount = allowScheduleChoice
+                    ? Number(scheduleEnrollmentCountByScheduleId.get(schedule.id) || 0)
+                    : Number(schedule.enrolled_count || enrolledCount || 0);
+
+                const scheduleIsFull =
+                    scheduleMaxStudents > 0 &&
+                    scheduleEnrolledCount >= scheduleMaxStudents;
+
+                const scheduleStartAt = schedule.computed_start_at || null;
+                const scheduleEndAt = schedule.computed_end_at || null;
+
+                return {
+                    id: schedule.id,
+                    program_id: schedule.program_id,
+                    room_code: schedule.room_code,
+                    room_title: schedule.room_title || program.title || '特約教室',
+
+                    scheduled_date: schedule.scheduled_date,
+                    start_time: schedule.start_time,
+                    periods: Number(schedule.periods || program.periods || 1),
+                    class_minutes: Number(schedule.class_minutes || program.class_minutes || 50),
+                    rest_minutes: Number(schedule.rest_minutes || program.rest_minutes || 10),
+
+                    max_students: scheduleMaxStudents,
+                    enrolled_count: scheduleEnrolledCount,
+                    remaining_slots: scheduleMaxStudents > 0
+                        ? Math.max(0, scheduleMaxStudents - scheduleEnrolledCount)
+                        : null,
+
+                    is_full: scheduleIsFull,
+                    is_enrolled: enrolledScheduleIdSet.has(schedule.id),
+
+                    computed_start_at: scheduleStartAt,
+                    computed_end_at: scheduleEndAt,
+                    status: schedule.status
+                };
+            });
+
+            const isFull = allowScheduleChoice
+                ? (
+                    mappedSchedules.length > 0 &&
+                    mappedSchedules.every(schedule => schedule.is_full)
+                )
+                : (
+                    maxStudents > 0 &&
+                    enrolledCount >= maxStudents
+                );
+
+            const isEnrolled = allowScheduleChoice
+                ? mappedSchedules.some(schedule => schedule.is_enrolled)
+                : enrolledProgramIdSet.has(program.id);
 
             return {
                 id: program.id,
@@ -1189,6 +1343,9 @@ app.get('/api/tutor-programs/store', async (req, res) => {
                 room_code: program.room_code,
                 title: program.title || '特約教室',
                 room_note: program.room_note || '',
+
+                                allow_student_schedule_choice: allowScheduleChoice,
+                allowStudentScheduleChoice: allowScheduleChoice,
 
                 start_date: program.start_date,
                 end_date: program.end_date,
@@ -1209,8 +1366,11 @@ app.get('/api/tutor-programs/store', async (req, res) => {
                 is_full: isFull,
                 is_enrolled: isEnrolled,
 
+                                selected_schedule_count: mappedSchedules.filter(schedule => schedule.is_enrolled).length,
+                schedules: mappedSchedules,
+
                 requires_subscription: program.requires_subscription === true,
-                can_enroll: access.canEnrollTutorProgram === true && !isFull && !isEnrolled,
+                                can_enroll: access.canEnrollTutorProgram === true && !isFull,
 
                 status: program.status,
                 created_at: program.created_at
