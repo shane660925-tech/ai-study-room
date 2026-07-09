@@ -1403,6 +1403,14 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         const username = String(req.body.username || '').trim();
         const programId = String(req.body.programId || '').trim();
 
+        const selectedScheduleIds = Array.isArray(req.body.selectedScheduleIds)
+            ? [...new Set(
+                req.body.selectedScheduleIds
+                    .map(id => String(id || '').trim())
+                    .filter(Boolean)
+            )]
+            : [];
+
         if (!username) {
             return res.status(400).json({
                 success: false,
@@ -1418,22 +1426,22 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         }
 
         const { data: user, error: userError } = await supabase
-    .from('users')
-    .select(`
-        username,
-        nickname,
-        real_name,
-        profile_completed_at,
-        role,
-        is_blocked,
-        membership_level,
-        is_subscribed,
-        subscription_status,
-        subscription_end_date,
-        trial_ends_at
-    `)
-    .eq('username', username)
-    .maybeSingle();
+            .from('users')
+            .select(`
+                username,
+                nickname,
+                real_name,
+                profile_completed_at,
+                role,
+                is_blocked,
+                membership_level,
+                is_subscribed,
+                subscription_status,
+                subscription_end_date,
+                trial_ends_at
+            `)
+            .eq('username', username)
+            .maybeSingle();
 
         if (userError) throw userError;
 
@@ -1480,22 +1488,134 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         }
 
         if (isTutorProgramExpired(program)) {
-    await hideExpiredTutorProgramsFromStore();
+            await hideExpiredTutorProgramsFromStore();
 
-    return res.status(410).json({
-        success: false,
-        error: '此特約教室已過期，無法報名'
-    });
-}
+            return res.status(410).json({
+                success: false,
+                error: '此特約教室已過期，無法報名'
+            });
+        }
+
+        const allowScheduleChoice = program.allow_student_schedule_choice === true;
 
         const maxStudents = Number(program.max_students || 0);
         const currentEnrolledCount = Number(program.enrolled_count || 0);
 
-        if (maxStudents > 0 && currentEnrolledCount >= maxStudents) {
+        // 舊模式才用整期人數上限直接擋。
+        // 新模式的人數上限改由每一堂 schedule 自己檢查。
+        if (
+            !allowScheduleChoice &&
+            maxStudents > 0 &&
+            currentEnrolledCount >= maxStudents
+        ) {
             return res.status(409).json({
                 success: false,
                 error: '此特約教室已額滿'
             });
+        }
+
+        if (allowScheduleChoice && selectedScheduleIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: '請至少選擇一個上課時段'
+            });
+        }
+
+        let selectedSchedules = [];
+
+        if (allowScheduleChoice) {
+            const { data: schedules, error: schedulesError } = await supabase
+                .from('tutor_schedules')
+                .select('*')
+                .eq('program_id', program.id)
+                .in('id', selectedScheduleIds)
+                .in('status', ['scheduled', 'live']);
+
+            if (schedulesError) throw schedulesError;
+
+            selectedSchedules = schedules || [];
+
+            if (selectedSchedules.length !== selectedScheduleIds.length) {
+                return res.status(400).json({
+                    success: false,
+                    error: '部分選擇的時段不存在或已結束，請重新整理後再選擇'
+                });
+            }
+
+            const now = new Date();
+
+            for (const schedule of selectedSchedules) {
+                const startAt = buildTutorScheduleStartAt(schedule);
+
+                if (!startAt) {
+                    return res.status(400).json({
+                        success: false,
+                        error: '選擇的時段缺少上課時間設定，請聯絡教師'
+                    });
+                }
+
+                const totalMinutes = getTutorScheduleTotalMinutes(schedule);
+                const endAt = new Date(startAt.getTime() + totalMinutes * 60 * 1000);
+
+                if (now > endAt) {
+                    await supabase
+                        .from('tutor_schedules')
+                        .update({
+                            status: 'ended',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', schedule.id);
+
+                    return res.status(410).json({
+                        success: false,
+                        error: '你選擇的時段已經結束，請重新整理後再選擇'
+                    });
+                }
+            }
+
+            const { data: existingScheduleEnrollments, error: existingScheduleEnrollmentError } = await supabase
+                .from('tutor_schedule_enrollments')
+                .select('schedule_id, username, status')
+                .eq('program_id', program.id)
+                .eq('username', username)
+                .eq('status', 'active');
+
+            if (existingScheduleEnrollmentError) throw existingScheduleEnrollmentError;
+
+            const alreadySelectedScheduleIdSet = new Set(
+                (existingScheduleEnrollments || []).map(row => row.schedule_id)
+            );
+
+            for (const schedule of selectedSchedules) {
+                const scheduleMaxStudents = Number(schedule.max_students || program.max_students || 0);
+
+                if (scheduleMaxStudents <= 0) {
+                    continue;
+                }
+
+                // 如果這個學生本來就已經選過這堂，不需要被額滿擋住。
+                if (alreadySelectedScheduleIdSet.has(schedule.id)) {
+                    continue;
+                }
+
+                const { count: activeScheduleCount, error: activeScheduleCountError } = await supabase
+                    .from('tutor_schedule_enrollments')
+                    .select('id', {
+                        count: 'exact',
+                        head: true
+                    })
+                    .eq('schedule_id', schedule.id)
+                    .eq('status', 'active');
+
+                if (activeScheduleCountError) throw activeScheduleCountError;
+
+                if (Number(activeScheduleCount || 0) >= scheduleMaxStudents) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `${schedule.scheduled_date || ''} ${String(schedule.start_time || '').slice(0, 5)} 這個時段已額滿，請選擇其他時段`
+                    });
+                }
+            }
         }
 
         const { data: existingEnrollment, error: existingError } = await supabase
@@ -1508,57 +1628,92 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
 
         if (existingError) throw existingError;
 
-        if (existingEnrollment) {
-    await safeCreateTutorProgramEnrollmentNotification(username, program);
+        let enrollment = existingEnrollment;
+        let alreadyEnrolled = !!existingEnrollment;
 
-    return res.json({
-        success: true,
-        alreadyEnrolled: true,
-        enrollment: existingEnrollment,
-        student: {
-            username: user.username,
-            nickname: user.nickname || '',
-            real_name: user.real_name || '',
-            display_name: studentDisplayName
-        },
-        program,
-        message: `你已經報名過此特約教室，課程代碼：${program.room_code}`
-    });
-}
+        // 不管新舊模式，都保留 program 層級 enrollment。
+        // 新模式用它代表「學生已報名此課程」，單堂白名單另看 tutor_schedule_enrollments。
+        if (!existingEnrollment) {
+            const { data: insertedEnrollment, error: insertError } = await supabase
+                .from('tutor_program_enrollments')
+                .insert([{
+                    program_id: program.id,
+                    username,
+                    status: 'active',
+                    source: allowScheduleChoice ? 'schedule_choice' : 'course_store'
+                }])
+                .select()
+                .single();
 
-        const { data: enrollment, error: insertError } = await supabase
-            .from('tutor_program_enrollments')
-            .insert([{
+            if (insertError) {
+                if (
+                    insertError.code === '23505' ||
+                    String(insertError.message || '').includes('duplicate')
+                ) {
+                    const { data: duplicatedEnrollment, error: duplicatedReadError } = await supabase
+                        .from('tutor_program_enrollments')
+                        .select('*')
+                        .eq('program_id', program.id)
+                        .eq('username', username)
+                        .eq('status', 'active')
+                        .maybeSingle();
+
+                    if (duplicatedReadError) throw duplicatedReadError;
+
+                    enrollment = duplicatedEnrollment;
+                    alreadyEnrolled = true;
+                } else {
+                    throw insertError;
+                }
+            } else {
+                enrollment = insertedEnrollment;
+                alreadyEnrolled = false;
+            }
+        }
+
+        let selectedScheduleEnrollments = [];
+
+        if (allowScheduleChoice) {
+            const scheduleEnrollmentRows = selectedSchedules.map(schedule => ({
+                schedule_id: schedule.id,
                 program_id: program.id,
                 username,
                 status: 'active',
-                source: 'course_store'
-            }])
-            .select()
-            .single();
+                source: 'student_choice'
+            }));
 
-        if (insertError) {
-            if (
-                insertError.code === '23505' ||
-                String(insertError.message || '').includes('duplicate')
-            ) {
-                await safeCreateTutorProgramEnrollmentNotification(username, program);
+            const { data: upsertedScheduleEnrollments, error: scheduleInsertError } = await supabase
+                .from('tutor_schedule_enrollments')
+                .upsert(scheduleEnrollmentRows, {
+                    onConflict: 'schedule_id,username'
+                })
+                .select();
 
-return res.json({
-    success: true,
-    alreadyEnrolled: true,
-    student: {
-        username: user.username,
-        nickname: user.nickname || '',
-        real_name: user.real_name || '',
-        display_name: studentDisplayName
-    },
-    program,
-    message: `你已經報名過此特約教室，課程代碼：${program.room_code}`
-});
+            if (scheduleInsertError) throw scheduleInsertError;
+
+            selectedScheduleEnrollments = upsertedScheduleEnrollments || [];
+
+            // 更新每一堂課的 enrolled_count，讓課程商店顯示更準。
+            for (const schedule of selectedSchedules) {
+                const { count: activeScheduleCount, error: activeScheduleCountError } = await supabase
+                    .from('tutor_schedule_enrollments')
+                    .select('id', {
+                        count: 'exact',
+                        head: true
+                    })
+                    .eq('schedule_id', schedule.id)
+                    .eq('status', 'active');
+
+                if (activeScheduleCountError) throw activeScheduleCountError;
+
+                await supabase
+                    .from('tutor_schedules')
+                    .update({
+                        enrolled_count: Number(activeScheduleCount || 0),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', schedule.id);
             }
-
-            throw insertError;
         }
 
         const { count: activeEnrollmentCount, error: countError } = await supabase
@@ -1582,32 +1737,41 @@ return res.json({
             })
             .eq('id', program.id);
 
-        await supabase
-            .from('tutor_schedules')
-            .update({
-                enrolled_count: finalEnrolledCount,
-                updated_at: new Date().toISOString()
-            })
-            .eq('program_id', program.id);
+        // 舊模式才把整期 enrolled_count 同步到所有 schedules。
+        // 新模式的每堂 enrolled_count 已在上面依照單堂報名數更新。
+        if (!allowScheduleChoice) {
+            await supabase
+                .from('tutor_schedules')
+                .update({
+                    enrolled_count: finalEnrolledCount,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('program_id', program.id);
+        }
 
         await safeCreateTutorProgramEnrollmentNotification(username, program);
 
         res.json({
-    success: true,
-    alreadyEnrolled: false,
-    enrollment,
-    student: {
-        username: user.username,
-        nickname: user.nickname || '',
-        real_name: user.real_name || '',
-        display_name: studentDisplayName
-    },
-    program: {
-        ...program,
-        enrolled_count: finalEnrolledCount
-    },
-    message: '報名成功，已加入特約教室白名單'
-});
+            success: true,
+            alreadyEnrolled,
+            allowStudentScheduleChoice: allowScheduleChoice,
+            enrollment,
+            selectedScheduleEnrollments,
+            selectedScheduleCount: selectedScheduleEnrollments.length,
+            student: {
+                username: user.username,
+                nickname: user.nickname || '',
+                real_name: user.real_name || '',
+                display_name: studentDisplayName
+            },
+            program: {
+                ...program,
+                enrolled_count: finalEnrolledCount
+            },
+            message: allowScheduleChoice
+                ? `報名成功，已選擇 ${selectedScheduleEnrollments.length} 個上課時段`
+                : '報名成功，已加入特約教室白名單'
+        });
 
     } catch (err) {
         console.error('報名週期特約教室失敗:', err);
