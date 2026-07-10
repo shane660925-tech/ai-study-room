@@ -3104,7 +3104,7 @@ window.showCourseStoreModal = async function() {
     modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
 
     modal.innerHTML = `
-        <div class="bg-[#111827] w-full max-w-2xl rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
+        <div class="bg-[#111827] w-[94vw] max-w-[1180px] rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
 
             <button onclick="document.getElementById('courseStoreModal').remove()"
                     class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
@@ -3137,7 +3137,7 @@ window.showCourseStoreModal = async function() {
                 </div>
             </div>
 
-            <div id="courseStoreModalList" class="p-6 max-h-[65vh] overflow-y-auto">
+            <div id="courseStoreModalList" class="p-5 max-h-[72vh] overflow-y-auto">
                 <div class="flex flex-col items-center justify-center py-10 text-gray-500">
                     <div class="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
                     <p class="text-xs tracking-widest uppercase">正在載入課程...</p>
@@ -3449,7 +3449,7 @@ function renderTutorScheduleChoiceHtml(program) {
     }
 
     return `
-        <div class="bg-black/30 border border-yellow-400/20 rounded-2xl p-4 mb-5">
+        <div class="bg-black/30 border border-yellow-400/20 rounded-2xl p-5 mb-6">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div>
                     <div class="text-yellow-300 text-xs font-black tracking-widest uppercase">
@@ -3460,21 +3460,21 @@ function renderTutorScheduleChoiceHtml(program) {
                     </p>
                 </div>
 
-                <span class="text-[10px] bg-yellow-500/10 text-yellow-200 border border-yellow-400/20 px-2 py-1 rounded-full font-black">
+                <span class="shrink-0 text-[10px] bg-yellow-500/10 text-yellow-200 border border-yellow-400/20 px-2 py-1 rounded-full font-black">
                     自選模式
                 </span>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[720px] border-separate border-spacing-2">
+            <div class="w-full overflow-visible">
+                <table class="w-full table-fixed border-separate [border-spacing:6px_10px]">
                     <thead>
                         <tr>
-                            <th class="w-28 text-left text-[11px] text-gray-500 font-black px-2 py-2">
+                            <th class="w-[132px] text-left text-[11px] text-gray-500 font-black px-2 py-2">
                                 堂數 / 星期
                             </th>
 
                             ${weekdayColumns.map(column => `
-                                <th class="text-center text-xs text-yellow-300 font-black px-2 py-2 bg-yellow-500/10 border border-yellow-400/20 rounded-xl">
+                                <th class="text-center text-[12px] text-yellow-300 font-black px-1 py-2 bg-yellow-500/10 border border-yellow-400/20 rounded-xl whitespace-nowrap">
                                     ${escapeCourseStoreHtml(column.label)}
                                 </th>
                             `).join('')}
@@ -3499,30 +3499,54 @@ function renderTutorScheduleChoiceHtml(program) {
 
                                     if (!hasSchedules) {
                                         return `
-                                            <td class="text-center bg-white/5 border border-white/5 rounded-xl px-2 py-3 opacity-30">
+                                            <td class="text-center bg-white/5 border border-white/5 rounded-xl px-1 py-3 opacity-30 align-top">
                                                 <span class="text-[10px] text-gray-600">無課</span>
                                             </td>
                                         `;
                                     }
 
+                                    const cellScheduleCount = weekdaySchedules.length;
+
+                                    const cellMaxStudents = weekdaySchedules.reduce((max, schedule) => {
+                                        return Math.max(max, Number(schedule.max_students || 0));
+                                    }, 0);
+
+                                    const remainingNumbers = weekdaySchedules
+                                        .map(schedule => Number(schedule.remaining_slots))
+                                        .filter(value => Number.isFinite(value));
+
+                                    const cellRemainingSlots = remainingNumbers.length > 0
+                                        ? Math.min(...remainingNumbers)
+                                        : null;
+
+                                    const isCellFull =
+                                        cellMaxStudents > 0 &&
+                                        cellRemainingSlots !== null &&
+                                        cellRemainingSlots <= 0;
+
+                                    const capacityText = cellMaxStudents > 0
+                                        ? `剩 ${Math.max(0, cellRemainingSlots ?? cellMaxStudents)} 名`
+                                        : '不限名額';
+
                                     const cellValue = `${column.weekday}:${period.periodNumber}`;
 
                                     return `
-                                        <td class="text-center bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-400/40 rounded-xl px-2 py-3 transition-all">
-                                            <label class="cursor-pointer flex flex-col items-center justify-center gap-2">
+                                        <td class="text-center bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-400/40 rounded-xl px-1 py-3 transition-all align-top ${isCellFull ? 'opacity-50' : ''}">
+                                            <label class="${isCellFull ? 'cursor-not-allowed' : 'cursor-pointer'} flex flex-col items-center justify-center gap-2 min-h-[86px]">
                                                 <input
                                                     type="checkbox"
                                                     class="tutor-period-choice w-5 h-5 accent-yellow-400"
                                                     value="${cellValue}"
                                                     data-weekday="${column.weekday}"
-                                                    data-period-number="${period.periodNumber}">
+                                                    data-period-number="${period.periodNumber}"
+                                                    ${isCellFull ? 'disabled' : ''}>
 
-                                                <span class="text-[11px] text-white font-mono font-bold">
-                                                    ${escapeCourseStoreHtml(period.start)}–${escapeCourseStoreHtml(period.end)}
+                                                <span class="text-[11px] text-yellow-200 font-black whitespace-nowrap">
+                                                    ${escapeCourseStoreHtml(capacityText)}
                                                 </span>
 
-                                                <span class="text-[10px] text-gray-500">
-                                                    共 ${weekdaySchedules.length} 次
+                                                <span class="text-[10px] text-gray-500 whitespace-nowrap">
+                                                    共 ${cellScheduleCount} 次
                                                 </span>
                                             </label>
                                         </td>
@@ -3898,7 +3922,7 @@ const restMinutes = Number(program.rest_minutes || 10);
                 ← 返回特約教室列表
             </button>
 
-            <div class="bg-white/5 border border-yellow-500/30 rounded-3xl p-6">
+            <div class="bg-white/5 border border-yellow-500/30 rounded-3xl p-5 lg:p-6">
                 <div class="flex items-start gap-4 mb-5">
                     <div class="w-14 h-14 bg-yellow-500/20 rounded-2xl flex items-center justify-center text-yellow-400 text-2xl">
                         <i class="fas fa-chalkboard-teacher"></i>
@@ -3910,7 +3934,7 @@ const restMinutes = Number(program.rest_minutes || 10);
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 text-xs mb-5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-xs mb-5">
                     <div class="bg-black/30 rounded-xl p-3">
                         <span class="text-gray-500">日期區間</span>
                         <div class="text-white font-bold mt-1">${program.start_date || '尚未設定'} ~ ${program.end_date || '尚未設定'}</div>
