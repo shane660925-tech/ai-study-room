@@ -1915,6 +1915,8 @@ window.generateTeacherRoom = async function() {
     const roomNote = document.getElementById('teacherRoomNote')?.value.trim() || '';
 
     const weekdays = getSelectedTeacherWeekdays();
+    const allowStudentScheduleChoice =
+    document.getElementById('allowStudentScheduleChoiceCheckbox')?.checked === true;
 
     if (!startDate || !endDate) {
         alert('請選擇週期開始日期與結束日期。');
@@ -1950,20 +1952,22 @@ window.generateTeacherRoom = async function() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                teacherUsername: username,
-                roomTitle: roomNote || '特約教室',
-                title: roomNote || '特約教室',
-                roomNote,
-                roomSize: size,
-                maxStudents: Number(size),
-                startDate,
-                endDate,
-                weekdays,
-                periods: parseInt(periods, 10),
-                classMinutes: parseInt(periodTime, 10),
-                restMinutes: parseInt(restTime, 10),
-                startTime
-            })
+    teacherUsername: username,
+    roomTitle: roomNote || '特約教室',
+    title: roomNote || '特約教室',
+    roomNote,
+    roomSize: size,
+    maxStudents: Number(size),
+    startDate,
+    endDate,
+    weekdays,
+    periods: parseInt(periods, 10),
+    classMinutes: parseInt(periodTime, 10),
+    restMinutes: parseInt(restTime, 10),
+    startTime,
+    allowStudentScheduleChoice,
+    allow_student_schedule_choice: allowStudentScheduleChoice
+})
         });
 
         const data = await res.json();

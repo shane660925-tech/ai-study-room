@@ -513,7 +513,7 @@
     <shared-footer></shared-footer>
 
     <script src="/js/lobby-core.js?v=profile-20260612-1"></script>
-<script src="/js/lobby-main.js?v=tutor-schedule-choice-ui-20260709-1"></script>
+<script src="/js/lobby-main.js?v=tutor-period-choice-20260709-1"></script>
 
     <script>
         // targetRoomUrl 已在 lobby-main.js 宣告，這裡不要重複宣告
@@ -736,6 +736,23 @@
                 <span class="text-xs text-blue-300 font-bold">預估每次下課時間</span>
                 <span id="calculatedEndTime" class="text-blue-100 font-mono font-black">--:--</span>
             </div>
+
+<label class="flex items-start gap-3 bg-purple-500/10 border border-purple-400/30 rounded-2xl p-4 cursor-pointer hover:bg-purple-500/15 transition-all">
+    <input
+        id="allowStudentScheduleChoiceCheckbox"
+        type="checkbox"
+        class="mt-1 w-5 h-5 accent-purple-400">
+
+    <div class="flex-1">
+        <div class="text-sm font-black text-purple-200">
+            允許學生自行選擇星期與堂數
+        </div>
+        <p class="text-[11px] text-purple-100/70 leading-relaxed mt-1">
+            開啟後，學生報名時可以用表格勾選「星期幾 × 第幾堂」。
+            例如只報名星期一第 1 堂、星期二第 2 堂，不必報名整場課。
+        </p>
+    </div>
+</label>
 
             <div class="bg-yellow-500/10 border border-yellow-400/30 rounded-2xl p-4 text-xs text-yellow-100 leading-relaxed">
                 <b class="text-yellow-300">提醒：</b>
