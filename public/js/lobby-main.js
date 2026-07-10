@@ -3104,7 +3104,7 @@ window.showCourseStoreModal = async function() {
     modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4';
 
     modal.innerHTML = `
-        <div class="bg-[#111827] w-[94vw] max-w-[1180px] rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
+        <div id="courseStoreModalBox" class="bg-[#111827] w-full max-w-2xl rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative">
 
             <button onclick="document.getElementById('courseStoreModal').remove()"
                     class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 z-10">
@@ -3137,7 +3137,7 @@ window.showCourseStoreModal = async function() {
                 </div>
             </div>
 
-            <div id="courseStoreModalList" class="p-5 max-h-[72vh] overflow-y-auto">
+            <div id="courseStoreModalList" class="p-6 max-h-[65vh] overflow-y-auto">
                 <div class="flex flex-col items-center justify-center py-10 text-gray-500">
                     <div class="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
                     <p class="text-xs tracking-widest uppercase">正在載入課程...</p>
@@ -3159,6 +3159,31 @@ function getCurrentCourseStoreUsername() {
         localStorage.getItem('username') ||
         ''
     );
+}
+
+function setCourseStoreModalMode(mode = 'list') {
+    const box = document.getElementById('courseStoreModalBox');
+    const list = document.getElementById('courseStoreModalList');
+
+    if (!box) return;
+
+    if (mode === 'detail') {
+        box.className =
+            'bg-[#111827] w-[94vw] max-w-[1180px] rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative';
+
+        if (list) {
+            list.className = 'p-5 max-h-[72vh] overflow-y-auto';
+        }
+
+        return;
+    }
+
+    box.className =
+        'bg-[#111827] w-full max-w-2xl rounded-3xl border border-cyan-500/30 shadow-2xl overflow-hidden relative';
+
+    if (list) {
+        list.className = 'p-6 max-h-[65vh] overflow-y-auto';
+    }
 }
 
 window.setCourseStoreTab = async function(tabName) {
@@ -3524,9 +3549,14 @@ function renderTutorScheduleChoiceHtml(program) {
                                         cellRemainingSlots !== null &&
                                         cellRemainingSlots <= 0;
 
-                                    const capacityText = cellMaxStudents > 0
-                                        ? `剩 ${Math.max(0, cellRemainingSlots ?? cellMaxStudents)} 名`
-                                        : '不限名額';
+                                    const cellEnrolledCount =
+    cellMaxStudents > 0 && cellRemainingSlots !== null
+        ? Math.max(0, cellMaxStudents - cellRemainingSlots)
+        : 0;
+
+const capacityText = cellMaxStudents > 0
+    ? `${cellEnrolledCount}/${cellMaxStudents}`
+    : '不限';
 
                                     const cellValue = `${column.weekday}:${period.periodNumber}`;
 
@@ -3541,9 +3571,9 @@ function renderTutorScheduleChoiceHtml(program) {
                                                     data-period-number="${period.periodNumber}"
                                                     ${isCellFull ? 'disabled' : ''}>
 
-                                                <span class="text-[11px] text-yellow-200 font-black whitespace-nowrap">
-                                                    ${escapeCourseStoreHtml(capacityText)}
-                                                </span>
+                                                <span class="${isCellFull ? 'text-red-300' : 'text-yellow-200'} text-[11px] font-black whitespace-nowrap">
+    ${escapeCourseStoreHtml(capacityText)}
+</span>
 
                                                 <span class="text-[10px] text-gray-500 whitespace-nowrap">
                                                     共 ${cellScheduleCount} 次
@@ -3583,6 +3613,8 @@ function getSelectedTutorPeriodChoicesFromDetail() {
 async function loadCourseStoreModalList() {
     const list = document.getElementById('courseStoreModalList');
     if (!list) return;
+
+    setCourseStoreModalMode('list');
 
     updateCourseStoreTabButtons('courses');
     renderCourseStoreLoading('fa-book-open', '正在載入線上課程...');
@@ -3706,6 +3738,8 @@ async function loadCourseStoreModalList() {
 async function loadTutorProgramStoreModalList() {
     const list = document.getElementById('courseStoreModalList');
     if (!list) return;
+
+    setCourseStoreModalMode('list');
 
     updateCourseStoreTabButtons('tutorPrograms');
     renderCourseStoreLoading('fa-chalkboard-teacher', '正在載入特約教室...');
@@ -3862,6 +3896,8 @@ const endDate = escapeCourseStoreHtml(program.end_date || '尚未設定');
 window.showTutorProgramDetail = function(programId) {
     const list = document.getElementById('courseStoreModalList');
     if (!list) return;
+
+    setCourseStoreModalMode('detail');
 
     const program = tutorProgramStoreCache.find(item => item.id === programId);
 
