@@ -794,6 +794,51 @@ function getTutorScheduleTotalMinutes(schedule) {
     );
 }
 
+function getTutorScheduleTaipeiWeekday(schedule) {
+    const dateText = String(schedule?.scheduled_date || '').slice(0, 10);
+
+    if (!dateText) return null;
+
+    const date = new Date(`${dateText}T00:00:00+08:00`);
+
+    if (Number.isNaN(date.getTime())) return null;
+
+    return date.getDay(); // 0 日、1 一、2 二、3 三、4 四、5 五、6 六
+}
+
+function normalizeTutorSelectedPeriodChoices(rawChoices, maxPeriods = 99) {
+    if (!Array.isArray(rawChoices)) return [];
+
+    const uniqueMap = new Map();
+
+    rawChoices.forEach(choice => {
+        const weekday = Number(choice?.weekday);
+        const periodNumber = Number(choice?.periodNumber);
+
+        if (
+            !Number.isInteger(weekday) ||
+            weekday < 0 ||
+            weekday > 6 ||
+            !Number.isInteger(periodNumber) ||
+            periodNumber < 1 ||
+            periodNumber > maxPeriods
+        ) {
+            return;
+        }
+
+        uniqueMap.set(`${weekday}:${periodNumber}`, {
+            weekday,
+            periodNumber
+        });
+    });
+
+    return Array.from(uniqueMap.values());
+}
+
+function getTutorPeriodChoiceKey(scheduleId, periodNumber) {
+    return `${String(scheduleId || '')}:${Number(periodNumber || 1)}`;
+}
+
 const TUTOR_ENTRY_OPEN_MINUTES = 5;
 
 function getTutorScheduleEntryWindow(schedule, now = new Date()) {
@@ -1411,6 +1456,10 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
             )]
             : [];
 
+let selectedPeriodChoices = Array.isArray(req.body.selectedPeriodChoices)
+            ? req.body.selectedPeriodChoices
+            : [];
+            
         if (!username) {
             return res.status(400).json({
                 success: false,
@@ -1498,6 +1547,13 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
 
         const allowScheduleChoice = program.allow_student_schedule_choice === true;
 
+const programPeriods = Number(program.periods || 1);
+
+selectedPeriodChoices = normalizeTutorSelectedPeriodChoices(
+            selectedPeriodChoices,
+            programPeriods
+        );
+
         const maxStudents = Number(program.max_students || 0);
         const currentEnrolledCount = Number(program.enrolled_count || 0);
 
@@ -1514,32 +1570,90 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
             });
         }
 
-        if (allowScheduleChoice && selectedScheduleIds.length === 0) {
+        if (
+            allowScheduleChoice &&
+            selectedScheduleIds.length === 0 &&
+            selectedPeriodChoices.length === 0
+        ) {
             return res.status(400).json({
                 success: false,
-                error: '請至少選擇一個上課時段'
+                error: '請至少選擇一個星期與堂數'
             });
         }
 
         let selectedSchedules = [];
+        let selectedSchedulePeriodItems = [];
 
         if (allowScheduleChoice) {
-            const { data: schedules, error: schedulesError } = await supabase
+            let schedulesQuery = supabase
                 .from('tutor_schedules')
                 .select('*')
                 .eq('program_id', program.id)
-                .in('id', selectedScheduleIds)
                 .in('status', ['scheduled', 'live']);
+
+            if (selectedScheduleIds.length > 0 && selectedPeriodChoices.length === 0) {
+                schedulesQuery = schedulesQuery.in('id', selectedScheduleIds);
+            }
+
+            const { data: schedules, error: schedulesError } = await schedulesQuery;
 
             if (schedulesError) throw schedulesError;
 
-            selectedSchedules = schedules || [];
+            const activeSchedules = schedules || [];
 
-            if (selectedSchedules.length !== selectedScheduleIds.length) {
-                return res.status(400).json({
-                    success: false,
-                    error: '部分選擇的時段不存在或已結束，請重新整理後再選擇'
-                });
+            if (selectedScheduleIds.length > 0 && selectedPeriodChoices.length === 0) {
+                selectedSchedules = activeSchedules;
+
+                if (selectedSchedules.length !== selectedScheduleIds.length) {
+                    return res.status(400).json({
+                        success: false,
+                        error: '部分選擇的時段不存在或已結束，請重新整理後再選擇'
+                    });
+                }
+
+                selectedSchedulePeriodItems = selectedSchedules.map(schedule => ({
+                    schedule,
+                    periodNumber: 1
+                }));
+            } else {
+                const choiceSet = new Set(
+                    selectedPeriodChoices.map(choice =>
+                        `${choice.weekday}:${choice.periodNumber}`
+                    )
+                );
+
+                selectedSchedulePeriodItems = activeSchedules.flatMap(schedule => {
+                    const weekday = getTutorScheduleTaipeiWeekday(schedule);
+
+                    if (weekday === null) return [];
+
+                    return selectedPeriodChoices
+                        .filter(choice => choice.weekday === weekday)
+                        .map(choice => ({
+                            schedule,
+                            periodNumber: choice.periodNumber,
+                            choiceKey: `${choice.weekday}:${choice.periodNumber}`
+                        }));
+                }).filter(item =>
+                    choiceSet.has(
+                        `${getTutorScheduleTaipeiWeekday(item.schedule)}:${item.periodNumber}`
+                    )
+                );
+
+                const selectedScheduleIdSet = new Set(
+                    selectedSchedulePeriodItems.map(item => item.schedule.id)
+                );
+
+                selectedSchedules = activeSchedules.filter(schedule =>
+                    selectedScheduleIdSet.has(schedule.id)
+                );
+
+                if (selectedSchedulePeriodItems.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: '你選擇的星期與堂數在此課程期間內沒有可報名的課，請重新選擇'
+                    });
+                }
             }
 
             const now = new Date();
@@ -1575,26 +1689,32 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
 
             const { data: existingScheduleEnrollments, error: existingScheduleEnrollmentError } = await supabase
                 .from('tutor_schedule_enrollments')
-                .select('schedule_id, username, status')
+                .select('schedule_id, period_number, username, status')
                 .eq('program_id', program.id)
                 .eq('username', username)
                 .eq('status', 'active');
 
             if (existingScheduleEnrollmentError) throw existingScheduleEnrollmentError;
 
-            const alreadySelectedScheduleIdSet = new Set(
-                (existingScheduleEnrollments || []).map(row => row.schedule_id)
+            const alreadySelectedPeriodSet = new Set(
+                (existingScheduleEnrollments || []).map(row =>
+                    getTutorPeriodChoiceKey(row.schedule_id, row.period_number || 1)
+                )
             );
 
-            for (const schedule of selectedSchedules) {
+            for (const item of selectedSchedulePeriodItems) {
+                const schedule = item.schedule;
+                const periodNumber = Number(item.periodNumber || 1);
                 const scheduleMaxStudents = Number(schedule.max_students || program.max_students || 0);
 
                 if (scheduleMaxStudents <= 0) {
                     continue;
                 }
 
-                // 如果這個學生本來就已經選過這堂，不需要被額滿擋住。
-                if (alreadySelectedScheduleIdSet.has(schedule.id)) {
+                const periodKey = getTutorPeriodChoiceKey(schedule.id, periodNumber);
+
+                // 如果這個學生本來就已經選過這一天這一堂，不需要被額滿擋住。
+                if (alreadySelectedPeriodSet.has(periodKey)) {
                     continue;
                 }
 
@@ -1605,6 +1725,7 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
                         head: true
                     })
                     .eq('schedule_id', schedule.id)
+                    .eq('period_number', periodNumber)
                     .eq('status', 'active');
 
                 if (activeScheduleCountError) throw activeScheduleCountError;
@@ -1612,7 +1733,7 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
                 if (Number(activeScheduleCount || 0) >= scheduleMaxStudents) {
                     return res.status(409).json({
                         success: false,
-                        error: `${schedule.scheduled_date || ''} ${String(schedule.start_time || '').slice(0, 5)} 這個時段已額滿，請選擇其他時段`
+                        error: `${schedule.scheduled_date || ''} 第 ${periodNumber} 堂已額滿，請選擇其他堂數`
                     });
                 }
             }
@@ -1674,18 +1795,21 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
         let selectedScheduleEnrollments = [];
 
         if (allowScheduleChoice) {
-            const scheduleEnrollmentRows = selectedSchedules.map(schedule => ({
-                schedule_id: schedule.id,
+            const scheduleEnrollmentRows = selectedSchedulePeriodItems.map(item => ({
+                schedule_id: item.schedule.id,
                 program_id: program.id,
                 username,
+                period_number: Number(item.periodNumber || 1),
                 status: 'active',
-                source: 'student_choice'
+                source: selectedPeriodChoices.length > 0
+                    ? 'student_period_choice'
+                    : 'student_choice'
             }));
 
             const { data: upsertedScheduleEnrollments, error: scheduleInsertError } = await supabase
                 .from('tutor_schedule_enrollments')
                 .upsert(scheduleEnrollmentRows, {
-                    onConflict: 'schedule_id,username'
+                    onConflict: 'schedule_id,period_number,username'
                 })
                 .select();
 
@@ -1693,23 +1817,39 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
 
             selectedScheduleEnrollments = upsertedScheduleEnrollments || [];
 
-            // 更新每一堂課的 enrolled_count，讓課程商店顯示更準。
-            for (const schedule of selectedSchedules) {
-                const { count: activeScheduleCount, error: activeScheduleCountError } = await supabase
-                    .from('tutor_schedule_enrollments')
-                    .select('id', {
-                        count: 'exact',
-                        head: true
-                    })
-                    .eq('schedule_id', schedule.id)
-                    .eq('status', 'active');
+            // 更新每一個 schedule 的 enrolled_count。
+            // period 模式下，enrolled_count 取該 schedule 各堂次中最大的報名人數，避免同一學生選多堂被重複灌水。
+            const selectedScheduleMap = new Map(
+                selectedSchedules.map(schedule => [schedule.id, schedule])
+            );
 
-                if (activeScheduleCountError) throw activeScheduleCountError;
+            for (const schedule of selectedScheduleMap.values()) {
+                let maxPeriodEnrollmentCount = 0;
+                const totalPeriods = Number(schedule.periods || program.periods || 1);
+
+                for (let periodNumber = 1; periodNumber <= totalPeriods; periodNumber++) {
+                    const { count: activePeriodCount, error: activePeriodCountError } = await supabase
+                        .from('tutor_schedule_enrollments')
+                        .select('id', {
+                            count: 'exact',
+                            head: true
+                        })
+                        .eq('schedule_id', schedule.id)
+                        .eq('period_number', periodNumber)
+                        .eq('status', 'active');
+
+                    if (activePeriodCountError) throw activePeriodCountError;
+
+                    maxPeriodEnrollmentCount = Math.max(
+                        maxPeriodEnrollmentCount,
+                        Number(activePeriodCount || 0)
+                    );
+                }
 
                 await supabase
                     .from('tutor_schedules')
                     .update({
-                        enrolled_count: Number(activeScheduleCount || 0),
+                        enrolled_count: maxPeriodEnrollmentCount,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', schedule.id);
@@ -1758,6 +1898,7 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
             enrollment,
             selectedScheduleEnrollments,
             selectedScheduleCount: selectedScheduleEnrollments.length,
+            selectedPeriodChoiceCount: selectedPeriodChoices.length,
             student: {
                 username: user.username,
                 nickname: user.nickname || '',
@@ -1769,7 +1910,11 @@ app.post('/api/tutor-programs/enroll', async (req, res) => {
                 enrolled_count: finalEnrolledCount
             },
             message: allowScheduleChoice
-                ? `報名成功，已選擇 ${selectedScheduleEnrollments.length} 個上課時段`
+                ? (
+                    selectedPeriodChoices.length > 0
+                        ? `報名成功，已選擇 ${selectedPeriodChoices.length} 個每週固定上課格`
+                        : `報名成功，已選擇 ${selectedScheduleEnrollments.length} 個上課時段`
+                )
                 : '報名成功，已加入特約教室白名單'
         });
 
